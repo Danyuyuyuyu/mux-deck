@@ -1,29 +1,32 @@
 @echo off
 setlocal
-chcp 65001 >nul
-title Mux Deck - å®‰è£…ä¾¿æºç¯å¢ƒ
+title Mux Deck - °²×°±ãĞ¯»·¾³
 cd /d "%~dp0"
 
 echo ============================================
-echo   Mux Deck ä¾¿æºç¯å¢ƒå®‰è£…
+echo   Mux Deck ±ãĞ¯»·¾³°²×°
 echo ============================================
-echo å°†è‡ªåŠ¨ä¸‹è½½å¹¶è§£å‹ï¼š
+echo ½«×Ô¶¯ÏÂÔØ²¢½âÑ¹£º
 echo   [1/4] Python 3.12.8 embeddable
 echo   [2/4] MKVToolNix 101.0 (mkvmerge/mkvextract)
-echo   [3/4] ffmpeg essentials (å« libass)
+echo   [3/4] ffmpeg essentials (º¬ libass)
 echo   [4/4] assfonts v0.7.3
 echo.
-echo éœ€è¦ä»£ç†æ—¶ï¼šç¼–è¾‘æœ¬æ–‡ä»¶ï¼Œå°†ä¸‹æ–¹ PROXY å˜é‡æ”¹ä¸ºä½ çš„ä»£ç†åœ°å€ï¼ˆå¦‚ http://127.0.0.1:7890ï¼‰
-echo æˆ–ç”¨ç¯å¢ƒå˜é‡ BOOTSTRAP_PROXY æŒ‡å®šã€‚
+echo ĞèÒª´úÀíÊ±£º±à¼­±¾ÎÄ¼ş£¬½«ÏÂ·½ PROXY ±äÁ¿¸ÄÎª´úÀíµØÖ·£¨Èç http://127.0.0.1:7890£©
+echo »òÓÃ»·¾³±äÁ¿ BOOTSTRAP_PROXY Ö¸¶¨¡£
 echo.
 set "PROXY="
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\bootstrap.ps1" -Proxy %PROXY%
+if defined PROXY (
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\bootstrap.ps1" -Proxy %PROXY%
+) else (
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\bootstrap.ps1"
+)
 echo.
 if errorlevel 1 (
-  echo [å¤±è´¥] ç¯å¢ƒå®‰è£…æœªå®Œæˆï¼Œè¯·æŸ¥çœ‹ä¸Šæ–¹é”™è¯¯ä¿¡æ¯ã€‚
+  echo [Ê§°Ü] »·¾³°²×°Î´Íê³É£¬Çë²é¿´ÉÏ·½´íÎóĞÅÏ¢¡£
 ) else (
-  echo [å®Œæˆ] ä¾¿æºç¯å¢ƒå°±ç»ªï¼Œå¯è¿è¡Œ start_mux_ui.bat å¯åŠ¨ï¼Œ
-  echo        æˆ–å…ˆè¿è¡Œ ç¯å¢ƒè‡ªæ£€.bat éªŒè¯ã€‚
+  echo [Íê³É] ±ãĞ¯»·¾³¾ÍĞ÷£¬¿ÉÔËĞĞ start_mux_ui.bat Æô¶¯£¬
+  echo        »òÏÈÔËĞĞ »·¾³×Ô¼ì.bat ÑéÖ¤¡£
 )
 echo.
 pause

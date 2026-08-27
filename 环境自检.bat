@@ -1,12 +1,11 @@
 @echo off
 setlocal
-chcp 65001 >nul
-title Mux Deck - 环境自检
+title Mux Deck - �����Լ�
 cd /d "%~dp0"
 set "FAIL=0"
 
 echo ============================================
-echo   Mux Deck 环境自检
+echo   Mux Deck �����Լ�
 echo ============================================
 
 rem ---- Python ----
@@ -17,7 +16,7 @@ if not defined PY where python >nul 2>&1 && set "PY=python"
 if defined PY (
   echo [PASS] Python: %PY%
 ) else (
-  echo [FAIL] Python: 未找到（缺 bin\python 或系统 Python）
+  echo [FAIL] Python: δ�ҵ���ȱ bin\python ��ϵͳ Python��
   set /a FAIL+=1
 )
 
@@ -29,7 +28,7 @@ if not defined MKV where mkvmerge >nul 2>&1 && set "MKV=mkvmerge"
 if defined MKV (
   echo [PASS] mkvmerge: %MKV%
 ) else (
-  echo [FAIL] mkvmerge: 未找到（缺 bin\mkvtoolnix 或系统安装）
+  echo [FAIL] mkvmerge: δ�ҵ���ȱ bin\mkvtoolnix ��ϵͳ��װ��
   set /a FAIL+=1
 )
 
@@ -41,7 +40,7 @@ if not defined MKE where mkvextract >nul 2>&1 && set "MKE=mkvextract"
 if defined MKE (
   echo [PASS] mkvextract: %MKE%
 ) else (
-  echo [FAIL] mkvextract: 未找到
+  echo [FAIL] mkvextract: δ�ҵ�
   set /a FAIL+=1
 )
 
@@ -52,7 +51,7 @@ if not defined FF where ffmpeg >nul 2>&1 && set "FF=ffmpeg"
 if defined FF (
   echo [PASS] ffmpeg: %FF%
 ) else (
-  echo [FAIL] ffmpeg: 未找到（缺 bin\ffmpeg 或 PATH）
+  echo [FAIL] ffmpeg: δ�ҵ���ȱ bin\ffmpeg �� PATH��
   set /a FAIL+=1
 )
 
@@ -63,31 +62,31 @@ if not defined AF where assfonts >nul 2>&1 && set "AF=assfonts"
 if defined AF (
   echo [PASS] assfonts: %AF%
 ) else (
-  echo [FAIL] assfonts: 未找到（缺 bin\assfonts\assfonts.exe）
+  echo [FAIL] assfonts: δ�ҵ���ȱ bin\assfonts\assfonts.exe��
   set /a FAIL+=1
 )
 
-rem ---- PowerShell（Windows 内置）----
+rem ---- PowerShell��Windows ���ã�----
 if exist "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" (
-  echo [PASS] PowerShell 5.1: 系统内置
+  echo [PASS] PowerShell 5.1: ϵͳ����
 ) else (
-  echo [FAIL] PowerShell: 未找到
+  echo [FAIL] PowerShell: δ�ҵ�
   set /a FAIL+=1
 )
 
-rem ---- 端口 8765 ----
+rem ---- �˿� 8765 ----
 netstat -ano | findstr ":8765" | findstr "LISTENING" >nul
 if errorlevel 1 (
-  echo [PASS] 端口 8765: 空闲
+  echo [PASS] �˿� 8765: ����
 ) else (
-  echo [WARN] 端口 8765: 已被占用（服务会自动试 8766-8774，但启动脚本探测只认 8765）
+  echo [WARN] �˿� 8765: �ѱ�ռ�ã�������Զ��� 8766-8774���������ű�̽��ֻ�� 8765��
 )
 
 echo.
 if %FAIL%==0 (
-  echo 全部关键依赖就绪，可以运行 start_mux_ui.bat 启动。
+  echo ȫ���ؼ������������������� start_mux_ui.bat ������
 ) else (
-  echo 有 %FAIL% 项缺失，请按上方 [FAIL] 提示补齐后再启动。
+  echo �� %FAIL% ��ȱʧ���밴�Ϸ� [FAIL] ��ʾ�������������
 )
 echo.
 pause
