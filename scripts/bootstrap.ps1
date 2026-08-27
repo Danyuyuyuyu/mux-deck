@@ -12,7 +12,7 @@ HTTP 代理地址（可选）。
 #>
 param([string]$Proxy = "")
 $ErrorActionPreference = "Stop"
-$base = Split-Path -Parent $MyInvocation.MyCommand.Path
+$base = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $bin = Join-Path $base "bin"
 $tmp = Join-Path $env:TEMP "muxdeck_bootstrap"
 $py = Join-Path $bin "python\python.exe"

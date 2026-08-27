@@ -120,14 +120,14 @@ function Fail([string]$msg) {
 }
 
 # ---------- tool lookup: prefer known install locations, fall back to PATH (I5) ----------
-$mkvmerge = Join-Path $PSScriptRoot "bin\mkvtoolnix\mkvmerge.exe"
+$mkvmerge = Join-Path (Split-Path -Parent $PSScriptRoot) "bin\mkvtoolnix\mkvmerge.exe"
 if (-not (Test-Path -LiteralPath $mkvmerge)) { $mkvmerge = "C:\Program Files\MKVToolNix\mkvmerge.exe" }
 if (-not (Test-Path -LiteralPath $mkvmerge)) {
   $cmd = Get-Command mkvmerge -ErrorAction SilentlyContinue
   if ($cmd) { $mkvmerge = $cmd.Source }
   else { Fail "mkvmerge not found; put bin\mkvtoolnix next to this script, install MKVToolNix, or add it to PATH" }
 }
-$assfonts = Join-Path $PSScriptRoot "bin\assfonts\assfonts.exe"
+$assfonts = Join-Path (Split-Path -Parent $PSScriptRoot) "bin\assfonts\assfonts.exe"
 if (-not (Test-Path -LiteralPath $assfonts)) {
   $cmd = Get-Command assfonts -ErrorAction SilentlyContinue
   if ($cmd) { $assfonts = $cmd.Source }

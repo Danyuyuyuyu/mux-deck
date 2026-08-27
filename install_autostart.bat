@@ -3,11 +3,11 @@ setlocal
 title Mux Deck - Autostart Installer
 
 set "VBS=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\muxui.vbs"
-set "SRV=%~dp0server.py"
+set "SRV=%~dp0app\server.py"
 
 rem ---- locate pythonw: bundled portable -> pyw -3 -> where pythonw -> original hardcoded path ----
 set "PYW="
-if exist "%~dp0bin\python\pythonw.exe" set "PYW=%~dp0bin\python\pythonw.exe"
+if exist "%~dp0..\bin\python\pythonw.exe" set "PYW=%~dp0..\bin\python\pythonw.exe"
 if not defined PYW pyw -3 -c exit() >nul 2>&1 && set "PYW=pyw -3"
 if not defined PYW where pythonw >nul 2>&1 && set "PYW=pythonw"
 if not defined PYW if exist "C:\Users\ZhenXun\AppData\Local\Programs\Python\Python312\pythonw.exe" set "PYW=C:\Users\ZhenXun\AppData\Local\Programs\Python\Python312\pythonw.exe"

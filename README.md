@@ -8,14 +8,15 @@
 
 ```powershell
 # 1. 首次使用（或 bin/ 为空时）拉取便携运行时：
-powershell -ExecutionPolicy Bypass -File bootstrap.ps1
-#    需要代理： powershell -ExecutionPolicy Bypass -File bootstrap.ps1 -Proxy http://127.0.0.1:7890
+powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1
+#    需要代理： powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -Proxy http://127.0.0.1:7890
+#    或直接双击 安装环境.bat（连 python 一行都不用敲）
 
 # 2. 自检依赖（可选）：
 环境自检.bat
 
 # 3. 启动：
-start_mux_ui.bat        # 浏览器自动打开 http://127.0.0.1:8765
+start_mux_ui.bat            # 浏览器自动打开 http://127.0.0.1:8765
 ```
 
 系统已装 Python / MKVToolNix / ffmpeg 时也可以不跑 bootstrap——程序按「自带 bin\ → 系统 PATH → 默认安装路径」自动回落。
@@ -36,9 +37,10 @@ start_mux_ui.bat        # 浏览器自动打开 http://127.0.0.1:8765
 
 ```
 mux-deck/
-├── server.py  index.html  config.json       # 入口 / 前端 / 用户配置
-├── *.ps1  *.bat                              # 脚本：启动、自启、自检、子集 CLI、bootstrap
-├── bin/                                      # 第三方运行时（bootstrap.ps1 获取，不随 git 分发）
+├── app/                                       # 服务端 + 前端 + 用户配置（server.py / index.html / config.json）
+├── start_mux_ui.bat / install_autostart.bat / 安装环境.bat / 环境自检.bat   # 操作入口（根目录，双击即用）
+├── scripts/                                   # 内部脚本：bootstrap、子集 CLI（ass_mux_manual/ass_subset_mux）
+├── bin/                                       # 第三方运行时（scripts\bootstrap.ps1 获取，不随 git 分发）
 │   ├── python/                               # Python embeddable（服务端运行时）
 │   ├── mkvtoolnix/                           # mkvmerge / mkvextract
 │   ├── ffmpeg/                               # 含 libass（预览必需）

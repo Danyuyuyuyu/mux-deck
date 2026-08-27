@@ -817,6 +817,23 @@
 </div>
 <div id="dropOverlay" role="presentation"><div class="txt"><span data-ic="film" aria-hidden="true"></span>松开以识别文件</div></div>
 
+<!-- 初始启动：设置工作目录（首次使用或当前工作目录无效时显示） -->
+<div id="setupModal" style="position:fixed;inset:0;background:rgba(7,10,15,0.75);z-index:90;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--surface-1,#20202a);border:1px solid var(--border,#333);border-radius:12px;padding:24px 26px;max-width:520px;width:92%;box-shadow:0 10px 40px rgba(0,0,0,.5);">
+    <h3 style="margin:0 0 6px;">设置工作目录</h3>
+    <p class="t-sec" style="margin:0 0 14px;">首次使用请先设置工作目录：它是<strong>拖放识别</strong>搜索文件的根目录，也是<strong>文件浏览器</strong>的默认起点。之后可在「高级选项 → 工作目录」随时更改。</p>
+    <div class="field" style="margin:0 0 10px;">
+      <label for="setup_scan">工作目录（扫描根）</label>
+      <input id="setup_scan" type="text" placeholder="如 D:\Video" autocomplete="off" style="flex:1;">
+      <button class="btn" id="btnSetupBrowse">浏览</button>
+    </div>
+    <div id="setupErr" class="t-sec" style="color:var(--warn-line);min-height:18px;margin-bottom:8px;"></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="btn primary" id="btnSetupSave" style="padding:6px 22px;">保存并开始</button>
+      <a id="setupSkip" href="javascript:void(0)" class="t-cap" style="cursor:pointer;">暂不设置，稍后在「高级选项」里设置</a>
+    </div>
+  </div>
+</div>
 <script>
 /* ==================== 图标（Lucide 风格，内联 SVG） ==================== */
 const ICONS = {
@@ -1130,7 +1147,14 @@ $('mbGo').onclick = () => { BR.path = $('mbPathInput').value.trim() || BR.path; 
 $('mbPathInput').onkeydown = e => { if (e.key === 'Enter') $('mbGo').click(); };
 $('mbUseDir').onclick = () => { BR.setter(BR.path.replace(/\\+$/, '')); $('browserModal').style.display = 'none'; };
 async function showBrowser() {
-  const d = await api('/api/list?path=' + encodeURIComponent(BR.path));
+  let d;
+  try {
+    d = await api('/api/list?path=' + encodeURIComponent(BR.path));
+  } catch (ex) {
+    $('mbPath').textContent = '加载失败';
+    $('mbHint').textContent = '连接失败：' + ex + '（请检查服务是否运行）';
+    return;
+  }
   $('mbPath').textContent = d.path || '（选择驱动器）';
   $('mbPathInput').value = d.path;
   const body = $('mbBody'); body.innerHTML = '';
@@ -1982,24 +2006,12 @@ refreshBatchSticky();
 syncSubStatus();
 $('video').value = localStorage.getItem('muxui_video') || $('video').value; // no-op guard
 api('/api/version').then(v => { if (v.ok) setStatus('服务已就绪 · 可直接把文件拖进窗口', 'ok'); }).catch(() => setStatus('无法连接服务器', 'err'));
+setInterval(() => {
+  const s = $('status');
+  if (s && (s.className === 'err' || s.className === 'run')) { // 仅当显示连接异常/进行中时重探
+    api('/api/version').then(v => { if (v.ok) setStatus('服务已就绪 · 可直接把文件拖进窗口', 'ok'); }).catch(() => {});
+  }
+}, 15000);
 </script>
-
-<!-- 初始启动：设置工作目录（首次使用或当前工作目录无效时显示） -->
-<div id="setupModal" style="position:fixed;inset:0;background:rgba(7,10,15,0.75);z-index:90;display:none;align-items:center;justify-content:center;">
-  <div style="background:var(--surface-1,#20202a);border:1px solid var(--border,#333);border-radius:12px;padding:24px 26px;max-width:520px;width:92%;box-shadow:0 10px 40px rgba(0,0,0,.5);">
-    <h3 style="margin:0 0 6px;">设置工作目录</h3>
-    <p class="t-sec" style="margin:0 0 14px;">首次使用请先设置工作目录：它是<strong>拖放识别</strong>搜索文件的根目录，也是<strong>文件浏览器</strong>的默认起点。之后可在「高级选项 → 工作目录」随时更改。</p>
-    <div class="field" style="margin:0 0 10px;">
-      <label for="setup_scan">工作目录（扫描根）</label>
-      <input id="setup_scan" type="text" placeholder="如 D:\Video" autocomplete="off" style="flex:1;">
-      <button class="btn" id="btnSetupBrowse">浏览</button>
-    </div>
-    <div id="setupErr" class="t-sec" style="color:var(--warn-line);min-height:18px;margin-bottom:8px;"></div>
-    <div style="display:flex;align-items:center;gap:10px;">
-      <button class="btn primary" id="btnSetupSave" style="padding:6px 22px;">保存并开始</button>
-      <a id="setupSkip" href="javascript:void(0)" class="t-cap" style="cursor:pointer;">暂不设置，稍后在「高级选项」里设置</a>
-    </div>
-  </div>
-</div>
 </body>
 </html>

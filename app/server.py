@@ -4,12 +4,12 @@ import json, os, re, shutil, subprocess, threading, time, uuid, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-BASE = os.path.dirname(os.path.abspath(__file__))
+BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 项目根（本文件位于 app/）
 JOBS_DIR = os.path.join(BASE, "data", "jobs")
 TMP_DIR = os.path.join(BASE, "data", "tmp")
 PREVIEW_DIR = os.path.join(BASE, "data", "previews")
 LOG_DIR = os.path.join(BASE, "data", "log")
-PS1 = os.path.join(BASE, "ass_mux_manual.ps1")
+PS1 = os.path.join(BASE, "scripts", "ass_mux_manual.ps1")
 POWERSHELL = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 def _first_existing(*paths):
     for p in paths:
@@ -23,7 +23,7 @@ ASSFONTS = _first_existing(os.path.join(BASE, "bin", "assfonts", "assfonts.exe")
 FFMPEG = _first_existing(os.path.join(BASE, "bin", "ffmpeg", "bin", "ffmpeg.exe")) or shutil.which("ffmpeg")
 HOST = "127.0.0.1"
 SCAN_ROOT = "D:\\Video"
-CONFIG_PATH = os.path.join(BASE, "config.json")
+CONFIG_PATH = os.path.join(BASE, "app", "config.json")
 CONFIG = {"scan_root": SCAN_ROOT}
 try:
     with open(CONFIG_PATH, encoding="utf-8") as _f:
@@ -834,7 +834,7 @@ class H(BaseHTTPRequestHandler):
             return
         if u.path in ("/", "/index.html"):
             try:
-                with open(os.path.join(BASE, "index.html"), "rb") as f:
+                with open(os.path.join(BASE, "app", "index.html"), "rb") as f:
                     self._send(200, f.read(), "text/html; charset=utf-8")
             except Exception as ex:
                 self._send(500, {"error": str(ex)})

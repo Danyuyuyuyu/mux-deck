@@ -16,7 +16,7 @@ param(
   [Parameter(Mandatory=$true)][string]$Root,
   [string]$FontsDir = '',
   [string]$OutDir = '',
-  [string]$AssFonts = (Join-Path $PSScriptRoot 'bin\assfonts\assfonts.exe'),
+  [string]$AssFonts = (Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\assfonts\assfonts.exe'),
   [string]$MkvMerge = '',
   [string]$MkvExtract = '',
   [string]$ScLang = 'zh-Hans',
@@ -28,11 +28,11 @@ param(
 $ErrorActionPreference = 'Stop'
 # 工具回落：自带便携版 -> 系统默认安装 -> PATH
 if (-not $MkvMerge) {
-  $cand = Join-Path $PSScriptRoot 'bin\mkvtoolnix\mkvmerge.exe'
+  $cand = Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\mkvtoolnix\mkvmerge.exe'
   $MkvMerge = $(if (Test-Path -LiteralPath $cand) { $cand } else { 'C:\Program Files\MKVToolNix\mkvmerge.exe' })
 }
 if (-not $MkvExtract) {
-  $cand = Join-Path $PSScriptRoot 'bin\mkvtoolnix\mkvextract.exe'
+  $cand = Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\mkvtoolnix\mkvextract.exe'
   $MkvExtract = $(if (Test-Path -LiteralPath $cand) { $cand } else { 'C:\Program Files\MKVToolNix\mkvextract.exe' })
 }
 # UTF-8 console I/O：中文提示经管道传输不乱码
