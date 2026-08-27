@@ -1,0 +1,20 @@
+# ===== 第三方运行时（克隆后用 bootstrap.ps1 获取） =====
+bin/
+
+# ===== 运行时数据（含本地绝对路径，涉及隐私，勿上传） =====
+data/
+docs/backups/
+
+# ===== 用户配置（机器相关；服务端缺省可自建默认） =====
+config.json
+
+# ===== Python 缓存 =====
+__pycache__/
+*.pyc
+
+# ===== 系统/编辑器杂项 =====
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+.idea/
