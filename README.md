@@ -65,6 +65,6 @@ mux-deck/
 
 ## 许可与第三方声明
 
-- 本项目代码随用途自由使用（个人工具）。
+- 本项目代码以 **MIT 许可证** 开源（见 [LICENSE](LICENSE)）。
 - 随附第三方二进制均为各自许可证分发：MKVToolNix（GPLv2，许可见其安装目录 doc/）、ffmpeg（LGPL/GPL 构建）、Python（PSF）、assfonts（许可见其自带 LICENSE.txt）。
 - `bin/` 不进入 git 仓库，通过 `bootstrap.ps1` 从官方源获取。
