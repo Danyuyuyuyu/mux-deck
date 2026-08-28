@@ -2,6 +2,16 @@
 
 用 mkvmerge 把 视频 + ASS 字幕 + 字体附件 合成 MKV 的本地工具：字体子集化（AssFontSubset 主用 / assfonts 回退）、字体体检、编码转换、预览帧、批量队列、内封轨道预览与提取，全部在浏览器界面完成。
 
+## 界面预览
+
+**单个封装**（浅色主题）：拖入视频自动识别、轨道取舍、简繁字幕与轨道旗标
+
+![单个封装界面](assets/ui-single-mux-light.png)
+
+**批量封装**（深色主题）：拖入整季 MKV 自动排队、按集数匹配简繁字幕
+
+![批量封装界面](assets/ui-batch-dark.png)
+
 **便携部署**：整个文件夹拷走即用（Windows 10/11），服务端纯 Python 标准库。**仅需自行安装 Python 3.8+**（官方安装器勾选 Add to PATH），其余组件（MKVToolNix / ffmpeg / assfonts / AssFontSubset）由 `安装环境.bat` 自动下载到 `bin/`，并顺带安装 fonttools（AFS 默认后端依赖，唯一 pip 包）。
 
 ## 快速开始
