@@ -106,6 +106,10 @@ def main():
     ap.add_argument("--audio-tracks", default="")
     ap.add_argument("--subtitle-tracks", default="")
     ap.add_argument("--keep-attachments", action="store_true")
+    ap.add_argument("--sc-default", default="", help="覆盖 SC 默认轨旗标: 0|1（空=自动：SC 在则默认）")
+    ap.add_argument("--tc-default", default="", help="覆盖 TC 默认轨旗标: 0|1（空=自动）")
+    ap.add_argument("--sc-forced", action="store_true", help="SC 轨打 forced 旗标")
+    ap.add_argument("--tc-forced", action="store_true", help="TC 轨打 forced 旗标")
     a = ap.parse_args()
 
     # ---------- 校验输入 ----------
@@ -250,12 +254,22 @@ def main():
     sc_def, tc_def = "0:1", "0:0"
     if not a.sc_sub and a.tc_sub:
         tc_def = "0:1"
+    if a.sc_default in ("0", "1"):
+        sc_def = "0:" + a.sc_default
+    if a.tc_default in ("0", "1"):
+        tc_def = "0:" + a.tc_default
     if a.sc_sub:
         margs += ["--language", "0:" + a.sc_lang, "--track-name", "0:" + a.sc_name,
-                  "--default-track-flag", sc_def, a.sc_sub]
+                  "--default-track-flag", sc_def]
+        if a.sc_forced:
+            margs += ["--forced-display-flag", "0:1"]
+        margs.append(a.sc_sub)
     if a.tc_sub:
         margs += ["--language", "0:" + a.tc_lang, "--track-name", "0:" + a.tc_name,
-                  "--default-track-flag", tc_def, a.tc_sub]
+                  "--default-track-flag", tc_def]
+        if a.tc_forced:
+            margs += ["--forced-display-flag", "0:1"]
+        margs.append(a.tc_sub)
     if ext_audio:
         if a.audio_lang:
             margs += ["--language", "0:" + a.audio_lang]

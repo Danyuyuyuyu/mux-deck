@@ -9,7 +9,8 @@ MUX_CLI = os.path.join(core.SCRIPTS_DIR, "mux_cli.py")
 
 COMMON_KEYS = ("fonts_dir", "audio", "audio_mode", "keep_src_audio", "audio_lang", "audio_name",
                "out_dir", "force", "sc_name", "tc_name", "no_backup", "audio_tracks",
-               "subtitle_tracks", "keep_attachments")
+               "subtitle_tracks", "keep_attachments", "sc_default", "tc_default",
+               "sc_forced", "tc_forced")
 
 # ---------------- 命令构造 ----------------
 
@@ -49,6 +50,13 @@ def build_cmd(it, common):
     add("--subtitle-tracks", full.get("subtitle_tracks"))
     if full.get("keep_attachments"):
         cmd.append("--keep-attachments")
+    # 轨道旗标：default 允许显式覆盖（"0"/"1"），空 = CLI 端自动
+    add("--sc-default", full.get("sc_default"))
+    add("--tc-default", full.get("tc_default"))
+    if full.get("sc_forced"):
+        cmd.append("--sc-forced")
+    if full.get("tc_forced"):
+        cmd.append("--tc-forced")
     return cmd
 
 # ---------------- 任务生命周期 ----------------

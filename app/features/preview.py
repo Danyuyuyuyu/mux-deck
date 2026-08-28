@@ -33,6 +33,36 @@ def _extract_embedded_fonts(video, pid):
     core.run_to_file(cmd, plog, timeout=120)
     return fdir if os.listdir(fdir) else ""
 
+def _ass_times(ass_path):
+    """读 ASS Dialogue 的 Start 时间（秒），升序去重。"""
+    ts = []
+    try:
+        with open(ass_path, encoding="utf-8-sig", errors="replace") as f:
+            for line in f:
+                if line.startswith("Dialogue:"):
+                    parts = line.split(",", 10)
+                    if len(parts) >= 3:
+                        try:
+                            h, m, s = parts[1].split(":")
+                            ts.append(int(h) * 3600 + int(m) * 60 + float(s))
+                        except (ValueError, IndexError):
+                            pass
+    except OSError:
+        pass
+    return sorted(set(ts))
+
+def _grid_points(times, n=8, pad=0.05):
+    """从字幕时间点均匀抽 n 个（首尾必含），各加 pad 秒保证字幕已上屏。"""
+    if not times:
+        return [0.0] * n
+    if len(times) <= n:
+        pts = list(times)
+    else:
+        step = (len(times) - 1) / float(n - 1)
+        pts = [times[int(round(i * step))] for i in range(n)]
+        pts = sorted(set(pts))
+    return [min(p + pad, max(times)) for p in pts]
+
 def make_preview(video, sub, fonts_dir, t, mode="frame"):
     ff = core.FFMPEG
     if not ff:
@@ -84,6 +114,39 @@ def make_preview(video, sub, fonts_dir, t, mode="frame"):
         vf = "ass=%s:fontsdir=%s,scale=1280:-2" % (os.path.basename(preview_ass), rel_fonts.replace("\\", "/"))
     else:
         vf = "ass=%s,scale=1280:-2" % os.path.basename(preview_ass)  # 无字体目录（内封轨且视频无字体附件）时用系统字体
+    # ---- 连拍模式：按字幕时间点抽 8 帧拼 4x2 网格（帧宽 640，输入 seek 保速度） ----
+    if mode == "grid":
+        pts = _grid_points(_ass_times(preview_ass), 8)
+        vf_g = vf.replace("scale=1280:-2", "scale=640:-2")
+        log = os.path.join(core.LOG_DIR, "preview_%s.log" % pid)
+        frames = []
+        for i, tt in enumerate(pts):
+            fp = os.path.join(core.PREVIEW_DIR, "%s_f%d.png" % (pid, i))
+            c = [ff, "-y", "-ss", str(tt), "-i", video, "-vf", vf_g, "-frames:v", "1", fp]
+            if core.run_to_file(c, log, timeout=120, cwd=core.PREVIEW_DIR) == 0 and os.path.exists(fp):
+                frames.append(fp)
+        if not frames:
+            return {"error": "连拍渲染失败（一帧都没成功）", "log": core.read_tail(log, 60)}
+        # 部分帧失败会导致 %d 模式断号 -> 重排成连续 seq
+        seqs = []
+        for i, fp in enumerate(frames):
+            sp = os.path.join(core.PREVIEW_DIR, "%s_s%d.png" % (pid, i))
+            try:
+                os.replace(fp, sp)
+                seqs.append(sp)
+            except OSError:
+                pass
+        rc = core.run_to_file([ff, "-y", "-start_number", "0", "-i", "%s_s%%d.png" % os.path.join(core.PREVIEW_DIR, pid),
+                               "-vf", "tile=4x2", "-frames:v", "1", out_png], log, timeout=120, cwd=core.PREVIEW_DIR)
+        for sp in seqs:
+            try:
+                os.remove(sp)
+            except OSError:
+                pass
+        if rc != 0 or not os.path.exists(out_png):
+            return {"error": "连拍拼图失败", "log": core.read_tail(log, 60)}
+        return {"ok": True, "url": "/api/file?path=" + pid + ".png", "pid": pid,
+                "grid": True, "points": pts}
     log = os.path.join(core.LOG_DIR, "preview_%s.log" % pid)
     if mode == "subtitle":
         cmd = [ff, "-y", "-f", "lavfi", "-i", "color=c=black:s=1920x1080:r=25:d=36000",
