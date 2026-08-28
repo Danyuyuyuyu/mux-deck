@@ -660,6 +660,14 @@
               <button class="btn" id="btnCfgSave">保存</button>
               <span class="t-cap">切换主力盘后保存，索引自动重建；新根目录同时作为文件浏览器的默认起点</span>
             </div>
+            <div class="field" style="margin-top:10px;">
+              <label for="cfg_tool">子集化工具（双轨）</label>
+              <select id="cfg_tool">
+                <option value="afs">AssFontSubset（主用：自动修正字幕字体名；要求字体目录无重复）</option>
+                <option value="assfonts">assfonts（回退：容忍重复字体目录）</option>
+              </select>
+              <span class="t-cap">字体目录有同族重复字体时 AFS 会拒跑，切成 assfonts 即可</span>
+            </div>
           </div>
         </div>
 
@@ -2034,7 +2042,14 @@ $('btnCfgSave').onclick = async () => {
     setStatus('工作目录已保存：' + CFG.scanRoot + '（索引将自动重建）', 'ok');
   } catch (ex) { setStatus('工作目录保存失败：' + ex, 'err'); }
 };
-api('/api/config').then(c => { if (c && c.scan_root) { CFG.scanRoot = c.scan_root; $('cfg_scan').value = c.scan_root; } if (c && (!c.configured || !c.valid)) showSetup(); }).catch(() => {});
+$('cfg_tool').onchange = async () => {
+  try {
+    const r = await api('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subset_tool: $('cfg_tool').value }) });
+    if (r.error) { setStatus('子集工具保存失败：' + r.error, 'err'); return; }
+    setStatus('子集化工具已切换：' + (r.subset_tool || $('cfg_tool').value), 'ok');
+  } catch (ex) { setStatus('子集工具保存失败：' + ex, 'err'); }
+};
+api('/api/config').then(c => { if (c && c.scan_root) { CFG.scanRoot = c.scan_root; $('cfg_scan').value = c.scan_root; } if (c && c.subset_tool) { $('cfg_tool').value = c.subset_tool; } if (c && (!c.configured || !c.valid)) showSetup(); }).catch(() => {});
 renderVideoCard();
 refreshSticky();
 refreshBatchSticky();
