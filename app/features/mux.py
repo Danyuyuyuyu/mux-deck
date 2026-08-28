@@ -1,0 +1,319 @@
+# -*- coding: utf-8 -*-
+# 封装编排：POST /api/mux（单任务）、POST /api/batch（批量）、GET /api/job、POST /api/stop、POST /api/rerun、GET /api/history
+# 单任务实际执行由 scripts/mux_cli.py 完成（Python 编排，PowerShell 已退役）
+import json, os, re, sys, threading, time, uuid
+from app import core
+from app.features import tracks as tracks_mod
+
+MUX_CLI = os.path.join(core.SCRIPTS_DIR, "mux_cli.py")
+
+COMMON_KEYS = ("fonts_dir", "audio", "audio_mode", "keep_src_audio", "audio_lang", "audio_name",
+               "out_dir", "force", "sc_name", "tc_name", "no_backup", "audio_tracks",
+               "subtitle_tracks", "keep_attachments")
+
+# ---------------- 命令构造 ----------------
+
+def build_cmd(it, common):
+    full = dict(common)
+    for k, v in it.items():
+        if v:
+            full[k] = v
+    video = full.get("video", "")
+    cmd = [sys.executable, MUX_CLI, "--video", video]
+    def add(k, v):
+        if v is None:
+            v = ""
+        elif not isinstance(v, str):
+            v = str(v)
+        v = v.strip()
+        if v:
+            cmd.append(k)
+            cmd.append(v)
+    add("--sc-sub", full.get("sc_sub") or full.get("sc"))
+    add("--tc-sub", full.get("tc_sub") or full.get("tc"))
+    add("--fonts-dir", full.get("fonts_dir"))
+    add("--sc-name", full.get("sc_name"))
+    add("--tc-name", full.get("tc_name"))
+    audio_tracks = full.get("audio_tracks")
+    if not audio_tracks and full.get("audio_mode") == "none":
+        audio_tracks = "none"
+    add("--audio-tracks", audio_tracks)
+    add("--audio", full.get("audio"))
+    add("--audio-lang", full.get("audio_lang"))
+    add("--audio-name", full.get("audio_name"))
+    add("--out-dir", full.get("out_dir"))
+    if full.get("force"):
+        cmd.append("--force")
+    if full.get("no_backup"):
+        cmd.append("--no-backup")
+    add("--subtitle-tracks", full.get("subtitle_tracks"))
+    if full.get("keep_attachments"):
+        cmd.append("--keep-attachments")
+    return cmd
+
+# ---------------- 任务生命周期 ----------------
+
+def _finalize_job(state):
+    jid, jdir = state["id"], state["dir"]
+    if state.get("stopped"):
+        state["status"] = "killed"
+        state["exit"] = -1
+    else:
+        state["status"] = "done" if state["failed"] == 0 else "error"
+        state["exit"] = 0 if state["failed"] == 0 else 1
+    try:
+        with open(os.path.join(jdir, "state.json"), "w", encoding="utf-8") as f:
+            json.dump({"status": state["status"], "exit": state["exit"], "failed": state.get("failed", 0),
+                       "results": state.get("results", []), "current": state.get("current", 0),
+                       "total": state.get("total", 0)}, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    try:
+        parts = []
+        for i in range(1, state.get("total", 1) + 1):
+            log = os.path.join(jdir, "item_%02d.log" % i)
+            tl = core.read_tail(log, 60)
+            if tl:
+                parts.append("---- item %d ----\n%s" % (i, tl))
+        with open(os.path.join(core.LOG_DIR, "job_%s.log" % jid), "w", encoding="utf-8", errors="replace") as f:
+            f.write("\n".join(parts))
+    except Exception:
+        pass
+
+def _another_running():
+    with core.JOBS_LOCK:
+        return any(s.get("status") == "running" for s in core.JOBS.values())
+
+def start_batch(body):
+    items = body.get("items") or []
+    if not items:
+        return {"error": "没有任务项"}
+    for it in items:
+        if not it.get("video") or not os.path.exists(it.get("video")):
+            return {"error": "存在无效的视频路径: %s" % it.get("video")}
+    if _another_running():
+        return {"error": "另一个任务正在运行，请等待完成"}
+    common = {k: body.get(k) for k in COMMON_KEYS}
+    if (common.get("out_dir") or "").strip():
+        base_names = [os.path.basename(it.get("video", "")) for it in items]
+        lower_names = [n.lower() for n in base_names]
+        dup = sorted({n for n in base_names if lower_names.count(n.lower()) > 1})
+        if dup:
+            return {"error": "输出同名冲突，已拒绝提交: %s" % "、".join(dup)}
+    jid = uuid.uuid4().hex[:12]
+    jdir = os.path.join(core.JOBS_DIR, jid)
+    os.makedirs(jdir)
+    with open(os.path.join(jdir, "params.json"), "w", encoding="utf-8") as f:
+        json.dump({"common": common, "items": items}, f, ensure_ascii=False, indent=2)
+    first = items[0]
+    fv = first.get("video", "")
+    out_dir = (common.get("out_dir") or "").strip() or os.path.dirname(fv)
+    result = os.path.join(out_dir, os.path.splitext(os.path.basename(fv))[0] + os.path.splitext(fv)[1]) if fv else ""
+    state = {"id": jid, "dir": jdir, "status": "running", "exit": None,
+             "started": time.time(), "current": 0, "total": len(items),
+             "current_video": "", "item_status": "", "failed": 0, "results": [], "result": result,
+             "stop_event": threading.Event()}
+
+    def worker():
+        for i, it in enumerate(items):
+            if state.get("stopped"):
+                break
+            state["current"] = i + 1
+            state["item_status"] = "running"
+            state["current_video"] = it.get("video", "")
+            log = os.path.join(jdir, "item_%02d.log" % (i + 1))
+            try:
+                rc = core.run_to_file(build_cmd(it, common), log, jid=jid, stop_flag=state["stop_event"])
+                od = (common.get("out_dir") or "").strip()
+                out_path = os.path.join(od, os.path.basename(it.get("video", ""))) if od else it.get("video", "")
+                state["results"].append({"video": it.get("video", ""), "output": out_path,
+                                         "ok": rc == 0 and not state.get("stopped"), "exit": rc})
+                if rc != 0 and not state.get("stopped"):
+                    state["failed"] += 1
+            except Exception as ex:
+                state["results"].append({"video": it.get("video", ""), "ok": False, "exit": -1})
+                state["failed"] += 1
+                try:
+                    with open(log, "a", encoding="utf-8", errors="replace") as f:
+                        f.write("\nSERVER ERROR: %s\n" % ex)
+                except Exception:
+                    pass
+            state["item_status"] = "done"
+        _finalize_job(state)
+
+    with core.JOBS_LOCK:
+        if any(s.get("status") == "running" for s in core.JOBS.values()):
+            return {"error": "另一个任务正在运行，请等待完成"}
+        core.JOBS[jid] = state
+        threading.Thread(target=worker, daemon=True).start()
+    return {"job": jid}
+
+def job_status(jid):
+    s = core.JOBS.get(jid)
+    if not s:
+        return {"error": "unknown job"}
+    # merge logs: current item full + previous items tails
+    parts = []
+    total_items = s.get("total", 1)
+    cur = s.get("current", 0)
+    for i in range(1, min(cur + 1, total_items + 1)):
+        log = os.path.join(s["dir"], "item_%02d.log" % i)
+        if i == cur and s.get("item_status") == "running":
+            parts.append(core.read_tail(log, 300))
+        else:
+            tl = core.read_tail(log, 25)
+            if tl:
+                parts.append("---- item %d ----\n%s" % (i, tl))
+    merged = "\n".join(parts)
+    progress = None
+    m = re.findall(r'(?:进度|Progress)[:：]\s*(\d+)%', merged)
+    if m:
+        progress = int(m[-1])
+    return {"id": s["id"], "status": s["status"], "exit": s["exit"],
+            "current": cur, "total": total_items, "failed": s.get("failed", 0),
+            "current_video": s.get("current_video", ""), "progress": progress,
+            "results": s.get("results", []), "result": s.get("result", ""), "log": merged}
+
+def stop_job(jid):
+    st = core.JOBS.get(jid)
+    if not st:
+        return {"error": "任务不存在"}
+    if st.get("status") != "running":
+        return {"ok": True, "status": st.get("status")}
+    st["stopped"] = True
+    ev = st.get("stop_event")
+    if ev is not None:
+        ev.set()
+    proc = core.get_proc(jid)
+    if proc and proc.poll() is None:
+        core._kill_tree(proc)
+    return {"ok": True}
+
+# ---------------- 历史（新 data/mux + 旧 data/jobs 合并读取） ----------------
+
+def _job_dirs():
+    out = []
+    for base in (core.JOBS_DIR, core.LEGACY_JOBS_DIR):
+        try:
+            for d in os.listdir(base):
+                jd = os.path.join(base, d)
+                if os.path.isdir(jd):
+                    out.append(jd)
+        except OSError:
+            pass
+    out.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+    return out
+
+def _find_job_dir(jid):
+    if not re.fullmatch(r"[0-9a-f]{12}", jid):
+        return ""
+    for base in (core.JOBS_DIR, core.LEGACY_JOBS_DIR):
+        jd = os.path.join(base, jid)
+        if os.path.isdir(jd):
+            return jd
+    return ""
+
+def history_list():
+    items = []
+    try:
+        for jd in _job_dirs()[:60]:
+            d = os.path.basename(jd)
+            try:
+                with open(os.path.join(jd, "params.json"), encoding="utf-8") as f:
+                    p = json.load(f)
+            except Exception:
+                continue
+            tracks = p.get("tracks")
+            items_data = p.get("items") or []
+            if tracks:
+                typ = "提取"
+                video = p.get("video", "")
+            elif len(items_data) > 1:
+                typ = "批量"
+                video = "、".join(os.path.basename(it.get("video", "")) for it in items_data[:3])
+            else:
+                typ = "封装"
+                it = items_data[0] if items_data else {}
+                video = it.get("video", "")
+            status = "done"
+            try:
+                with open(os.path.join(jd, "state.json"), encoding="utf-8") as f:
+                    st = json.load(f)
+                status = {"done": "done", "error": "error", "killed": "killed"}.get(st.get("status"), "done")
+            except Exception:
+                for fn in os.listdir(jd):
+                    if fn.startswith("item_") and fn.endswith(".log"):
+                        txt = core.read_tail(os.path.join(jd, fn), 8000)
+                        if "FAIL:" in txt or "SERVER ERROR" in txt:
+                            status = "error"
+                            break
+            items.append({"id": d, "type": typ, "video": video, "status": status,
+                          "time": int(os.path.getmtime(jd) * 1000)})
+    except Exception:
+        pass
+    return {"items": items}
+
+def history_log(jid):
+    jd = _find_job_dir(jid)
+    if not jd:
+        return {"error": "任务不存在"}
+    parts = []
+    for fn in sorted(os.listdir(jd)):
+        if fn.startswith("item_") and fn.endswith(".log"):
+            parts.append("---- " + fn + " ----\n" + core.read_tail(os.path.join(jd, fn), 8000))
+    return {"log": "\n".join(parts)}
+
+def rerun(jid):
+    jd = _find_job_dir(jid)
+    if not jd:
+        return {"error": "任务不存在"}
+    try:
+        with open(os.path.join(jd, "params.json"), encoding="utf-8") as f:
+            p = json.load(f)
+    except Exception as ex:
+        return {"error": "参数读取失败: %s" % ex}
+    if p.get("tracks"):
+        from app.features import extract as extract_mod
+        return extract_mod.extract_subs(p.get("video", ""), p.get("tracks") or [], p.get("out_dir", ""))
+    body = dict(p.get("common") or {})
+    body["items"] = p.get("items") or []
+    for it in body["items"]:
+        if it.get("video") and not (it.get("sc_sub") or it.get("sc") or it.get("tc_sub") or it.get("tc")):
+            m = tracks_mod.match_subs(it["video"])
+            if m.get("sc"):
+                it["sc_sub"] = m["sc"]
+            if m.get("tc"):
+                it["tc_sub"] = m["tc"]
+    return start_batch(body)
+
+# ---------------- 路由 ----------------
+
+def handle_mux(body):
+    item = dict(body)
+    payload = {"items": [item]}
+    for k in COMMON_KEYS:
+        if k in body:
+            payload[k] = body[k]
+    return start_batch(payload)
+
+def handle_batch(body):
+    return start_batch(body)
+
+def handle_job(q):
+    return job_status((q.get("id") or [""])[0])
+
+def handle_stop(body):
+    return stop_job((body.get("id") or "").strip())
+
+def handle_rerun(body):
+    return rerun((body.get("id") or "").strip())
+
+def handle_history(q):
+    jid = (q.get("id") or [""])[0]
+    return history_log(jid) if jid else history_list()
+
+handlers = {
+    "GET": {"/api/job": handle_job, "/api/history": handle_history},
+    "POST": {"/api/mux": handle_mux, "/api/batch": handle_batch,
+             "/api/stop": handle_stop, "/api/rerun": handle_rerun},
+}

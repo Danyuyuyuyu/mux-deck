@@ -1,4 +1,4 @@
-# ===== 第三方运行时（克隆后用 bootstrap.ps1 获取） =====
+# ===== 第三方运行时（克隆后用 bootstrap.py 获取） =====
 bin/
 
 # ===== 运行时数据（含本地绝对路径，涉及隐私，勿上传） =====
@@ -18,3 +18,4 @@ Desktop.ini
 .DS_Store
 .vscode/
 .idea/
+.workbuddy/
