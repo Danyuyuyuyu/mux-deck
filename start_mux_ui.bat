@@ -3,8 +3,18 @@ setlocal
 title Mux Deck - Subtitle Muxer
 cd /d "%~dp0"
 
+rem ---- locate python: py -3 -> python on PATH ----
+set "PY="
+py -3 -c exit() >nul 2>&1 && set "PY=py -3"
+if not defined PY where python >nul 2>&1 && set "PY=python"
+if not defined PY (
+  echo Python not found. Install Python 3.8+ with "Add to PATH" checked.
+  pause
+  exit /b 1
+)
+
 rem already running? -> open the browser only when /api/version really returns ok
-powershell -NoProfile -Command "try{$r=Invoke-WebRequest 'http://127.0.0.1:8765/api/version' -UseBasicParsing -TimeoutSec 2;$j=$r.Content|ConvertFrom-Json;if($j.ok){exit 0}}catch{};exit 1" >nul 2>&1
+%PY% -c "import urllib.request,sys,json;sys.exit(0 if json.load(urllib.request.urlopen('http://127.0.0.1:8765/api/version',timeout=2)).get('ok') else 1)" >nul 2>&1
 if not errorlevel 1 (
   start "" "http://127.0.0.1:8765"
   echo Server already running - browser opened.
@@ -12,21 +22,9 @@ if not errorlevel 1 (
   exit /b
 )
 
-rem ---- locate python: py -3 -> where python -> original hardcoded path (user-installed) ----
-set "PY="
-py -3 -c exit() >nul 2>&1 && set "PY=py -3"
-if not defined PY where python >nul 2>&1 && set "PY=python"
-if not defined PY if exist "C:\Users\ZhenXun\AppData\Local\Programs\Python\Python312\python.exe" set "PY=C:\Users\ZhenXun\AppData\Local\Programs\Python\Python312\python.exe"
-if not defined PY (
-  echo Python not found. Tried: ^"py -3^", ^"python^" on PATH and the hardcoded path.
-  echo Install Python 3 with ^"Add to PATH^" checked, or edit the hardcoded path at the top of this script.
-  pause
-  exit /b 1
-)
-
 echo Starting server, browser opens in 2s...
 start "" /min %PY% "%~dp0app\server.py"
 timeout /t 2 /nobreak >nul
 start "" "http://127.0.0.1:8765"
-echo Server started: http://127.0.0.1:8765  ^(close the minimized window to stop^)
+echo Server started: http://127.0.0.1:8765  (close the minimized window to stop)
 timeout /t 4 >nul
