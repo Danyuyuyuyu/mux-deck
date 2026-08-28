@@ -460,6 +460,10 @@
 </head>
 <body>
 
+<div id="offlineBar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:300;background:var(--err-bg);border-bottom:1px solid var(--err-line);color:var(--danger);font:13px/1.6 var(--sans);text-align:center;padding:8px 40px;backdrop-filter:blur(4px);">
+  <b>服务未运行</b> — 请双击 <span style="font-family:var(--mono)">start_mux_ui.bat</span> 重新启动后端；恢复后本提示自动消失。
+</div>
+
 <header class="app-header">
   <div class="container header-inner">
     <div class="brand">
@@ -537,6 +541,15 @@
                 <input id="sc_name" type="text" value="SC" autocomplete="off">
                 <span class="t-cap">勾选时自动识别</span>
               </div>
+              <div class="sub-name-row">
+                <label for="sc_default">默认轨</label>
+                <select id="sc_default" style="height:34px;">
+                  <option value="">自动（有 SC 则默认）</option>
+                  <option value="1">是</option>
+                  <option value="0">否</option>
+                </select>
+                <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary)"><input id="sc_forced" type="checkbox" style="width:auto;height:auto">强制轨 (forced)</label>
+              </div>
               <div class="sub-card-foot">
                 <span class="sub-status off" id="scStatus"><span data-ic="info" aria-hidden="true"></span><span class="sub-status-txt">未设置</span></span>
                 <span class="badge" id="sc_enc"></span>
@@ -556,6 +569,15 @@
                 <label for="tc_name">轨道名</label>
                 <input id="tc_name" type="text" value="TC" autocomplete="off">
                 <span class="t-cap">勾选时自动识别</span>
+              </div>
+              <div class="sub-name-row">
+                <label for="tc_default">默认轨</label>
+                <select id="tc_default" style="height:34px;">
+                  <option value="">自动（仅 TC 时默认）</option>
+                  <option value="1">是</option>
+                  <option value="0">否</option>
+                </select>
+                <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary)"><input id="tc_forced" type="checkbox" style="width:auto;height:auto">强制轨 (forced)</label>
               </div>
               <div class="sub-card-foot">
                 <span class="sub-status off" id="tcStatus"><span data-ic="info" aria-hidden="true"></span><span class="sub-status-txt">未设置</span></span>
@@ -772,6 +794,7 @@
           <div class="field" style="margin-top:16px;">
             <button class="btn lg primary" id="btnPreview" style="height:36px;"><span data-ic="image" aria-hidden="true"></span>渲染预览帧</button>
             <button class="btn" id="btnPreviewSub"><span data-ic="captions" aria-hidden="true"></span>纯字幕黑底</button>
+            <button class="btn" id="btnPreviewGrid"><span data-ic="grid" aria-hidden="true"></span>连拍 8 帧</button>
           </div>
           <div id="previewBox"></div>
         </div>
@@ -864,6 +887,7 @@ const ICONS = {
   list:'<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>',
   eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
   image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
   download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
   plus:'<path d="M5 12h14"/><path d="M12 5v14"/>',
   sparkles:'<path d="m12 3-1.9 5.8a2 2 0 0 1-1.287 1.288L3 12l5.813 1.912A2 2 0 0 1 10.1 15.2L12 21l1.9-5.8a2 2 0 0 1 1.287-1.288L21 12l-5.813-1.912A2 2 0 0 1 13.9 8.8Z"/>',
@@ -908,9 +932,33 @@ function isTcName(n) { return /(?:^|[._\- ])(?:tc|cht|jptc)(?:[._\- ]|$)/i.test(
 const BR = { setter: null, filter: 'any', path: 'D:\\Video' };
 
 async function api(url, opts) {
-  const r = await fetch(url, opts);
-  return r.json();
+  try {
+    const r = await fetch(url, opts);
+    setOffline(false);
+    return r.json();
+  } catch (ex) {
+    if (ex instanceof TypeError) setOffline(true); // fetch 网络层失败 = 服务不可达
+    throw ex;
+  }
 }
+/* ---------- 服务断线探测：横幅 + 每 3s 重试，恢复自动隐藏 ---------- */
+let __offline = null;
+function setOffline(bad) {
+  if (__offline === bad) return;
+  __offline = bad;
+  const bar = document.getElementById('offlineBar');
+  if (bar) bar.style.display = bad ? 'block' : 'none';
+  if (bad && !setOffline._timer) {
+    setOffline._timer = setInterval(async () => {
+      try {
+        const r = await fetch('/api/version');
+        if (r.ok) { clearInterval(setOffline._timer); setOffline._timer = null; setOffline(false); }
+      } catch (e) { /* 仍在断线 */ }
+    }, 3000);
+  }
+}
+/* 初始探测一次：打开页面时后端就没在跑也能立刻给出提示 */
+fetch('/api/version').then(r => { if (r.ok) setOffline(false); }).catch(() => setOffline(true));
 function truncMid(t, max) {
   t = String(t || '');
   var pi = t.search(/[A-Za-z]:\\/);
@@ -1304,19 +1352,49 @@ $('btnCheckFonts').onclick = async () => {
   $('fontCheckBox').innerHTML = '<div class="chip run" style="margin-top:8px">' + ic('loader', 'spin') + '<span>正在检查字体，请稍候…</span></div>';
   try {
     const r = await api('/api/check_fonts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({subs, fonts_dir}) });
-    const box = $('fontCheckBox');
-    if (r.error) { box.innerHTML = '<div class="chip warn" style="margin-top:8px">' + ic('alertTriangle') + '<span>' + esc(r.error) + '</span></div>' + (r.log ? '<pre class="log-pre">' + esc(r.log) + '</pre>' : ''); return; }
-    if (r.ok && !r.missing.length) {
-      box.innerHTML = '<div class="chip ok" style="margin-top:8px">' + ic('checkCircle') + '<span>字体齐全，可正常封装</span></div>';
-    } else {
-      box.innerHTML = '<div class="chip warn" style="margin-top:8px">' + ic('alertTriangle') + '<span>缺少 ' + r.missing.length + ' 个字体</span></div><pre class="log-pre">' + esc(r.missing.join('\n')) + '</pre>';
-    }
+    renderFontCheck(r, subs, fonts_dir);
   } catch (ex) {
     $('fontCheckBox').innerHTML = '<div class="chip err" style="margin-top:8px">' + ic('xCircle') + '<span>连接失败：' + esc(ex) + '</span></div>';
   } finally {
     $('btnCheckFonts').disabled = false;
   }
 };
+/* 体检结果渲染（含缺字体时的补给入口） */
+function renderFontCheck(r, subs, fonts_dir) {
+  const box = $('fontCheckBox');
+  if (r.error) { box.innerHTML = '<div class="chip warn" style="margin-top:8px">' + ic('alertTriangle') + '<span>' + esc(r.error) + '</span></div>' + (r.log ? '<pre class="log-pre">' + esc(r.log) + '</pre>' : ''); return; }
+  if (r.ok && !r.missing.length) {
+    box.innerHTML = '<div class="chip ok" style="margin-top:8px">' + ic('checkCircle') + '<span>字体齐全，可正常封装</span></div>';
+    return;
+  }
+  let html = '<div class="chip warn" style="margin-top:8px">' + ic('alertTriangle') + '<span>缺少 ' + r.missing.length + ' 个字体</span></div><pre class="log-pre">' + esc(r.missing.join('\n')) + '</pre>';
+  html += '<div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+       +  '<input id="fs_source" class="ipt" style="flex:1;min-width:220px" placeholder="备份字体目录（如 D:\\Video\\Font）" value="' + esc(localStorage.getItem('muxui_fs_source') || 'D:\\Video\\Font') + '">'
+       +  '<button class="btn" id="btnFontSupply">' + ic('download') + '<span>从备份目录补给</span></button></div>';
+  box.innerHTML = html;
+  $('btnFontSupply').onclick = async () => {
+    const source_dir = $('fs_source').value.trim();
+    if (!source_dir) { alert('请填写备份字体目录'); return; }
+    localStorage.setItem('muxui_fs_source', source_dir);
+    $('btnFontSupply').disabled = true;
+    $('fontCheckBox').innerHTML = '<div class="chip run" style="margin-top:8px">' + ic('loader', 'spin') + '<span>补给中：检索备份目录、复制字体、复检…</span></div>';
+    try {
+      const r2 = await api('/api/font_supply', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({subs, fonts_dir, source_dir}) });
+      if (r2.error) { $('fontCheckBox').innerHTML = '<div class="chip err" style="margin-top:8px">' + ic('xCircle') + '<span>' + esc(r2.error) + '</span></div>'; return; }
+      let parts = [];
+      (r2.supplied || []).forEach(s => parts.push('已补给：' + s.missing + '  ←  ' + s.file));
+      (r2.skipped_dup || []).forEach(s => parts.push('目标目录已有同族样式，跳过：' + s.missing + '（' + s.key + '）'));
+      (r2.not_found || []).forEach(n => parts.push('备份目录也找不到：' + n));
+      const rc = r2.recheck || {};
+      const head = rc.ok
+        ? '<div class="chip ok" style="margin-top:8px">' + ic('checkCircle') + '<span>补给完成，复检通过 ✓</span></div>'
+        : '<div class="chip warn" style="margin-top:8px">' + ic('alertTriangle') + '<span>补给后仍缺字体：</span></div>';
+      $('fontCheckBox').innerHTML = head + (parts.length ? '<pre class="log-pre">' + esc(parts.join('\n')) + '</pre>' : '') + (rc.missing && rc.missing.length ? '<pre class="log-pre">' + esc(rc.missing.join('\n')) + '</pre>' : '');
+    } catch (ex) {
+      $('fontCheckBox').innerHTML = '<div class="chip err" style="margin-top:8px">' + ic('xCircle') + '<span>补给失败：' + esc(ex) + '</span></div>';
+    }
+  };
+}
 
 /* ==================== 字幕预览 ==================== */
 $('btnPreview').onclick = async () => {
@@ -1342,6 +1420,32 @@ $('btnPreview').onclick = async () => {
     $('previewBox').innerHTML = '<div class="chip err" style="margin-top:12px">' + ic('xCircle') + '<span>连接失败：' + esc(ex) + '</span></div>';
   } finally {
     $('btnPreview').disabled = false;
+  }
+};
+
+/* 连拍：按字幕行自动抽 8 个时间点，4x2 网格一图总览（忽略上方时间点） */
+$('btnPreviewGrid').onclick = async () => {
+  const video = $('pv_video').value.trim() || $('video').value.trim();
+  const sel = $('pv_subsel').value;
+  let sub = String(sel).indexOf('track:') === 0 ? sel : $('pv_sub').value.trim();
+  const fonts_dir = $('pv_fonts').value.trim() || $('fonts_dir').value.trim();
+  if (!video) { alert('请选择视频文件'); return; }
+  if (!sub) { alert('请选择字幕文件'); return; }
+  $('btnPreviewGrid').disabled = true;
+  $('previewBox').innerHTML = '<div class="chip run" style="margin-top:12px">' + ic('loader', 'spin') + '<span>连拍渲染中（8 帧，约十几秒）…</span></div>';
+  try {
+    const r = await api('/api/preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({video, sub, fonts_dir, mode: 'grid'}) });
+    const box = $('previewBox');
+    if (r.ok) {
+      const pts = (r.points || []).map(p => { const m = Math.floor(p / 60), s = Math.round(p % 60); return m + ':' + String(s).padStart(2, '0'); }).join(' · ');
+      box.innerHTML = '<img id="previewImg" src="' + r.url + '" alt="连拍网格">' + (pts ? '<div class="t-cap" style="margin-top:6px">抽帧时间点：' + esc(pts) + '</div>' : '');
+    } else {
+      box.innerHTML = '<div class="chip err" style="margin-top:12px">' + ic('xCircle') + '<span>连拍失败：' + esc(r.error || '') + '</span></div>' + (r.log ? '<pre class="log-pre">' + esc(r.log) + '</pre>' : '');
+    }
+  } catch (ex) {
+    $('previewBox').innerHTML = '<div class="chip err" style="margin-top:12px">' + ic('xCircle') + '<span>连接失败：' + esc(ex) + '</span></div>';
+  } finally {
+    $('btnPreviewGrid').disabled = false;
   }
 };
 
@@ -1389,7 +1493,9 @@ $('btnStart').onclick = async () => {
     subtitle_tracks: trackSel.sub.size ? [...trackSel.sub].join(',') : '',
     keep_attachments: trackSel.keepAtt,
     audio_lang: $('audio_lang').value.trim(), audio_name: $('audio_name').value.trim(),
-    out_dir: $('out_dir').value.trim(), force: $('force').checked, no_backup: !$('backup').checked
+    out_dir: $('out_dir').value.trim(), force: $('force').checked, no_backup: !$('backup').checked,
+    sc_default: $('sc_default').value, tc_default: $('tc_default').value,
+    sc_forced: $('sc_forced').checked, tc_forced: $('tc_forced').checked
   };
   if (!body.video) { alert('请选择视频文件'); return; }
   if (!body.sc_sub && !body.tc_sub && !confirm('未提供任何字幕，将保留源字幕与源字体（无新字幕时不做字体子集化）。继续？')) return;

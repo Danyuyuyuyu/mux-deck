@@ -229,12 +229,33 @@ def _clean_one_dir(d, cutoff):
         except OSError:
             pass
 
+# ---------- 历史任务目录保留策略 ----------
+# 任务目录（data/mux + 旧 data/jobs）含 params.json/state.json/item_*.log，
+# /api/history 只展示最近 60 条，但目录会无限累积 —— 这里按 mtime 清理：
+#   超过 retention_days 天的整目录删除；无论多旧，最近 keep_min 条始终保留。
+def _clean_job_dirs(retention_days=30, keep_min=100):
+    cutoff = time.time() - retention_days * 86400
+    for base in (JOBS_DIR, LEGACY_JOBS_DIR):
+        try:
+            dirs = [os.path.join(base, d) for d in os.listdir(base)
+                    if os.path.isdir(os.path.join(base, d))]
+        except OSError:
+            continue
+        dirs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+        for jd in dirs[keep_min:]:  # 最新 keep_min 条不动
+            try:
+                if os.path.getmtime(jd) < cutoff:
+                    shutil.rmtree(jd, ignore_errors=True)
+            except OSError:
+                pass
+
 def _cleaner():
     while True:
         try:
             cutoff = time.time() - 7 * 86400
             for d in (LOG_DIR, PREVIEW_DIR, LEGACY_PREVIEW_DIR, TMP_DIR):
                 _clean_one_dir(d, cutoff)
+            _clean_job_dirs()  # 历史任务：30 天 + 至少留 100 条
         except Exception:
             pass
         time.sleep(6 * 3600)
