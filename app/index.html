@@ -262,7 +262,8 @@
   /* ================= chips / badges ================= */
   .chip {
     display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:999px;
-    font-size:12px; font-weight:500; line-height:1.6; white-space:nowrap;
+    font-size:12px; font-weight:500; line-height:1.6;
+    max-width:100%; overflow-wrap:anywhere;
   }
   .chip .ic { font-size:13px; }
   .chip.ok   { background:var(--ok-bg);   color:var(--success); border:1px solid var(--ok-line); }
@@ -709,6 +710,17 @@
         <div class="field">
           <label class="check"><input id="b_force" type="checkbox" aria-label="强制封装"> 强制封装</label>
           <label class="check"><input id="b_backup" type="checkbox" checked aria-label="备份原件"> 备份原件</label>
+        </div>
+        <div class="field" style="flex-wrap:wrap;">
+          <label for="b_sc_default" style="font-size:12px;color:var(--text-secondary)">字幕旗标</label>
+          <select id="b_sc_default" style="height:34px;" title="简体轨 default 旗标">
+            <option value="">SC默认:自动</option><option value="1">SC默认:是</option><option value="0">SC默认:否</option>
+          </select>
+          <select id="b_tc_default" style="height:34px;" title="繁体轨 default 旗标">
+            <option value="">TC默认:自动</option><option value="1">TC默认:是</option><option value="0">TC默认:否</option>
+          </select>
+          <label class="check"><input id="b_sc_forced" type="checkbox" aria-label="简体强制轨"> SC强制</label>
+          <label class="check"><input id="b_tc_forced" type="checkbox" aria-label="繁体强制轨"> TC强制</label>
         </div>
         <div id="batchProgress" style="margin-top:8px;">
           <div class="progress"><div id="batchBar" role="progressbar" aria-label="批量进度"></div></div>
@@ -1525,8 +1537,10 @@ async function poll() {
       else if (s.status === 'error') {
         clearInterval(timer); timer = null; job = null;
         $('btnStart').disabled = false; $('btnStart').innerHTML = ic('play') + '<span>开始封装</span>'; $('btnStart').classList.add('primary'); $('btnStart').classList.remove('danger');
-        $('singleBarWrap').style.display = 'none'; setStatus('封装失败（退出码 ' + (s.exit ?? '?') + '），请查看日志', 'err');
-        $('result').innerHTML = '<span class="chip err">' + ic('xCircle') + '<span>封装失败，请查看下方任务日志</span></span>';
+        $('singleBarWrap').style.display = 'none';
+        const reason = s.reason || ('退出码 ' + (s.exit ?? '?'));
+        setStatus('封装失败：' + reason, 'err');
+        $('result').innerHTML = '<span class="chip err">' + ic('xCircle') + '<span>封装失败：' + esc(reason) + '</span></span>';
         refreshSticky();
       }
       else if (s.status === 'killed') {
@@ -1679,7 +1693,9 @@ $('btnBatchStart').onclick = async () => {
     }
   }
   const body = { items, fonts_dir: $('b_fonts').value.trim(),
-                 out_dir: $('b_out').value.trim(), force: $('b_force').checked, no_backup: !$('b_backup').checked };
+                 out_dir: $('b_out').value.trim(), force: $('b_force').checked, no_backup: !$('b_backup').checked,
+                 sc_default: $('b_sc_default').value, tc_default: $('b_tc_default').value,
+                 sc_forced: $('b_sc_forced').checked, tc_forced: $('b_tc_forced').checked };
   const r = await api('/api/batch', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   if (r.error) { $('batchState').textContent = '错误：' + r.error; return; }
   bJob = r.job; $('btnBatchStart').disabled = false; $('btnBatchStart').innerHTML = ic('square') + '<span>停止批量</span>'; $('btnBatchStart').classList.add('danger'); $('btnBatchStart').classList.remove('primary');
@@ -1700,7 +1716,7 @@ async function bPoll() {
       const resBox = $('batchResults');
       if (s.results && s.results.length) {
         resBox.innerHTML = '<div class="table-wrap" style="margin-top:8px;"><table style="min-width:560px;"><tr><th>#</th><th>输出文件</th><th>结果</th><th style="width:80px"></th></tr>' + s.results.map((r, i) =>
-          '<tr><td>' + (i + 1) + '</td><td class="mono" style="word-break:break-all">' + esc(r.output || r.video) + '</td><td>' + (r.ok ? '<span class="chip sm ok">' + ic('check') + '成功</span>' : '<span class="chip sm err">' + ic('xCircle') + '失败 (exit ' + r.exit + ')</span>') + '</td><td><button class="btn small" data-open-dir="' + encodeURIComponent(r.output || r.video) + '">打开</button></td></tr>').join('') + '</table></div>';
+          '<tr><td>' + (i + 1) + '</td><td class="mono" style="word-break:break-all">' + esc(r.output || r.video) + '</td><td>' + (r.ok ? '<span class="chip sm ok">' + ic('check') + '成功</span>' : '<span class="chip sm err">' + ic('xCircle') + '失败' + (r.reason ? '：' + esc(r.reason) : ' (exit ' + r.exit + ')') + '</span>') + '</td><td><button class="btn small" data-open-dir="' + encodeURIComponent(r.output || r.video) + '">打开</button></td></tr>').join('') + '</table></div>';
       }
       if (s.status === 'done' || s.status === 'error' || s.status === 'killed') {
         clearInterval(bTimer); bTimer = null; bJob = null;

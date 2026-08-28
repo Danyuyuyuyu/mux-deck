@@ -2,7 +2,7 @@
 # mux_cli.py — 单任务封装编排（ass_mux_manual.ps1 的 Python 继任者）
 # 独立运行：py -3 scripts/mux_cli.py --video V [--sc-sub A] [--tc-sub B] [--fonts-dir D] ...
 # 行为与旧 ps1 完全对齐：assfonts 两阶段子集化 -> mkvmerge 组装 -> 校验 -> 安装(替换/备份)。
-import argparse, json, os, shutil, subprocess, sys, tempfile, uuid
+import argparse, json, os, re, shutil, subprocess, sys, tempfile, uuid
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 项目根（本文件位于 scripts/）
 
@@ -65,14 +65,43 @@ def run_stream(cmd, log_path=None):
         rc = proc.wait()
     return rc
 
+def _tail_text(path, limit=20000):
+    try:
+        with open(path, "rb") as f:
+            return f.read().decode("utf-8", errors="replace")[-limit:]
+    except Exception:
+        return ""
+
+def _afs_fail_reason(txt):
+    """AFS 子集化失败时从其输出里分类根因（与体检端 fonts.py 同口径）。"""
+    m = re.search(r"Command execution failed:.*?pyftsubset (\S+)", txt)
+    if m:
+        return ("AFS 子集化失败：字体文件 %s 不规范或损坏，无法解析"
+                "——建议在高级选项把子集化工具切换为 assfonts 后重试" % os.path.basename(m.group(1)))
+    if "Duplicate fonts" in txt or "duplicate fonts" in txt:
+        return "AFS 子集化失败：字体目录存在重复字体（AFS 要求同族同样式只保留一份）——请精简字体目录或切换 assfonts"
+    names = []
+    for line in txt.splitlines():
+        if "Not found font file:" in line:
+            rest = line.split("Not found font file:", 1)[1].strip()
+            for item in rest.split("、"):
+                n = item.split(",", 1)[0].strip().lstrip("@")
+                if n and n not in names:
+                    names.append(n)
+    if names:
+        more = "等 %d 个" % len(names) if len(names) > 8 else ""
+        return "AFS 子集化失败：缺字体 %s%s——请先做字体体检并补给，或补齐字体目录" % ("、".join(names[:8]), more)
+    m = re.search(r"Return exitcode (-?\d+)", txt)
+    return "AFS 子集化失败（退出码 %s），详见任务日志" % (m.group(1) if m else "?")
+
 def probe_json(path):
     out = subprocess.run([MKVMERGE, "-J", path], capture_output=True)
     if out.returncode != 0:
-        fail("mkvmerge -J failed on: " + path)
+        fail("读取视频信息失败（mkvmerge -J）: " + path)
     try:
         return json.loads(out.stdout.decode("utf-8", errors="replace"))
     except Exception as ex:
-        fail("mkvmerge -J parse failed: %s" % ex)
+        fail("视频信息解析失败: %s" % ex)
 
 def unique_path(dest):
     if not os.path.exists(dest):
@@ -115,9 +144,9 @@ def main():
     # ---------- 校验输入 ----------
     video = a.video
     if not os.path.isfile(video):
-        fail("video not found: " + video)
+        fail("视频文件不存在: " + video)
     if not os.path.isfile(MKVMERGE or ""):
-        fail("mkvmerge not found; put bin\\mkvtoolnix next to the project, install MKVToolNix, or add it to PATH")
+        fail("找不到 mkvmerge——请确认 bin\\mkvtoolnix 存在、已安装 MKVToolNix 或已加入 PATH")
     video_dir = os.path.dirname(os.path.abspath(video))
     base = os.path.splitext(os.path.basename(video))[0]
     ext = os.path.splitext(video)[1]
@@ -132,16 +161,16 @@ def main():
     subs = []
     if a.sc_sub:
         if not os.path.isfile(a.sc_sub):
-            fail("sc subtitle not found: " + a.sc_sub)
+            fail("简体字幕文件不存在: " + a.sc_sub)
         subs.append(a.sc_sub)
     if a.tc_sub:
         if not os.path.isfile(a.tc_sub):
-            fail("tc subtitle not found: " + a.tc_sub)
+            fail("繁体字幕文件不存在: " + a.tc_sub)
         subs.append(a.tc_sub)
     if subs and not fonts_dir:
-        fail("no font dir given and none found next to the video; use --fonts-dir")
+        fail("未指定字体目录，且视频旁未找到 Fonts/Font 目录；请用 --fonts-dir")
     if fonts_dir and not os.path.isdir(fonts_dir):
-        fail("font dir not found: " + fonts_dir)
+        fail("字体目录不存在: " + fonts_dir)
 
     print("Source : " + video, flush=True)
     print("Fonts  : " + (fonts_dir or "(none)"), flush=True)
@@ -152,7 +181,7 @@ def main():
     attach_count = len(j.get("attachments") or [])
     # 仅在将重建附件（给了新 ASS 字幕）时守卫
     if subs and attach_count > 0 and not a.force and not a.keep_attachments:
-        fail("source already has %d attachments; use --force to re-mux anyway" % attach_count)
+        fail("源视频自带 %d 个附件；如确要重封装请勾选强制封装，或勾选保留源附件" % attach_count)
 
     # ---------- 临时工作目录 ----------
     TMP = os.path.join(tempfile.gettempdir(), "manual_mux_" + uuid.uuid4().hex)
@@ -173,7 +202,7 @@ def main():
             rc = run_stream([AFS, sub, "--fonts", fonts_dir, "--output", out_i,
                              "--bin-path", PY_SCRIPTS], os.path.join(TMP, "afs_%d.log" % i))
             if rc != 0:
-                fail("AFS subset failed（缺字体或字体目录重复？详见日志）; log: " + os.path.join(TMP, "afs_%d.log" % i))
+                fail(_afs_fail_reason(_tail_text(os.path.join(TMP, "afs_%d.log" % i))))
             fixed = os.path.join(out_i, os.path.basename(sub))
             if not os.path.isfile(fixed):
                 fail("AFS 未产出修正字幕: " + fixed)
@@ -191,20 +220,23 @@ def main():
                     fonts.append(os.path.join(out_i, fn))
     elif subs:
         if not os.path.isfile(ASSFONTS or ""):
-            fail("assfonts not found; expected in bin\\assfonts or on PATH")
+            fail("找不到 assfonts——请确认 bin\\assfonts 存在或已加入 PATH")
         print("assfonts: building database and subsetting fonts...", flush=True)
         db_dir = os.path.join(TMP, "db")
         os.makedirs(db_dir, exist_ok=True)
         rc = run_stream([ASSFONTS, "-f", fonts_dir, "-b", "-d", db_dir],
                         os.path.join(TMP, "assfonts_build.log"))
         if rc != 0:
-            fail("assfonts database build failed; log: " + os.path.join(TMP, "assfonts_build.log"))
+            fail("assfonts 字体库构建失败（退出码 %d），详见任务日志" % rc)
         if not os.path.isfile(os.path.join(db_dir, "fonts.json")):
-            fail("fonts database not created at " + db_dir)
+            fail("assfonts 字体库未生成: " + db_dir)
         rc = run_stream([ASSFONTS, "-f", fonts_dir, "-s", "-c", "-d", db_dir, "-o", subset_dir] + subs,
                         os.path.join(TMP, "assfonts_subset.log"))
         if rc != 0:
-            fail("assfonts subset failed (missing fonts?); log: " + os.path.join(TMP, "assfonts_subset.log"))
+            names = re.findall(r'Missing the font "([^"]+)"', _tail_text(os.path.join(TMP, "assfonts_subset.log")))
+            if names:
+                fail("assfonts 子集化失败：缺字体 " + "、".join(dict.fromkeys(names)))
+            fail("assfonts 子集化失败（退出码 %d），详见任务日志中的 assfonts 输出" % rc)
         fonts = []
         sf = os.path.join(subset_dir, "subsetted_fonts")
         if os.path.isdir(sf):
@@ -236,7 +268,7 @@ def main():
                        if t.get("type") == "audio"
                        and str((t.get("properties") or {}).get("language") or "").lower() in langs]
                 if not ids:
-                    fail("no source audio track matches language: " + a.audio)
+                    fail("没有语言为 %s 的源音轨" % a.audio)
                 audio_args += ["--audio-tracks", ",".join(ids)]
 
     # ---------- 组装 mkvmerge ----------
@@ -284,7 +316,11 @@ def main():
     print("Muxing...", flush=True)
     rc = run_stream([MKVMERGE] + margs, os.path.join(TMP, "mux.log"))
     if rc != 0:
-        fail("mkvmerge failed; log: " + os.path.join(TMP, "mux.log"))
+        mtxt = _tail_text(os.path.join(TMP, "mux.log"))
+        errs = re.findall(r"^(?:Error|错误)[:：]\s*(.+)$", mtxt, re.M)
+        if errs:
+            fail("mkvmerge 失败：" + errs[-1].strip()[:300])
+        fail("mkvmerge 失败（退出码 %d），详见任务日志中的 mkvmerge 输出" % rc)
 
     # ---------- 校验 ----------
     vo = probe_json(out_tmp)
@@ -299,7 +335,7 @@ def main():
         kept = 0
     expect = len(subs) + kept
     if st != expect:
-        fail("expected %d subtitle tracks, got %d" % (expect, st))
+        fail("封装校验失败：预期 %d 条字幕轨，实际 %d 条" % (expect, st))
     print("--- Result ---", flush=True)
     for tr in (vo.get("tracks") or []):
         pr = tr.get("properties") or {}
@@ -322,7 +358,7 @@ def main():
             try:
                 shutil.move(video, staged)
             except Exception as ex:
-                fail("cannot stage the original: %s" % ex)
+                fail("无法暂存原件（可能被占用）: %s" % ex)
             try:
                 shutil.move(out_tmp, dest)
             except Exception as ex:
@@ -338,12 +374,12 @@ def main():
                     except Exception:
                         pass
                     if os.path.exists(rescue):
-                        fail("install failed; original could not return to its path, rescued to %s: %s" % (rescue, err))
+                        fail("成品安装失败，且原件无法放回原位，已救援至 %s: %s" % (rescue, err))
                     else:
                         TMP = ""  # 保住临时目录，原件还在里面
-                        fail("install failed; original kept at %s (temp dir preserved): %s" % (staged, err))
+                        fail("成品安装失败，原件保留在 %s（临时目录未删除）: %s" % (staged, err))
                 else:
-                    fail("install failed, original restored: " + err)
+                    fail("成品安装失败，原件已放回原位: " + err)
             try:
                 os.remove(staged)
             except OSError:
@@ -364,9 +400,9 @@ def main():
                 except Exception:
                     pass
                 if os.path.exists(bak_dest):
-                    fail("install failed and the backup could not be moved back (left at %s): %s" % (bak_dest, err))
+                    fail("成品安装失败，且备份无法移回原位（留在 %s）: %s" % (bak_dest, err))
                 else:
-                    fail("install failed, backup moved back to its original location: " + err)
+                    fail("成品安装失败，备份已移回原位置: " + err)
             print("OK -> " + dest + "  (original kept in " + bak_dest + ")", flush=True)
 
     shutil.rmtree(TMP, ignore_errors=True)

@@ -61,6 +61,11 @@ def build_cmd(it, common):
 
 # ---------------- 任务生命周期 ----------------
 
+def _fail_reason(txt):
+    """任务日志里最后一条 FAIL: 行 = mux_cli 写下的最贴近根因的失败原因。"""
+    m = re.findall(r"^FAIL: (.+)$", txt or "", re.M)
+    return m[-1].strip() if m else ""
+
 def _finalize_job(state):
     jid, jdir = state["id"], state["dir"]
     if state.get("stopped"):
@@ -134,12 +139,15 @@ def start_batch(body):
                 rc = core.run_to_file(build_cmd(it, common), log, jid=jid, stop_flag=state["stop_event"])
                 od = (common.get("out_dir") or "").strip()
                 out_path = os.path.join(od, os.path.basename(it.get("video", ""))) if od else it.get("video", "")
+                reason = "" if (rc == 0 or state.get("stopped")) else _fail_reason(core.read_tail(log, 200))
                 state["results"].append({"video": it.get("video", ""), "output": out_path,
-                                         "ok": rc == 0 and not state.get("stopped"), "exit": rc})
+                                         "ok": rc == 0 and not state.get("stopped"), "exit": rc,
+                                         "reason": reason})
                 if rc != 0 and not state.get("stopped"):
                     state["failed"] += 1
             except Exception as ex:
-                state["results"].append({"video": it.get("video", ""), "ok": False, "exit": -1})
+                state["results"].append({"video": it.get("video", ""), "ok": False, "exit": -1,
+                                         "reason": "服务端编排异常: %s" % ex})
                 state["failed"] += 1
                 try:
                     with open(log, "a", encoding="utf-8", errors="replace") as f:
@@ -180,7 +188,8 @@ def job_status(jid):
     return {"id": s["id"], "status": s["status"], "exit": s["exit"],
             "current": cur, "total": total_items, "failed": s.get("failed", 0),
             "current_video": s.get("current_video", ""), "progress": progress,
-            "results": s.get("results", []), "result": s.get("result", ""), "log": merged}
+            "results": s.get("results", []), "result": s.get("result", ""), "log": merged,
+            "reason": _fail_reason(merged)}
 
 def stop_job(jid):
     st = core.JOBS.get(jid)

@@ -20,6 +20,17 @@ def _parse_afs_missing(txt):
                     missing.append(name)
     return missing
 
+def _afs_crash_font(txt):
+    """AFS 崩溃时找出正在处理的字体文件名：优先从 pyftsubset 命令行取，回退最后一条 'Start subset'。"""
+    m = re.search(r"Command execution failed:.*?pyftsubset (\S+)", txt)
+    if m:
+        return os.path.basename(m.group(1))
+    name = ""
+    for line in txt.splitlines():
+        if "Start subset" in line:
+            name = line.split("Start subset", 1)[1].strip()
+    return name
+
 def check_fonts_afs(subs, fonts_dir):
     ck = os.path.join(core.TMP_DIR, "fontcheck_" + uuid.uuid4().hex[:8])
     os.makedirs(ck)
@@ -40,7 +51,16 @@ def check_fonts_afs(subs, fonts_dir):
                     "error": "字体目录存在重复字体（AFS 要求目录内同族字体只保留一份），请精简字体目录，或在高级选项把子集化工具改为 assfonts",
                     "missing": missing, "log": "\n".join(logs)}
         if rc != 0 and not missing:
-            return {"ok": False, "error": "AFS 检查失败", "missing": [], "log": "\n".join(logs)}
+            # 不是缺字、是工具崩溃：最常见根因是字体文件本身不规范
+            # （如老字体 cmap 子表 length 字段写错，pyftsubset 严格解析即断言退出）。
+            crash_font = _afs_crash_font(txt)
+            tip = "建议在高级选项把子集化工具切换为 assfonts 后重试"
+            if crash_font:
+                return {"ok": False,
+                        "error": "字体文件 %s 不规范或损坏，AFS 无法解析——%s" % (crash_font, tip),
+                        "missing": [], "log": "\n".join(logs)}
+            return {"ok": False, "error": "AFS 检查失败——%s" % tip,
+                    "missing": [], "log": "\n".join(logs)}
     return {"ok": len(missing) == 0, "missing": missing, "log": "\n".join(logs)}
 
 def check_fonts_assfonts(subs, fonts_dir):
