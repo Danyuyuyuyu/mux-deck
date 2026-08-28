@@ -8,15 +8,14 @@ echo ============================================
 echo   Mux Deck 环境自检
 echo ============================================
 
-rem ---- Python ----
+rem ---- Python（用户安装）----
 set "PY="
-if exist "%CD%\bin\python\python.exe" set "PY=%CD%\bin\python\python.exe"
-if not defined PY py -3 -c exit() >nul 2>&1 && set "PY=py -3"
+py -3 -c exit() >nul 2>&1 && set "PY=py -3"
 if not defined PY where python >nul 2>&1 && set "PY=python"
 if defined PY (
   echo [PASS] Python: %PY%
 ) else (
-  echo [FAIL] Python: 未找到（缺 bin\python 或系统 Python）
+  echo [FAIL] Python: 未找到（请安装 Python 3.8+，勾选 Add to PATH）
   set /a FAIL+=1
 )
 

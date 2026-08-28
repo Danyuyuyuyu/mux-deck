@@ -12,10 +12,9 @@ if not errorlevel 1 (
   exit /b
 )
 
-rem ---- locate python: bundled portable -> py -3 -> where python -> original hardcoded path ----
+rem ---- locate python: py -3 -> where python -> original hardcoded path (user-installed) ----
 set "PY="
-if exist "%~dp0..\bin\python\python.exe" set "PY=%~dp0..\bin\python\python.exe"
-if not defined PY py -3 -c exit() >nul 2>&1 && set "PY=py -3"
+py -3 -c exit() >nul 2>&1 && set "PY=py -3"
 if not defined PY where python >nul 2>&1 && set "PY=python"
 if not defined PY if exist "C:\Users\ZhenXun\AppData\Local\Programs\Python\Python312\python.exe" set "PY=C:\Users\ZhenXun\AppData\Local\Programs\Python\Python312\python.exe"
 if not defined PY (

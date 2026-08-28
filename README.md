@@ -2,15 +2,16 @@
 
 用 mkvmerge 把 视频 + ASS 字幕 + 字体附件 合成 MKV 的本地工具：字体子集化（assfonts）、字体体检、编码转换、预览帧、批量队列、内封轨道预览与提取，全部在浏览器界面完成。
 
-**零安装便携**：整个文件夹拷走即用（Windows 10/11，无需安装任何软件）。无 pip 依赖，`server.py` 纯 Python 标准库。
+**便携部署**：整个文件夹拷走即用（Windows 10/11），无 pip 依赖，`server.py` 纯 Python 标准库。**仅需自行安装 Python 3.8+**（官方安装器勾选 Add to PATH），其余组件（MKVToolNix / ffmpeg / assfonts）由 `安装环境.bat` 自动下载到 `bin/`。
 
 ## 快速开始
 
 ```powershell
-# 1. 首次使用（或 bin/ 为空时）拉取便携运行时：
+# 0. 先安装 Python 3.8+（https://www.python.org/downloads/，勾选 Add to PATH）
+# 1. 首次使用（或 bin/ 为空时）拉取运行时：
 powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1
 #    需要代理： powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -Proxy http://127.0.0.1:7890
-#    或直接双击 安装环境.bat（连 python 一行都不用敲）
+#    或直接双击 安装环境.bat
 
 # 2. 自检依赖（可选）：
 环境自检.bat
@@ -41,7 +42,6 @@ mux-deck/
 ├── start_mux_ui.bat / install_autostart.bat / 安装环境.bat / 环境自检.bat   # 操作入口（根目录，双击即用）
 ├── scripts/                                   # 内部脚本：bootstrap、子集 CLI（ass_mux_manual/ass_subset_mux）
 ├── bin/                                       # 第三方运行时（scripts\bootstrap.ps1 获取，不随 git 分发）
-│   ├── python/                               # Python embeddable（服务端运行时）
 │   ├── mkvtoolnix/                           # mkvmerge / mkvextract
 │   ├── ffmpeg/                               # 含 libass（预览必需）
 │   └── assfonts/                             # bootstrap 自动下载（v0.7.3）
@@ -54,7 +54,7 @@ mux-deck/
 | 组件 | 系统级 | bin/ 自带 | 说明 |
 |---|---|---|---|
 | Windows 10/11 | ✅ 必须 | — | PowerShell、浏览器均为系统内置 |
-| Python 3.8+ | 可选 | ✅ embeddable | 纯标准库，无 pip 依赖 |
+| Python 3.8+ | ✅ 自行安装 | — | 官方安装器勾选 Add to PATH；纯标准库，无 pip 依赖 |
 | MKVToolNix | 可选 | ✅ v101.0 | 封装/提取/内封轨预览 |
 | ffmpeg | 可选 | ✅ 9.0.1 | 预览；必须含 libass |
 | assfonts | 可选 | ✅ v0.7.3 | bootstrap 自动从 GitHub Releases 下载 |
@@ -67,4 +67,4 @@ mux-deck/
 
 - 本项目代码以 **MIT 许可证** 开源（见 [LICENSE](LICENSE)）。
 - 随附第三方二进制均为各自许可证分发：MKVToolNix（GPLv2，许可见其安装目录 doc/）、ffmpeg（LGPL/GPL 构建）、Python（PSF）、assfonts（许可见其自带 LICENSE.txt）。
-- `bin/` 不进入 git 仓库，通过 `bootstrap.ps1` 从官方源获取。
+- `bin/` 不进入 git 仓库，通过 `bootstrap.ps1` 从官方源获取；Python 由用户自行安装。

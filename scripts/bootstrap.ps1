@@ -1,6 +1,7 @@
 ﻿<#
 .SYNOPSIS
-Mux Deck 便携运行时引导脚本：下载 Python / MKVToolNix / ffmpeg 到 bin\（可重复运行，已存在则跳过）。
+Mux Deck 运行时引导脚本：下载 MKVToolNix / ffmpeg / assfonts 到 bin\（可重复运行，已存在则跳过）。
+Python 需用户自行安装（3.8+，官方安装器勾选 Add to PATH，`py -3` 或 `python` 可用即可）。
 
 用法（在项目目录执行）:
   powershell -ExecutionPolicy Bypass -File bootstrap.ps1
@@ -15,13 +16,21 @@ $ErrorActionPreference = "Stop"
 $base = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $bin = Join-Path $base "bin"
 $tmp = Join-Path $env:TEMP "muxdeck_bootstrap"
-$py = Join-Path $bin "python\python.exe"
 if (-not $Proxy) { $Proxy = $env:BOOTSTRAP_PROXY }
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 
+# 定位用户安装的 python（下载器优先用它，比 curl 稳；没有则回落 curl）
+$py = ""
+$c = Get-Command py -ErrorAction SilentlyContinue
+if ($c) { $py = "py" }
+if (-not $py) {
+  $c = Get-Command python -ErrorAction SilentlyContinue
+  if ($c) { $py = $c.Source }
+}
+
 function Get-File([string]$Url, [string]$Out, [int]$MinBytes = 1000000) {
-  # 优先用自带 python 的 urllib 下载（对大文件/CDN 更稳，支持代理）；python 不可用时回落到 curl
-  if (Test-Path $py) {
+  # 优先用 python 的 urllib 下载（对大文件/CDN 更稳，支持代理）；python 不可用时回落到 curl
+  if ($py) {
     $dlpy = @'
 import urllib.request, sys
 proxy = sys.argv[3] if len(sys.argv) > 3 else ""
@@ -52,7 +61,7 @@ with opener.open(req, timeout=600) as r, open(sys.argv[2], "wb") as f:
   if ($sz -lt $MinBytes) { throw "下载文件过小 ($sz 字节)，疑似失败: $Url" }
 }
 function Test-Zip([string]$Zip) {
-  if (-not (Test-Path $py)) { return $true }
+  if (-not $py) { return $true }
   & $py -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); sys.exit(0 if z.testzip() is None else 1)" $Zip
   return ($LASTEXITCODE -eq 0)
 }
@@ -65,25 +74,15 @@ function Get-ZipChecked([string]$Url, [string]$Out) {
   }
 }
 
-Write-Host "== Mux Deck 便携运行时引导 =="
+Write-Host "== Mux Deck 运行时引导 =="
+if (-not $py) { Write-Host "[提示] 未检测到 Python。请先安装 Python 3.8+（勾选 Add to PATH），否则下载将回落 curl。" }
 
-# ---------- 1) Python embeddable ----------
-if (Test-Path $py) {
-  Write-Host "[1/4] Python 已存在，跳过。"
-} else {
-  Write-Host "[1/4] 下载 Python 3.12.8 embeddable ..."
-  Get-ZipChecked "https://www.python.org/ftp/python/3.12.8/python-3.12.8-embed-amd64.zip" (Join-Path $tmp "py.zip")
-  New-Item -ItemType Directory -Force -Path (Join-Path $bin "python") | Out-Null
-  Expand-Archive (Join-Path $tmp "py.zip") (Join-Path $bin "python") -Force
-  Write-Host "  -> bin\python"
-}
-
-# ---------- 2) MKVToolNix ----------
+# ---------- 1) MKVToolNix ----------
 $mkm = Join-Path $bin "mkvtoolnix\mkvmerge.exe"
 if (Test-Path $mkm) {
-  Write-Host "[2/4] MKVToolNix 已存在，跳过。"
+  Write-Host "[1/3] MKVToolNix 已存在，跳过。"
 } else {
-  Write-Host "[2/4] 下载 MKVToolNix 101.0 ..."
+  Write-Host "[1/3] 下载 MKVToolNix 101.0 ..."
   Get-ZipChecked "https://mkvtoolnix.download/windows/releases/101.0/mkvtoolnix-64-bit-101.0.zip" (Join-Path $tmp "mkv.zip")
   New-Item -ItemType Directory -Force -Path (Join-Path $bin "mkvtoolnix") | Out-Null
   Expand-Archive (Join-Path $tmp "mkv.zip") (Join-Path $bin "mkvtoolnix") -Force
@@ -95,12 +94,12 @@ if (Test-Path $mkm) {
   Write-Host "  -> bin\mkvtoolnix"
 }
 
-# ---------- 3) ffmpeg ----------
+# ---------- 2) ffmpeg ----------
 $ff = Join-Path $bin "ffmpeg\bin\ffmpeg.exe"
 if (Test-Path $ff) {
-  Write-Host "[3/4] ffmpeg 已存在，跳过。"
+  Write-Host "[2/3] ffmpeg 已存在，跳过。"
 } else {
-  Write-Host "[3/4] 下载 ffmpeg essentials (含 libass，预览必需) ..."
+  Write-Host "[2/3] 下载 ffmpeg essentials (含 libass，预览必需) ..."
   Get-ZipChecked "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" (Join-Path $tmp "ff.zip")
   Expand-Archive (Join-Path $tmp "ff.zip") $bin -Force
   $fdir = Get-ChildItem $bin -Directory | Where-Object { $_.Name -like "ffmpeg-*essentials*" } | Select-Object -First 1
@@ -111,12 +110,12 @@ if (Test-Path $ff) {
   Write-Host "  -> bin\ffmpeg"
 }
 
-# ---------- 4) assfonts ----------
+# ---------- 3) assfonts ----------
 $af = Join-Path $bin "assfonts\assfonts.exe"
 if (Test-Path $af) {
-  Write-Host "[4/4] assfonts 已存在，跳过。"
+  Write-Host "[3/3] assfonts 已存在，跳过。"
 } else {
-  Write-Host "[4/4] 下载 assfonts v0.7.3 ..."
+  Write-Host "[3/3] 下载 assfonts v0.7.3 ..."
   Get-ZipChecked "https://github.com/wyzdwdz/assfonts/releases/download/v0.7.3/assfonts-v0.7.3-x86_64-Windows.zip" (Join-Path $tmp "af.zip")
   New-Item -ItemType Directory -Force -Path (Join-Path $bin "assfonts") | Out-Null
   Expand-Archive (Join-Path $tmp "af.zip") (Join-Path $bin "assfonts") -Force
