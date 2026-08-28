@@ -16,7 +16,8 @@ def main():
     ap.add_argument("--sub", required=True, help="字幕文件路径，或 track:<id>:<ext> 内封轨")
     ap.add_argument("--fonts-dir", default="")
     ap.add_argument("--time", type=float, default=0)
-    ap.add_argument("--mode", choices=["frame", "subtitle"], default="frame")
+    ap.add_argument("--mode", choices=["frame", "subtitle", "grid"], default="frame",
+                    help="frame=视频烧录帧 / subtitle=黑底纯字幕 / grid=按字幕行抽8帧拼4x2网格（忽略 --time）")
     a = ap.parse_args()
 
     r = preview_mod.make_preview(a.video, a.sub, a.fonts_dir, a.time, a.mode)

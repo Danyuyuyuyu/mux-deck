@@ -77,6 +77,10 @@ def main():
     ap.add_argument("--sc-name", default="SC")
     ap.add_argument("--tc-name", default="TC")
     ap.add_argument("--force", action="store_true", help="重新处理已含字体附件的 MKV")
+    ap.add_argument("--sc-default", default="", help="覆盖 SC 默认轨旗标: 0|1（空=自动：SC 在则默认）")
+    ap.add_argument("--tc-default", default="", help="覆盖 TC 默认轨旗标: 0|1（空=自动）")
+    ap.add_argument("--sc-forced", action="store_true", help="SC 轨打 forced 旗标")
+    ap.add_argument("--tc-forced", action="store_true", help="TC 轨打 forced 旗标")
     a = ap.parse_args()
 
     root = a.root
@@ -200,12 +204,18 @@ def main():
         sc_def, tc_def = "0:1", "0:0"
         if not sc and tc:
             tc_def = "0:1"
+        if a.sc_default in ("0", "1"):
+            sc_def = "0:" + a.sc_default
+        if a.tc_default in ("0", "1"):
+            tc_def = "0:" + a.tc_default
         if sc:
             margs += ["--language", "0:" + a.sc_lang, "--track-name", "0:" + a.sc_name,
-                      "--default-track-flag", sc_def, "--forced-display-flag", "0:0", sc]
+                      "--default-track-flag", sc_def,
+                      "--forced-display-flag", "0:1" if a.sc_forced else "0:0", sc]
         if tc:
             margs += ["--language", "0:" + a.tc_lang, "--track-name", "0:" + a.tc_name,
-                      "--default-track-flag", tc_def, "--forced-display-flag", "0:0", tc]
+                      "--default-track-flag", tc_def,
+                      "--forced-display-flag", "0:1" if a.tc_forced else "0:0", tc]
         for fp in fonts:
             margs += ["--attach-file", fp]
         mux_log = os.path.join(ep_work, "mux.log")
