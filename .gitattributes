@@ -1,0 +1,4 @@
+# 批处理脚本必须按原样存储（CRLF）：cmd 解析 LF 会出错；
+# GitHub 网页 zip 与 git clone 均保留工作区字节，禁止换行归一化。
+*.bat -text
+*.cmd -text
