@@ -343,8 +343,8 @@ function syncDefaultBadge() {
 
 /* ==================== 文件浏览器 ==================== */
 const CFG = { scanRoot: 'D:\\Video' };
-function openBrowser(setter, filter, startPath, slot) {
-  BR.setter = setter; BR.filter = filter; BR.slot = slot || filter || 'generic';
+function openBrowser(setter, filter, startPath, slot, dirSetter) {
+  BR.setter = setter; BR.filter = filter; BR.slot = slot || filter || 'generic'; BR.dirSetter = dirSetter || null;
   BR.path = startPath || localStorage.getItem('muxui_ld_' + BR.slot) || localStorage.getItem('muxui_lastdir') || CFG.scanRoot;
   $('browserModal').style.display = 'block';
   showBrowser();
@@ -353,7 +353,11 @@ $('mbClose').onclick = () => $('browserModal').style.display = 'none';
 $('mbUp').onclick = () => { BR.path = BR.path.replace(/\\+$/, '').replace(/[^\\/]+$/, '') || ''; showBrowser(); }; // 到盘根后再向上进入盘符列表
 $('mbGo').onclick = () => { BR.path = $('mbPathInput').value.trim() || BR.path; showBrowser(); };
 $('mbPathInput').onkeydown = e => { if (e.key === 'Enter') $('mbGo').click(); };
-$('mbUseDir').onclick = () => { BR.setter(BR.path.replace(/\\+$/, '')); $('browserModal').style.display = 'none'; };
+$('mbUseDir').onclick = () => {
+  const fn = BR.dirSetter || BR.setter;
+  fn(BR.path.replace(/\\+$/, ''));
+  $('browserModal').style.display = 'none';
+};
 async function showBrowser() {
   let d;
   try {
@@ -367,7 +371,10 @@ async function showBrowser() {
   $('mbPathInput').value = d.path;
   const body = $('mbBody'); body.innerHTML = '';
   const ext = FILTERS[BR.filter];
-  $('mbUseDir').style.display = (BR.filter === 'dir' && d.path) ? '' : 'none';
+  $('mbUseDir').style.display = ((BR.filter === 'dir' || BR.dirSetter) && d.path) ? '' : 'none';
+  $('mbUseDir').innerHTML = (BR.dirSetter && BR.filter !== 'dir')
+    ? ic('folderOutput') + '<span>添加此目录全部视频</span>'
+    : ic('check') + '<span>使用此目录</span>';
   $('mbHint').textContent = d.error ? ('错误: ' + d.error) : '';
   if (d.path && !d.error) { try { localStorage.setItem('muxui_lastdir', d.path); localStorage.setItem('muxui_ld_' + (BR.slot || 'generic'), d.path); } catch (e) {} } // 记住上次浏览目录（分槽位）
   const itemCls = (n, dir) => '<span class="it">' + ic(dir ? 'folder' : 'fileText') + '<span>' + esc(n) + '</span></span>';

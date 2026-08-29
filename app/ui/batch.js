@@ -52,9 +52,38 @@ async function autoFontDir(v) {
     if (idx >= 0) $('b_fonts').value = dir + d.dirs[idx];
   } catch (e) { /* 目录探测失败静默 */ }
 }
+/* 添加整个文件夹：列出目录内全部视频 → 逐个自动匹配字幕 + 字体目录识别 */
+const BATCH_VIDEO_RE = /\.(mkv|mp4|m2ts|ts|avi|mov|webm|flv|wmv|m4v)$/i;
+async function addVideosFromDir(dir) {
+  if (!dir) return;
+  let d;
+  try {
+    d = await api('/api/list?path=' + encodeURIComponent(dir));
+  } catch (ex) { setStatus('读取目录失败：' + ex, 'err'); return; }
+  const vids = (d.files || []).filter(f => BATCH_VIDEO_RE.test(f[0])).map(f => dir + '\\' + f[0]);
+  if (!vids.length) { setStatus('该目录下没有视频文件（MKV/MP4 等）', 'err'); return; }
+  setStatus('正在识别 ' + vids.length + ' 个视频的字幕与字体目录…', 'run');
+  try {
+    const ms = await Promise.all(vids.map(v => api('/api/match_subs?path=' + encodeURIComponent(v)).catch(() => ({}))));
+    let added = 0;
+    vids.forEach((v, i) => {
+      if (batchItems.some(it => it.video && it.video.toLowerCase() === v.toLowerCase())) return;
+      addBatchVideo(v, [], ms[i]);
+      added++;
+    });
+    await autoFontDir(vids[0]);
+    renderBatch();
+    setStatus(added
+      ? ('已添加 ' + added + ' 个视频' + (added < vids.length ? '（跳过 ' + (vids.length - added) + ' 个重复）' : ''))
+      : '所选视频都已在列表中', 'ok');
+  } catch (ex) {
+    setStatus('添加失败：' + ex, 'err');
+  }
+}
+const _lastBv = $('b_v_' + Math.max(0, batchItems.length - 1));
 $('btnBatchFiles').onclick = () => openBrowser(async v => {
   if (!v) return;
-  if (!/\.(mkv|mp4|m2ts|ts|avi|mov|webm|flv|wmv|m4v)$/i.test(v)) { setStatus('请选择视频文件（MKV/MP4/M2TS 等）', 'err'); return; }
+  if (!BATCH_VIDEO_RE.test(v)) { setStatus('请选择视频文件（MKV/MP4/M2TS 等）', 'err'); return; }
   if (batchItems.some(it => it.video && it.video.toLowerCase() === v.toLowerCase())) { setStatus('该视频已在列表中：' + v, 'err'); return; }
   setStatus('正在识别字幕与字体目录…', 'run');
   try {
@@ -66,7 +95,7 @@ $('btnBatchFiles').onclick = () => openBrowser(async v => {
   } catch (ex) {
     setStatus('添加失败：' + ex, 'err');
   }
-}, 'video', $('b_v_' + Math.max(0, batchItems.length - 1)) || '', 'batch');
+}, 'video', _lastBv ? _lastBv.value : '', 'batch', addVideosFromDir);
 
 $('btnBatchClear').onclick = () => {
   if (bJob) { setStatus('批量任务进行中，不能清除列表', 'err'); return; }
