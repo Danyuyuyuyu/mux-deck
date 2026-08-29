@@ -24,14 +24,30 @@ def _first_existing(*paths):
     return None
 
 BIN_DIR = os.path.join(BASE, "bin")
-MKVMERGE   = _first_existing(os.path.join(BIN_DIR, "mkvtoolnix", "mkvmerge.exe")) or shutil.which("mkvmerge") or "C:/Program Files/MKVToolNix/mkvmerge.exe"
-MKVEXTRACT = _first_existing(os.path.join(BIN_DIR, "mkvtoolnix", "mkvextract.exe")) or shutil.which("mkvextract") or "C:/Program Files/MKVToolNix/mkvextract.exe"
-FFMPEG     = _first_existing(os.path.join(BIN_DIR, "ffmpeg", "bin", "ffmpeg.exe")) or shutil.which("ffmpeg") or "ffmpeg"
-ASSFONTS   = _first_existing(os.path.join(BIN_DIR, "assfonts", "assfonts.exe")) or shutil.which("assfonts") or os.path.join(BIN_DIR, "assfonts", "assfonts.exe")
-AFS        = _first_existing(os.path.join(BIN_DIR, "assfontsubset", "AssFontSubset.Console.exe")) or shutil.which("AssFontSubset.Console") or ""
-# AFS 默认后端 PyFontTools 需要 pyftsubset/ttx（fonttools），用当前解释器的 Scripts 目录
-PY_SCRIPTS = os.path.join(os.path.dirname(sys.executable), "Scripts")
-PYFTSUBSET = _first_existing(os.path.join(PY_SCRIPTS, "pyftsubset.exe")) or shutil.which("pyftsubset") or ""
+
+def _locate_tools():
+    # AFS 默认后端 PyFontTools 需要 pyftsubset/ttx（fonttools），用当前解释器的 Scripts 目录
+    py_scripts = os.path.join(os.path.dirname(sys.executable), "Scripts")
+    return {
+        "MKVMERGE": _first_existing(os.path.join(BIN_DIR, "mkvtoolnix", "mkvmerge.exe")) or shutil.which("mkvmerge") or "C:/Program Files/MKVToolNix/mkvmerge.exe",
+        "MKVEXTRACT": _first_existing(os.path.join(BIN_DIR, "mkvtoolnix", "mkvextract.exe")) or shutil.which("mkvextract") or "C:/Program Files/MKVToolNix/mkvextract.exe",
+        "FFMPEG": _first_existing(os.path.join(BIN_DIR, "ffmpeg", "bin", "ffmpeg.exe")) or shutil.which("ffmpeg") or "ffmpeg",
+        "ASSFONTS": _first_existing(os.path.join(BIN_DIR, "assfonts", "assfonts.exe")) or shutil.which("assfonts") or os.path.join(BIN_DIR, "assfonts", "assfonts.exe"),
+        "AFS": _first_existing(os.path.join(BIN_DIR, "assfontsubset", "AssFontSubset.Console.exe")) or shutil.which("AssFontSubset.Console") or "",
+        "PY_SCRIPTS": py_scripts,
+        "PYFTSUBSET": _first_existing(os.path.join(py_scripts, "pyftsubset.exe")) or shutil.which("pyftsubset") or "",
+    }
+
+# 工具定位在模块加载时执行一次；环境（bin/ 或 PATH）变更后调 refresh_tools() 重算，免重启生效
+_tools = _locate_tools()
+MKVMERGE, MKVEXTRACT, FFMPEG = _tools["MKVMERGE"], _tools["MKVEXTRACT"], _tools["FFMPEG"]
+ASSFONTS, AFS, PY_SCRIPTS, PYFTSUBSET = _tools["ASSFONTS"], _tools["AFS"], _tools["PY_SCRIPTS"], _tools["PYFTSUBSET"]
+
+def refresh_tools():
+    """环境安装/变更后重算工具路径（网页内安装完成后调用，免重启生效）。返回新的定位结果。"""
+    _t = _locate_tools()
+    globals().update(_t)
+    return _t
 
 for d in (JOBS_DIR, LEGACY_JOBS_DIR, TMP_DIR, PREVIEW_DIR, LEGACY_PREVIEW_DIR, LOG_DIR):
     os.makedirs(d, exist_ok=True)
