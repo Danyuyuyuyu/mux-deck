@@ -191,70 +191,46 @@ $('btnBatchStart').onclick = async () => {
       return;
     }
   }
-  const body = { items, fonts_dir: $('b_fonts').value.trim(),
-                 out_dir: $('b_out').value.trim(), force: $('b_force').checked, no_backup: !$('b_backup').checked,
-                 sc_default: $('b_sc_default').value, tc_default: $('b_tc_default').value,
-                 sc_forced: $('b_sc_forced').checked, tc_forced: $('b_tc_forced').checked };
+  const body = Object.assign({ items }, buildMuxCommon('b_'));   // 公共参数（字体/输出/备份/旗标，与单个封装同一份逻辑，见 task.js）
   const r = await api('/api/batch', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   if (r.error) { $('batchState').textContent = '错误：' + r.error; return; }
-  bJob = r.job; $('btnBatchStart').disabled = false; $('btnBatchStart').innerHTML = ic('square') + '<span>停止批量</span>'; $('btnBatchStart').classList.add('danger'); $('btnBatchStart').classList.remove('primary');
+  bJob = r.job;
+  setRunButton($('btnBatchStart'), true, '停止批量', '开始批量封装');
   showLogTab('batch'); setLog('batch', '');
   $('batchBar').style.width = '0%';
-  bPoll();
-};
-let bJob = null, bTimer = null;
-async function bPoll() {
-  let failCount = 0;
-  bTimer = setInterval(async () => {
-    try {
-      const s = await api('/api/job?id=' + bJob);
-      failCount = 0;
+  const bfin = (s, lastR, stateText, statusMsg, statusCls) => {
+    bJob = null;
+    setRunButton($('btnBatchStart'), false, '停止批量', '开始批量封装');
+    $('batchState').textContent = stateText;
+    $('batchProgress').style.display = 'none';
+    $('batchStickyBarWrap').style.display = 'none';
+    setStatus(statusMsg, statusCls);
+    lastBatchResult = lastR;
+    refreshBatchSticky();
+  };
+  startTaskPolling({
+    job, interval: 1200,
+    onAny: s => {
       if (s.total) $('batchBar').style.width = Math.round(s.current / s.total * 100) + '%';
       $('batchState').textContent = s.total ? ('第 ' + s.current + ' / ' + s.total + ' 个：' + (s.current_video || '') + (s.progress != null ? ('  当前项 ' + s.progress + '%') : '')) : '';
-      const bnote = $('batchStickyNote');
-      bnote.className = 'sticky-note run';
-      bnote.firstElementChild.innerHTML = ic('loader', 'spin');
-      const bl = s.log || '';
-      let bstage;
-      if (s.progress != null) bstage = '（' + s.progress + '%）';
-      else if (/Subset tool|subsetting|assfonts|AFS:/i.test(bl)) bstage = '（子集化中）';
-      else bstage = '';
-      bnote.querySelector('.sticky-txt').textContent = s.total ? ('批量封装中：第 ' + s.current + ' / ' + s.total + ' 个' + bstage) : '批量封装中…';
       setLog('batch', s.log);
       const resBox = $('batchResults');
       if (s.results && s.results.length) {
         resBox.innerHTML = '<div class="table-wrap" style="margin-top:8px;"><table style="min-width:560px;"><tr><th>#</th><th>输出文件</th><th>结果</th><th style="width:80px"></th></tr>' + s.results.map((r, i) =>
           '<tr><td>' + (i + 1) + '</td><td class="mono" style="word-break:break-all">' + esc(r.output || r.video) + '</td><td>' + (r.ok ? '<span class="chip sm ok">' + ic('check') + '成功</span>' : '<span class="chip sm err">' + ic('xCircle') + '失败' + (r.reason ? '：' + esc(r.reason) : ' (exit ' + r.exit + ')') + '</span>') + '</td><td><button class="btn small" data-open-dir="' + encodeURIComponent(r.output || r.video) + '">打开</button></td></tr>').join('') + '</table></div>';
       }
-      if (s.status === 'done' || s.status === 'error' || s.status === 'killed') {
-        clearInterval(bTimer); bTimer = null; bJob = null;
-        $('btnBatchStart').disabled = false; $('btnBatchStart').innerHTML = ic('play') + '<span>开始批量封装</span>'; $('btnBatchStart').classList.add('primary'); $('btnBatchStart').classList.remove('danger');
-        $('batchState').textContent = s.status === 'done' ? '全部完成' : (s.status === 'killed' ? '已停止' : '完成，但有失败项');
-        $('batchProgress').style.display = 'none';
-        $('batchStickyBarWrap').style.display = 'none';
-        setStatus(s.status === 'done' ? '批量封装完成' : (s.status === 'killed' ? '批量已停止' : '批量封装结束（有失败项）'), s.status === 'done' ? 'ok' : 'err');
-        lastBatchResult = s.status === 'done'
-          ? { cls: 'ok', icon: 'checkCircle', text: '批量封装完成 · 全部成功' }
-          : s.status === 'killed'
-            ? { cls: 'info', icon: 'info', text: '批量已停止' }
-            : { cls: 'err', icon: 'xCircle', text: '批量封装结束（有失败项）' };
-        if (s.status === 'done') beep();
-        refreshBatchSticky();
-      }
-    } catch (ex) {
-      failCount++;
-      if (failCount >= 5) {
-        clearInterval(bTimer); bTimer = null; bJob = null;
-        $('btnBatchStart').disabled = false; $('btnBatchStart').innerHTML = ic('play') + '<span>开始批量封装</span>'; $('btnBatchStart').classList.add('primary'); $('btnBatchStart').classList.remove('danger');
-        $('batchState').textContent = '连接丢失，请刷新';
-        $('batchProgress').style.display = 'none';
-        $('batchStickyBarWrap').style.display = 'none';
-        setStatus('连接丢失，请刷新', 'err');
-        lastBatchResult = { cls: 'err', icon: 'xCircle', text: '连接丢失，请刷新' };
-        refreshBatchSticky();
-      }
-    }
-  }, 1200);
-}
+    },
+    onTick: s => {
+      const st = muxStage(s);
+      const bstage = st.progress != null ? ('（' + st.progress + '%）') : st.subsetting ? '（子集化中）' : '';
+      setStickyRun($('batchStickyNote'), s.total ? ('批量封装中：第 ' + s.current + ' / ' + s.total + ' 个' + bstage) : '批量封装中…');
+    },
+    onDone: s => { beep(); bfin(s, { cls: 'ok', icon: 'checkCircle', text: '批量封装完成 · 全部成功' }, '全部完成', '批量封装完成', 'ok'); },
+    onError: s => bfin(s, { cls: 'err', icon: 'xCircle', text: '批量封装结束（有失败项）' }, '完成，但有失败项', '批量封装结束（有失败项）', 'err'),
+    onKilled: s => bfin(s, { cls: 'info', icon: 'info', text: '批量已停止' }, '已停止', '批量已停止', 'err'),
+    onLost: () => bfin(null, { cls: 'err', icon: 'xCircle', text: '连接丢失，请刷新' }, '连接丢失，请刷新', '连接丢失，请刷新', 'err')
+  });
+};
+let bJob = null;
 $('btnBFonts').onclick = () => openBrowser(v => $('b_fonts').value = v, 'dir', $('b_fonts').value, 'fonts');
 $('btnBOut').onclick = () => openBrowser(v => $('b_out').value = v, 'dir', $('b_out').value, 'out');

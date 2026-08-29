@@ -558,96 +558,55 @@ function renderFontCheck(r, subs, fonts_dir) {
 }
 
 /* ==================== 单个封装 ==================== */
-let job = null, timer = null;
+let job = null;
 $('btnStart').onclick = async () => {
   if (job) {
     setStatus('正在停止…', 'run');
     await api('/api/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: job }) });
     return;
   }
-  const body = {
+  const common = buildMuxCommon('');   // 公共参数（字体/输出/备份/旗标，与批量同一份逻辑，见 task.js）
+  const body = Object.assign({
     video: $('video').value.trim(), sc_sub: $('sc_sub').value.trim(), tc_sub: $('tc_sub').value.trim(),
     sc_name: $('sc_name').value.trim() || 'SC', tc_name: $('tc_name').value.trim() || 'TC',
-    fonts_dir: $('fonts_dir').value.trim(),
     audio: $('audio').value.trim(),
     audio_tracks: (trackSel.allAudio.length === 0) ? '' : (trackSel.audio.size === 0) ? 'none' : (trackSel.audio.size < trackSel.allAudio.length) ? [...trackSel.audio].join(',') : '',
     subtitle_tracks: trackSel.sub.size ? [...trackSel.sub].join(',') : '',
     keep_attachments: trackSel.keepAtt,
-    audio_lang: $('audio_lang').value.trim(), audio_name: $('audio_name').value.trim(),
-    out_dir: $('out_dir').value.trim(), force: $('force').checked, no_backup: !$('backup').checked,
-    sc_default: $('sc_default').value, tc_default: $('tc_default').value,
-    sc_forced: $('sc_forced').checked, tc_forced: $('tc_forced').checked
-  };
+    audio_lang: $('audio_lang').value.trim(), audio_name: $('audio_name').value.trim()
+  }, common);
   if (!body.video) { alert('请选择视频文件'); return; }
   if (!body.sc_sub && !body.tc_sub && !confirm('未提供任何字幕，将保留源字幕与源字体（无新字幕时不做字体子集化）。继续？')) return;
   setStatus('正在提交…', 'run'); setResult('');
   const r = await api('/api/mux', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   if (r.error) { setStatus('错误：' + r.error, 'err'); return; }
-  job = r.job; $('btnStart').disabled = false; $('btnStart').innerHTML = ic('square') + '<span>停止封装</span>'; $('btnStart').classList.add('danger'); $('btnStart').classList.remove('primary');
+  job = r.job;
+  setRunButton($('btnStart'), true, '停止封装', '开始封装');
   showLogTab('mux'); setLog('mux', '');
   $('singleBarWrap').style.display = ''; $('singleBar').style.width = '0%';
-  poll();
+  const fin = (s, lastR, statusMsg, statusCls, resultHtml) => {
+    job = null;
+    setRunButton($('btnStart'), false, '停止封装', '开始封装');
+    $('singleBarWrap').style.display = 'none';
+    setStatus(statusMsg, statusCls);
+    lastResult = lastR;
+    if (resultHtml) $('result').innerHTML = resultHtml;
+    refreshSticky();
+  };
+  startTaskPolling({
+    job, interval: 1200,
+    onAny: s => { setLog('mux', s.log); if (s.progress != null) $('singleBar').style.width = s.progress + '%'; },
+    onTick: s => setStickyRun($('stickyNote'), muxStage(s).label),   // 运行中：分阶段 + 进度
+    onDone: s => { beep(); fin(s, { cls: 'ok', icon: 'checkCircle', text: '封装完成' }, '封装完成', 'ok',
+      '<span class="t-sec">输出：</span><code class="mono" style="color:var(--text-primary)">' + esc(s.result || '') + '</code> <button class="btn small" data-open-dir="' + encodeURIComponent(s.result || '') + '">' + ic('arrowUpRight') + '打开文件夹</button>'); },
+    onError: s => { const reason = s.reason || ('退出码 ' + (s.exit ?? '?')); fin(s, { cls: 'err', icon: 'xCircle', text: '封装失败：' + reason }, '封装失败：' + reason, 'err',
+      '<span class="chip err">' + ic('xCircle') + '<span>封装失败：' + esc(reason) + '</span></span>'); },
+    onKilled: s => fin(s, { cls: 'info', icon: 'info', text: '任务已停止' }, '已停止', 'err',
+      '<span class="chip info">' + ic('info') + '<span>任务已停止</span></span>'),
+    onLost: () => fin(null, { cls: 'err', icon: 'xCircle', text: '连接丢失，请刷新' }, '连接丢失，请刷新', 'err',
+      '<span class="chip err">' + ic('xCircle') + '<span>连接丢失，请刷新页面后重试</span></span>')
+  });
 };
-async function poll() {
-  let failCount = 0;
-  timer = setInterval(async () => {
-    try {
-      const s = await api('/api/job?id=' + job);
-      failCount = 0;
-      setLog('mux', s.log);
-      if (s.progress != null) $('singleBar').style.width = s.progress + '%';
-      if (s.status === 'done') {        clearInterval(timer); timer = null; job = null;
-        $('btnStart').disabled = false; $('btnStart').innerHTML = ic('play') + '<span>开始封装</span>'; $('btnStart').classList.add('primary'); $('btnStart').classList.remove('danger');
-        $('singleBarWrap').style.display = 'none'; setStatus('封装完成', 'ok'); beep();
-        lastResult = { cls: 'ok', icon: 'checkCircle', text: '封装完成' };
-        $('result').innerHTML = '<span class="t-sec">输出：</span><code class="mono" style="color:var(--text-primary)">' + esc(s.result || '') + '</code> <button class="btn small" data-open-dir="' + encodeURIComponent(s.result || '') + '">' + ic('arrowUpRight') + '打开文件夹</button>';
-        refreshSticky();
-      }
-      else if (s.status === 'error') {
-        clearInterval(timer); timer = null; job = null;
-        $('btnStart').disabled = false; $('btnStart').innerHTML = ic('play') + '<span>开始封装</span>'; $('btnStart').classList.add('primary'); $('btnStart').classList.remove('danger');
-        $('singleBarWrap').style.display = 'none';
-        const reason = s.reason || ('退出码 ' + (s.exit ?? '?'));
-        setStatus('封装失败：' + reason, 'err');
-        lastResult = { cls: 'err', icon: 'xCircle', text: '封装失败：' + reason };
-        $('result').innerHTML = '<span class="chip err">' + ic('xCircle') + '<span>封装失败：' + esc(reason) + '</span></span>';
-        refreshSticky();
-      }
-      else if (s.status === 'killed') {
-        clearInterval(timer); timer = null; job = null;
-        $('btnStart').disabled = false; $('btnStart').innerHTML = ic('play') + '<span>开始封装</span>'; $('btnStart').classList.add('primary'); $('btnStart').classList.remove('danger');
-        $('singleBarWrap').style.display = 'none'; setStatus('已停止', 'err');
-        lastResult = { cls: 'info', icon: 'info', text: '任务已停止' };
-        $('result').innerHTML = '<span class="chip info">' + ic('info') + '<span>任务已停止</span></span>';
-        refreshSticky();
-      }
-      else {
-        // 运行中：sticky 栏随轮询自动刷新当前状态（子集化/封装分阶段 + 进度）
-        const note = $('stickyNote');
-        note.className = 'sticky-note run';
-        note.firstElementChild.innerHTML = ic('loader', 'spin');
-        const lg = s.log || '';
-        let stage;
-        if (s.progress != null) stage = '封装中 ' + s.progress + '%';
-        else if (/Muxing/i.test(lg)) stage = '封装中…';
-        else if (/Subset tool|subsetting|assfonts|AFS:/i.test(lg)) stage = '子集化中…';
-        else stage = '处理中…';
-        note.querySelector('.sticky-txt').textContent = stage;
-      }
-    } catch (ex) {
-      failCount++;
-      if (failCount >= 5) {
-        clearInterval(timer); timer = null; job = null;
-        $('btnStart').disabled = false; $('btnStart').innerHTML = ic('play') + '<span>开始封装</span>'; $('btnStart').classList.add('primary'); $('btnStart').classList.remove('danger');
-        $('singleBarWrap').style.display = 'none';
-        setStatus('连接丢失，请刷新', 'err');
-        lastResult = { cls: 'err', icon: 'xCircle', text: '连接丢失，请刷新' };
-        $('result').innerHTML = '<span class="chip err">' + ic('xCircle') + '<span>连接丢失，请刷新页面后重试</span></span>';
-        refreshSticky();
-      }
-    }
-  }, 1200);
-}
 /* ==================== 拖放识别 ==================== */
 function pickDropCandidates(entries, done) {
   const ov = document.createElement('div');

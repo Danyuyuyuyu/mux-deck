@@ -16,6 +16,7 @@ STATIC_FILES = {
     "style.css": "text/css; charset=utf-8",
     "app.js": "application/javascript; charset=utf-8",
     "identify.js": "application/javascript; charset=utf-8",
+    "task.js": "application/javascript; charset=utf-8",
     "batch.js": "application/javascript; charset=utf-8",
     "extract.js": "application/javascript; charset=utf-8",
     "preview.js": "application/javascript; charset=utf-8",
