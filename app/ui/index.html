@@ -8,7 +8,7 @@
 <title>字幕封装助手 · ASS Subtitle Packaging Tool</title>
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="single-active">
 
 <div id="offlineBar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:300;background:var(--err-bg);border-bottom:1px solid var(--err-line);color:var(--danger);font:13px/1.6 var(--sans);text-align:center;padding:8px 40px;backdrop-filter:blur(4px);">
   <b>服务未运行</b> — 请双击 <span style="font-family:var(--mono)">start_mux_ui.bat</span> 重新启动后端；恢复后本提示自动消失。
@@ -226,9 +226,17 @@
       <div class="sticky-bar" id="stickySingle">
         <div class="sticky-inner">
           <div class="sticky-note info" id="stickyNote"><span data-ic="info" aria-hidden="true"></span><span class="sticky-txt">尚未选择视频</span></div>
+          <div class="sp-block" id="stickyProgress">
+            <div class="sp-head"><span class="sp-label">封装进度</span><span class="sp-pct" id="stickyPct">--</span></div>
+            <div class="sp-track" id="stickyBarWrap"><div class="sp-fill" id="stickyBar"></div></div>
+          </div>
+          <div class="sp-times" id="stickyTimes">
+            <span class="sp-time"><span class="sp-tlabel">已用时</span><span class="sp-tval" id="stickyElapsed">--:--:--</span></span>
+            <span class="sp-vsep" aria-hidden="true"></span>
+            <span class="sp-time"><span class="sp-tlabel">预计剩余</span><span class="sp-tval" id="stickyEta">--:--:--</span></span>
+          </div>
           <button class="btn lg primary" id="btnStart" disabled><span data-ic="play" aria-hidden="true"></span>开始封装</button>
         </div>
-        <div class="progress sm" id="stickyBarWrap" style="display:none"><div id="stickyBar"></div></div>
       </div>
     </section>
 

@@ -113,6 +113,22 @@ function setStatus(msg, cls) {
 }
 function setResult(msg) { $('result').textContent = msg; }
 
+/* ===== 底部状态条时间信息（耗时 / 预计剩余；纯展示，不影响任务逻辑） ===== */
+let stickyStartTs = 0;   // 本轮任务开始时刻
+function fmtDur(ms) {
+  const t = Math.max(0, Math.floor(ms / 1000));
+  const p = n => String(n).padStart(2, '0');
+  return p(Math.floor(t / 3600)) + ':' + p(Math.floor((t % 3600) / 60)) + ':' + p(t % 60);
+}
+function stickyTimesRunning(progress) {
+  const elapsed = Date.now() - stickyStartTs;
+  $('stickyElapsed').textContent = fmtDur(elapsed);
+  // 线性外推：按已耗时长度的进度占比推算剩余（progress 为空=阶段未报进度，先显示计算中）
+  if (progress != null && progress > 0) $('stickyEta').textContent = fmtDur(elapsed / progress * (100 - progress));
+  else $('stickyEta').textContent = '计算中…';
+}
+function stickyTimesFreeze() { $('stickyEta').textContent = '--:--:--'; }   // 终态：耗时定格，剩余不再显示
+
 /* ==================== 设置面板（主题 / 强调色） ==================== */
 (function () {
   var prefs = {};
@@ -159,6 +175,7 @@ function setResult(msg) { $('result').textContent = msg; }
 function switchMode(mode) {
   document.querySelectorAll('.mode').forEach(function (m) { m.classList.toggle('active', m.id === 'mode-' + mode); });
   document.querySelectorAll('.mode-tab').forEach(function (b) { b.classList.toggle('active', b.dataset.mode === mode); });
+  document.body.classList.toggle('single-active', mode === 'single');   // 单封装固定状态条：给页尾让位
   refreshSticky();
   refreshBatchSticky();
 }
@@ -343,10 +360,8 @@ function syncDefaultBadge() {
     }
   }).observe($('status'), { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
   new MutationObserver(function () {
-    const wrap = $('singleBarWrap');
-    if (wrap.style.display !== 'none') { $('stickyBarWrap').style.display = ''; $('stickyBar').style.width = $('singleBar').style.width; }
-    else { $('stickyBarWrap').style.display = 'none'; }
-  }).observe($('singleBarWrap'), { attributes: true, attributeFilter: ['style'] });
+    $('stickyBar').style.width = $('singleBar').style.width;   // 镜像真实进度（观察内层 bar 的宽度变化）
+  }).observe($('singleBar'), { attributes: true, attributeFilter: ['style'] });
   new MutationObserver(function () {
     if ($('batchProgress').style.display !== 'none') {
       $('batchStickyBarWrap').style.display = '';
@@ -595,6 +610,12 @@ $('btnStart').onclick = async () => {
   const r = await api('/api/mux', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   if (r.error) { setStatus('错误：' + r.error, 'err'); return; }
   job = r.job;
+  stickyStartTs = Date.now();
+  $('stickyProgress').classList.add('run');   // 进度条流动高光
+  $('stickyBar').style.width = '0%';
+  $('stickyPct').textContent = '--';
+  $('stickyElapsed').textContent = '00:00:00';
+  $('stickyEta').textContent = '计算中…';
   setRunButton($('btnStart'), true, '停止封装', '开始封装');
   showLogTab('mux'); setLog('mux', '');
   $('singleBarWrap').style.display = ''; $('singleBar').style.width = '0%';
@@ -602,6 +623,8 @@ $('btnStart').onclick = async () => {
     job = null;
     setRunButton($('btnStart'), false, '停止封装', '开始封装');
     $('singleBarWrap').style.display = 'none';
+    $('stickyProgress').classList.remove('run');
+    stickyTimesFreeze();   // 耗时定格、剩余清空（进度条与百分比一致定格，下次启动时归零）
     setStatus(statusMsg, statusCls);
     lastResult = lastR;
     if (resultHtml) $('result').innerHTML = resultHtml;
@@ -610,8 +633,12 @@ $('btnStart').onclick = async () => {
   startTaskPolling({
     job, interval: 1200,
     onAny: s => { setLog('mux', s.log); if (s.progress != null) $('singleBar').style.width = s.progress + '%'; },
-    onTick: s => setStickyRun($('stickyNote'), muxStage(s).label),   // 运行中：分阶段 + 进度
-    onDone: s => { beep(); fin(s, { cls: 'ok', icon: 'checkCircle', text: '封装完成' }, '封装完成', 'ok',
+    onTick: s => {
+      setStickyRun($('stickyNote'), muxStage(s).label);   // 运行中：分阶段 + 进度
+      stickyTimesRunning(s.progress);
+      if (s.progress != null) $('stickyPct').textContent = s.progress + '%';
+    },
+    onDone: s => { beep(); $('stickyPct').textContent = '100%'; fin(s, { cls: 'ok', icon: 'checkCircle', text: '封装完成' }, '封装完成', 'ok',
       '<span class="t-sec">输出：</span><code class="mono" style="color:var(--text-primary)">' + esc(s.result || '') + '</code> <button class="btn small" data-open-dir="' + encodeURIComponent(s.result || '') + '">' + ic('arrowUpRight') + '打开文件夹</button>'); },
     onError: s => { const reason = s.reason || ('退出码 ' + (s.exit ?? '?')); fin(s, { cls: 'err', icon: 'xCircle', text: '封装失败：' + reason }, '封装失败：' + reason, 'err',
       '<span class="chip err">' + ic('xCircle') + '<span>封装失败：' + esc(reason) + '</span></span>'); },
