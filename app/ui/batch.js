@@ -42,16 +42,7 @@ function batchDel(i) { batchItems.splice(i, 1); renderBatch(); }
 $('btnBatchAdd').onclick = () => { batchItems.push({video:'', sc:'', tc:''}); renderBatch(); };
 
 /* 添加文件：浏览器选视频 → 自动匹配字幕 + 自动识别字体文件夹（视频旁 Fonts/Font） */
-async function autoFontDir(v) {
-  if ($('b_fonts').value.trim()) return;   // 已有字体目录不覆盖
-  const dir = v.slice(0, v.lastIndexOf('\\') + 1);
-  if (!dir) return;
-  try {
-    const d = await api('/api/list?path=' + encodeURIComponent(dir.replace(/\\$/, '')));
-    const idx = (d.dirs || []).findIndex(n => /^fonts?$/i.test(n));
-    if (idx >= 0) $('b_fonts').value = dir + d.dirs[idx];
-  } catch (e) { /* 目录探测失败静默 */ }
-}
+function autoFontDir(v) { return autoFontDirInput($('b_fonts'), v); }
 /* 添加整个文件夹：列出目录内全部视频 → 逐个自动匹配字幕 + 字体目录识别 */
 const BATCH_VIDEO_RE = /\.(mkv|mp4|m2ts|ts|avi|mov|webm|flv|wmv|m4v)$/i;
 async function addVideosFromDir(dir) {
@@ -115,9 +106,10 @@ $('btnMatchAll').onclick = async () => {
   if (!batchItems.length) { alert('批量列表为空'); return; }
   setStatus('正在按集数匹配字幕…', 'run');
   try {
-    let hit = 0, miss = 0, noVideo = 0, hitSc = 0, hitTc = 0;
+    let hit = 0, miss = 0, noVideo = 0, hitSc = 0, hitTc = 0, firstVideo = '';
     await Promise.all(batchItems.map(async function (it) {
       if (!it.video) { noVideo++; return; }
+      if (!firstVideo) firstVideo = it.video;
       const m = await api('/api/match_subs?path=' + encodeURIComponent(it.video));
       if (m.sc) hitSc++;
       if (m.tc) hitTc++;
@@ -126,10 +118,11 @@ $('btnMatchAll').onclick = async () => {
       if (m.tc && !it.tc) it.tc = m.tc;
       if (matched) hit++; else miss++;
     }));
+    const fontFound = firstVideo ? await autoFontDirInput($('b_fonts'), firstVideo) : false;   // 自动匹配字体目录
     if (hit === 0) {
-      setStatus(miss === 0 ? '没有可匹配的项（视频路径均为空）' : '按集数未匹配到任何字幕（0/' + (hit + miss) + ' 命中）', 'err');
+      setStatus(miss === 0 ? '没有可匹配的项（视频路径均为空）' : '按集数未匹配到任何字幕（0/' + (hit + miss) + ' 命中）' + (fontFound ? ' · 已自动识别字体目录' : ''), 'err');
     } else {
-      setStatus('批量字幕匹配完成：命中 ' + hit + ' 项（简 ' + hitSc + ' / 繁 ' + hitTc + '）' + (miss ? '，未命中 ' + miss + ' 项' : '') + (noVideo ? '，' + noVideo + ' 项无视频路径' : ''), 'ok');
+      setStatus('批量字幕匹配完成：命中 ' + hit + ' 项（简 ' + hitSc + ' / 繁 ' + hitTc + '）' + (miss ? '，未命中 ' + miss + ' 项' : '') + (noVideo ? '，' + noVideo + ' 项无视频路径' : '') + (fontFound ? ' · 已自动识别字体目录' : ''), 'ok');
     }
   } catch (ex) {
     setStatus('批量匹配失败：' + ex, 'err');

@@ -420,6 +420,19 @@ $('btnSingleReset').onclick = () => {
 };
 
 /* ==================== 自动匹配字幕（单个） ==================== */
+/* 通用：视频旁 Fonts/Font 目录探测（inputEl 已有值时不覆盖；支持 \ 与 / 两种路径分隔符） */
+async function autoFontDirInput(inputEl, v) {
+  if (!inputEl || inputEl.value.trim()) return false;
+  const idxS = Math.max(v.lastIndexOf('\\'), v.lastIndexOf('/'));
+  const dir = idxS >= 0 ? v.slice(0, idxS + 1) : '';
+  if (!dir) return false;
+  try {
+    const d = await api('/api/list?path=' + encodeURIComponent(dir.replace(/[\\/]$/, '')));
+    const idx = (d.dirs || []).findIndex(n => /^fonts?$/i.test(n));
+    if (idx >= 0) { inputEl.value = dir + d.dirs[idx]; return true; }
+  } catch (e) { /* 目录探测失败静默 */ }
+  return false;
+}
 $('btnAutoMatch').onclick = async () => {
   const v = $('video').value.trim();
   if (!v) { alert('请先选择视频文件'); return; }
@@ -432,13 +445,14 @@ $('btnAutoMatch').onclick = async () => {
     if (m.sc && !scHad) { $('sc_sub').value = m.sc; autoTrackName('sc_sub', 'sc_name', 'sc'); sc = true; }
     if (m.tc && !tcHad) { $('tc_sub').value = m.tc; autoTrackName('tc_sub', 'tc_name', 'tc'); tc = true; }
     syncSubStatus();
+    const fontFound = await autoFontDirInput($('fonts_dir'), v);   // 自动匹配字体目录（视频旁 Fonts/Font）
     lastResult = null; refreshSticky();   // 字幕已填充：同步底部操作栏状态
     if (sc || tc) {
-      setStatus('字幕匹配完成：已填充 ' + (sc ? '简体' : '') + (sc && tc ? ' + ' : '') + (tc ? '繁体' : ''), 'ok');
+      setStatus('字幕匹配完成：已填充 ' + (sc ? '简体' : '') + (sc && tc ? ' + ' : '') + (tc ? '繁体' : '') + (fontFound ? ' · 已自动识别字体目录' : ''), 'ok');
     } else if (m.sc || m.tc) {
-      setStatus('匹配到的字幕槽位已有内容，未覆盖（重置后可重新填充）', 'ok');
+      setStatus('匹配到的字幕槽位已有内容，未覆盖（重置后可重新填充）' + (fontFound ? ' · 已自动识别字体目录' : ''), 'ok');
     } else {
-      setStatus('未匹配到任何字幕（简 0 / 繁 0）', 'err');
+      setStatus('未匹配到任何字幕（简 0 / 繁 0）' + (fontFound ? ' · 已自动识别字体目录' : ''), 'err');
     }
   } catch (ex) {
     setStatus('字幕匹配失败：' + ex, 'err');
