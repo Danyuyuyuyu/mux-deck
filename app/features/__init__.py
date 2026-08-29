@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # 功能注册表：每个模块暴露 handlers = {"GET": {path: fn}, "POST": {path: fn}}
 # server.py 只做分发；新增功能 = 新模块 + 在此登记。
-from app.features import browse, files, tracks, mux, extract, preview, misc, fonts, env, subcheck
+from app.features import browse, files, tracks, mux, extract, preview, misc, fonts, env, subcheck, propedit
 
 ROUTES = {"GET": {}, "POST": {}}
 
@@ -12,7 +12,7 @@ def _register(mod):
             ROUTES.setdefault(method, {})[path] = fn
 
 
-for _m in (browse, files, tracks, mux, extract, preview, misc, fonts, env, subcheck):
+for _m in (browse, files, tracks, mux, extract, preview, misc, fonts, env, subcheck, propedit):
     _register(_m)
 
 

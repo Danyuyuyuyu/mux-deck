@@ -31,6 +31,7 @@ def _locate_tools():
     return {
         "MKVMERGE": _first_existing(os.path.join(BIN_DIR, "mkvtoolnix", "mkvmerge.exe")) or shutil.which("mkvmerge") or "C:/Program Files/MKVToolNix/mkvmerge.exe",
         "MKVEXTRACT": _first_existing(os.path.join(BIN_DIR, "mkvtoolnix", "mkvextract.exe")) or shutil.which("mkvextract") or "C:/Program Files/MKVToolNix/mkvextract.exe",
+        "MKVPROPEDIT": _first_existing(os.path.join(BIN_DIR, "mkvtoolnix", "mkvpropedit.exe")) or shutil.which("mkvpropedit") or "C:/Program Files/MKVToolNix/mkvpropedit.exe",
         "FFMPEG": _first_existing(os.path.join(BIN_DIR, "ffmpeg", "bin", "ffmpeg.exe")) or shutil.which("ffmpeg") or "ffmpeg",
         "ASSFONTS": _first_existing(os.path.join(BIN_DIR, "assfonts", "assfonts.exe")) or shutil.which("assfonts") or os.path.join(BIN_DIR, "assfonts", "assfonts.exe"),
         "AFS": _first_existing(os.path.join(BIN_DIR, "assfontsubset", "AssFontSubset.Console.exe")) or shutil.which("AssFontSubset.Console") or "",
@@ -41,6 +42,7 @@ def _locate_tools():
 # 工具定位在模块加载时执行一次；环境（bin/ 或 PATH）变更后调 refresh_tools() 重算，免重启生效
 _tools = _locate_tools()
 MKVMERGE, MKVEXTRACT, FFMPEG = _tools["MKVMERGE"], _tools["MKVEXTRACT"], _tools["FFMPEG"]
+MKVPROPEDIT = _tools["MKVPROPEDIT"]
 ASSFONTS, AFS, PY_SCRIPTS, PYFTSUBSET = _tools["ASSFONTS"], _tools["AFS"], _tools["PY_SCRIPTS"], _tools["PYFTSUBSET"]
 
 def refresh_tools():

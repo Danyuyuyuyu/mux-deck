@@ -39,6 +39,7 @@
     <button type="button" class="mode-tab" data-mode="batch" onclick="switchMode('batch')"><span data-ic="layers" aria-hidden="true"></span>批量封装</button>
     <button type="button" class="mode-tab" data-mode="extract" onclick="switchMode('extract')"><span data-ic="download" aria-hidden="true"></span>字幕提取</button>
     <button type="button" class="mode-tab" data-mode="preview" onclick="switchMode('preview')"><span data-ic="image" aria-hidden="true"></span>字幕预览</button>
+    <button type="button" class="mode-tab" data-mode="propedit" onclick="switchMode('propedit')"><span data-ic="shieldCheck" aria-hidden="true"></span>快速修补</button>
   </div>
 </nav>
 
@@ -439,6 +440,41 @@
       </div>
     </section>
 
+    <!-- ==================== 快速修补（mkvpropedit） ==================== -->
+    <section class="mode" id="mode-propedit">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="t-section">快速修补</h2>
+            <p class="t-sec">mkvpropedit 原地修改轨道旗标/名称/语言、MKV 标题与章节——秒级完成，不重封装（章节需 XML 格式）</p>
+          </div>
+        </div>
+        <div class="panel-sec" style="padding-top:16px;">
+          <div class="field">
+            <label for="pe_video">视频</label>
+            <input id="pe_video" type="text" placeholder="MKV 文件路径（直接修改，建议先备份）" autocomplete="off">
+            <button class="btn" id="btnPeVideo">浏览</button>
+            <button class="btn" id="btnPeProbe"><span data-ic="list" aria-hidden="true"></span>读取轨道</button>
+          </div>
+          <div class="field">
+            <label for="pe_title">MKV 标题</label>
+            <input id="pe_title" type="text" placeholder="留空 = 不修改标题" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="pe_chapters">章节（XML）</label>
+            <input id="pe_chapters" type="text" placeholder="留空 = 不修改章节；填 XML 章节文件替换" autocomplete="off">
+            <button class="btn" id="btnPeChapters">浏览</button>
+          </div>
+          <div id="peList"></div>
+          <div class="field" style="margin-top:16px;">
+            <button class="btn lg primary" id="btnPeApply" style="height:36px;"><span data-ic="check" aria-hidden="true"></span>应用修改</button>
+            <span class="t-cap">直接修改源文件（秒级）；只有改动过的轨道会被提交</span>
+          </div>
+          <div id="peRes"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- ==================== 任务控制台 ==================== -->
     <section class="console" aria-label="任务日志">
       <div class="console-panel">
@@ -545,6 +581,7 @@
 <script src="batch.js"></script>
 <script src="extract.js"></script>
 <script src="preview.js"></script>
+<script src="propedit.js"></script>
 <script src="env.js"></script>
 <script src="init.js"></script>
 </body>

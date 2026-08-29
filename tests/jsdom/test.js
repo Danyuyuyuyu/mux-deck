@@ -42,7 +42,8 @@ function mockFetch(url, opts) {
   else if (u === '/api/detect_fonts_dir') { data = { path: q.replace('path=', ''), fonts_dir: fontsDirRet.fonts_dir }; }
   else if (u === '/api/detect_chapters') { data = { path: q.replace('path=', ''), chapters: chaptersRet.chapters }; }
   else if (u === '/api/list') data = { path: 'D:\\Video', dirs: [], files: [['EP01.sc.ass', 1024], ['EP01.chs.ass', 2048], ['EP01.mkv', 999]] };
-  else if (u === '/api/probe') data = { tracks: [{ id: 1, type: 'video', codec: 'AVC' }, { id: 2, type: 'subtitles', codec: 'ASS', lang: 'zh' }], attachments: 0 };
+  else if (u === '/api/probe') data = { tracks: [{ id: 1, type: 'video', codec: 'AVC' }, { id: 2, type: 'audio', codec: 'AAC' }, { id: 3, type: 'subtitles', codec: 'ASS', lang: 'zh' }], attachments: 0 };
+  else if (u === '/api/propedit') data = { ok: true, log: '', probe: {} };
   else if (u === '/api/sub_check') data = { ok: true, dialogue: 120, counts: { overlap: 1, empty: 0, bad_time: 0, bad_style: 0, cps: 2, long_line: 1 }, issues: [{ line: 12, type: 'cps', detail: 'CPS 18.0 超过 15（27 字 / 1.50s）' }], total_issues: 4, truncated: false, status: 'warn' };
   else if (u === '/api/history') data = { items: [] };
   else if (u === '/api/presets') {
@@ -328,6 +329,22 @@ function mockFetch(url, opts) {
   $('btnSubCheck').click();
   ok = await waitUntil(() => $('subCheckBox') && $('subCheckBox').innerHTML.indexOf('第12行') >= 0);
   check('字幕体检渲染预警汇总与明细', ok && $('subCheckBox').innerHTML.indexOf('CPS 超速 2') >= 0 && $('subCheckBox').innerHTML.indexOf('时间重叠 1') >= 0, $('subCheckBox') && $('subCheckBox').innerHTML.slice(0, 150));
+
+  /* ---- 场景18：快速修补（读取轨道 → 改动标记 → 应用） ---- */
+  window.switchMode('propedit');
+  check('快速修补 tab 切换', window.document.getElementById('mode-propedit').classList.contains('active'));
+  $('pe_video').value = 'D:\Video\EP01.mkv';
+  $('btnPeProbe').click();
+  ok = await waitUntil(() => $('peList') && $('peList').querySelector('tr[data-tid]'));
+  check('快速修补读取轨道并生成编辑行', ok && window.document.querySelectorAll('#peList tr[data-tid]').length >= 2);
+  const peRow = $('peList').querySelector('tr[data-tid]');
+  peRow.querySelector('.pe-name').value = '改名';
+  peRow.querySelector('.pe-name').dispatchEvent(new window.Event('input', { bubbles: true }));
+  check('改动字段标记已改', peRow.querySelector('.pe-state').textContent === '已改');
+  $('pe_title').value = 'T2';
+  $('btnPeApply').click();
+  await sleep(60);
+  check('应用修补成功提示', $('peRes').innerHTML.indexOf('修改已应用') >= 0, $('peRes').innerHTML.slice(0, 100));
 
   const failed = results.filter(r => !r.ok);
   console.log('\n=== ' + (results.length - failed.length) + '/' + results.length + ' PASS ===');
