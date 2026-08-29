@@ -167,6 +167,13 @@ def main():
     except Exception as ex:
         check("env_check", False, str(ex))
 
+    # 13) detect_fonts_dir（识别服务：空路径返回空，不报错）
+    try:
+        fd = get("/api/detect_fonts_dir?path=")
+        check("detect_fonts_dir", "fonts_dir" in fd and fd.get("fonts_dir") == "", "空路径=%s" % fd.get("fonts_dir"))
+    except Exception as ex:
+        check("detect_fonts_dir", False, str(ex))
+
     # 汇总
     print()
     print("=" * 60)

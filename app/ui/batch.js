@@ -25,7 +25,7 @@ function renderBatch() {
       var v = vin.value.trim();
       batchItems[i].video = v;
       if (!v) return;
-      var m = await api('/api/match_subs?path=' + encodeURIComponent(v));
+      var m = await identify(v);
       if (m.sc && !$('b_s_' + i).value) $('b_s_' + i).value = m.sc;
       if (m.tc && !$('b_t_' + i).value) $('b_t_' + i).value = m.tc;
       batchItems[i].sc = $('b_s_' + i).value; batchItems[i].tc = $('b_t_' + i).value;
@@ -41,9 +41,8 @@ function batchBrowse(i, kind) {
 function batchDel(i) { batchItems.splice(i, 1); renderBatch(); }
 $('btnBatchAdd').onclick = () => { batchItems.push({video:'', sc:'', tc:''}); renderBatch(); };
 
-/* 添加文件：浏览器选视频 → 自动匹配字幕 + 自动识别字体文件夹（视频旁 Fonts/Font） */
-function autoFontDir(v) { return autoFontDirInput($('b_fonts'), v); }
-/* 添加整个文件夹：列出目录内全部视频 → 逐个自动匹配字幕 + 字体目录识别 */
+/* 添加文件：浏览器选视频 → 统一识别（字幕 + 字体目录，逻辑见 identify.js） */
+/* 添加整个文件夹：列出目录内全部视频 → 逐个统一识别 */
 const BATCH_VIDEO_RE = /\.(mkv|mp4|m2ts|ts|avi|mov|webm|flv|wmv|m4v)$/i;
 async function addVideosFromDir(dir) {
   if (!dir) return;
@@ -55,14 +54,15 @@ async function addVideosFromDir(dir) {
   if (!vids.length) { setStatus('该目录下没有视频文件（MKV/MP4 等）', 'err'); return; }
   setStatus('正在识别 ' + vids.length + ' 个视频的字幕与字体目录…', 'run');
   try {
-    const ms = await Promise.all(vids.map(v => api('/api/match_subs?path=' + encodeURIComponent(v)).catch(() => ({}))));
+    const ids = await Promise.all(vids.map(v => identify(v)));
     let added = 0;
     vids.forEach((v, i) => {
       if (batchItems.some(it => it.video && it.video.toLowerCase() === v.toLowerCase())) return;
-      addBatchVideo(v, [], ms[i]);
+      addBatchVideo(v, [], ids[i]);
       added++;
     });
-    await autoFontDir(vids[0]);
+    const fd = ids.map(x => x.fontsDir).find(Boolean);
+    if (fd && !$('b_fonts').value.trim()) $('b_fonts').value = fd;   // 字体目录：取首个识别到的
     renderBatch();
     setStatus(added
       ? ('已添加 ' + added + ' 个视频' + (added < vids.length ? '（跳过 ' + (vids.length - added) + ' 个重复）' : ''))
@@ -78,11 +78,11 @@ $('btnBatchFiles').onclick = () => openBrowser(async v => {
   if (batchItems.some(it => it.video && it.video.toLowerCase() === v.toLowerCase())) { setStatus('该视频已在列表中：' + v, 'err'); return; }
   setStatus('正在识别字幕与字体目录…', 'run');
   try {
-    const m = await api('/api/match_subs?path=' + encodeURIComponent(v));
-    addBatchVideo(v, [], m);   // addBatchVideo 内置 matched.sc/tc 填充
-    await autoFontDir(v);
+    const id = await identify(v);   // 统一识别：字幕 + 字体目录
+    addBatchVideo(v, [], id);   // addBatchVideo 内置 matched.sc/tc 填充
+    if (id.fontsDir && !$('b_fonts').value.trim()) $('b_fonts').value = id.fontsDir;
     renderBatch();
-    setStatus('已添加：' + v.split(/[\\/]/).pop() + (m.sc || m.tc ? ' · 已自动匹配字幕' : ''), 'ok');
+    setStatus('已添加：' + v.split(/[\\/]/).pop() + (id.sc || id.tc ? ' · 已自动匹配字幕' : ''), 'ok');
   } catch (ex) {
     setStatus('添加失败：' + ex, 'err');
   }
@@ -107,19 +107,19 @@ $('btnMatchAll').onclick = async () => {
   if (!batchItems.length) { alert('批量列表为空'); return; }
   setStatus('正在按集数匹配字幕…', 'run');
   try {
-    let hit = 0, miss = 0, noVideo = 0, hitSc = 0, hitTc = 0, firstVideo = '';
+    let hit = 0, miss = 0, noVideo = 0, hitSc = 0, hitTc = 0, firstId = null;
     await Promise.all(batchItems.map(async function (it) {
       if (!it.video) { noVideo++; return; }
-      if (!firstVideo) firstVideo = it.video;
-      const m = await api('/api/match_subs?path=' + encodeURIComponent(it.video));
-      if (m.sc) hitSc++;
-      if (m.tc) hitTc++;
-      const matched = !!(m.sc || m.tc);
-      if (m.sc && !it.sc) it.sc = m.sc;
-      if (m.tc && !it.tc) it.tc = m.tc;
+      const id = await identify(it.video);   // 统一识别：字幕 + 字体目录
+      if (!firstId) firstId = id;
+      if (id.sc) hitSc++;
+      if (id.tc) hitTc++;
+      const matched = !!(id.sc || id.tc);
+      if (id.sc && !it.sc) it.sc = id.sc;
+      if (id.tc && !it.tc) it.tc = id.tc;
       if (matched) hit++; else miss++;
     }));
-    const fontFound = firstVideo ? await autoFontDirInput($('b_fonts'), firstVideo) : false;   // 自动匹配字体目录
+    const fontFound = !!(firstId && firstId.fontsDir && !$('b_fonts').value.trim() && ($('b_fonts').value = firstId.fontsDir, true));   // 自动匹配字体目录
     if (hit === 0) {
       setStatus(miss === 0 ? '没有可匹配的项（视频路径均为空）' : '按集数未匹配到任何字幕（0/' + (hit + miss) + ' 命中）' + (fontFound ? ' · 已自动识别字体目录' : ''), 'err');
     } else {
@@ -159,7 +159,7 @@ $('btnBatchStart').onclick = async () => {
   let autoMatched = 0;
   await Promise.all(items.map(async (it) => {
     if (it.sc || it.tc) return;
-    const m = await api('/api/match_subs?path=' + encodeURIComponent(it.video));
+    const m = await identify(it.video);   // 统一识别入口（见 identify.js）
     if (m.sc) { it.sc = m.sc; autoMatched++; }
     if (m.tc) { it.tc = m.tc; autoMatched++; }
   }));

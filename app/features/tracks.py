@@ -92,6 +92,24 @@ def handle_match(q):
     return match_subs((q.get("path") or [""])[0])
 
 
+def detect_fonts_dir(video):
+    """识别视频旁的字体目录（Fonts 优先，其次 Font）；服务端 isdir 直判，供前端统一识别入口。"""
+    if not video:
+        return {"fonts_dir": ""}
+    d = os.path.dirname(video)
+    if not d:
+        return {"fonts_dir": ""}
+    for cand in ("Fonts", "Font"):
+        p = os.path.join(d, cand)
+        if os.path.isdir(p):
+            return {"fonts_dir": p}
+    return {"fonts_dir": ""}
+
+
+def handle_fonts_dir(q):
+    return detect_fonts_dir((q.get("path") or [""])[0])
+
+
 # ---------------- 字幕编码预处理 ----------------
 BOM_UTF8 = bytes([239, 187, 191])
 BOM_UTF16 = (bytes([255, 254]), bytes([254, 255]))
@@ -168,6 +186,6 @@ def handle_prep(body):
 
 
 handlers = {
-    "GET": {"/api/probe": handle, "/api/match_subs": handle_match},
+    "GET": {"/api/probe": handle, "/api/match_subs": handle_match, "/api/detect_fonts_dir": handle_fonts_dir},
     "POST": {"/api/prep_subs": handle_prep},
 }

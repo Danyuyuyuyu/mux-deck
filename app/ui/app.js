@@ -420,36 +420,23 @@ $('btnSingleReset').onclick = () => {
 };
 
 /* ==================== 自动匹配字幕（单个） ==================== */
-/* 通用：视频旁 Fonts/Font 目录探测（inputEl 已有值时不覆盖；支持 \ 与 / 两种路径分隔符） */
-async function autoFontDirInput(inputEl, v) {
-  if (!inputEl || inputEl.value.trim()) return false;
-  const idxS = Math.max(v.lastIndexOf('\\'), v.lastIndexOf('/'));
-  const dir = idxS >= 0 ? v.slice(0, idxS + 1) : '';
-  if (!dir) return false;
-  try {
-    const d = await api('/api/list?path=' + encodeURIComponent(dir.replace(/[\\/]$/, '')));
-    const idx = (d.dirs || []).findIndex(n => /^fonts?$/i.test(n));
-    if (idx >= 0) { inputEl.value = dir + d.dirs[idx]; return true; }
-  } catch (e) { /* 目录探测失败静默 */ }
-  return false;
-}
 $('btnAutoMatch').onclick = async () => {
   const v = $('video').value.trim();
   if (!v) { alert('请先选择视频文件'); return; }
   $('btnAutoMatch').disabled = true;
   try {
-    const m = await api('/api/match_subs?path=' + encodeURIComponent(v));
+    const id = await identify(v);   // 统一识别：字幕 + 字体目录（识别逻辑见 identify.js）
     if ($('video').value.trim() !== v) return; // 视频已变更，丢弃过期结果
     const scHad = !!$('sc_sub').value.trim(), tcHad = !!$('tc_sub').value.trim();
     let sc = false, tc = false;
-    if (m.sc && !scHad) { $('sc_sub').value = m.sc; autoTrackName('sc_sub', 'sc_name', 'sc'); sc = true; }
-    if (m.tc && !tcHad) { $('tc_sub').value = m.tc; autoTrackName('tc_sub', 'tc_name', 'tc'); tc = true; }
+    if (id.sc && !scHad) { $('sc_sub').value = id.sc; autoTrackName('sc_sub', 'sc_name', 'sc'); sc = true; }
+    if (id.tc && !tcHad) { $('tc_sub').value = id.tc; autoTrackName('tc_sub', 'tc_name', 'tc'); tc = true; }
     syncSubStatus();
-    const fontFound = await autoFontDirInput($('fonts_dir'), v);   // 自动匹配字体目录（视频旁 Fonts/Font）
+    const fontFound = !!(id.fontsDir && !$('fonts_dir').value.trim() && ($('fonts_dir').value = id.fontsDir, true));
     lastResult = null; refreshSticky();   // 字幕已填充：同步底部操作栏状态
     if (sc || tc) {
       setStatus('字幕匹配完成：已填充 ' + (sc ? '简体' : '') + (sc && tc ? ' + ' : '') + (tc ? '繁体' : '') + (fontFound ? ' · 已自动识别字体目录' : ''), 'ok');
-    } else if (m.sc || m.tc) {
+    } else if (id.sc || id.tc) {
       setStatus('匹配到的字幕槽位已有内容，未覆盖（重置后可重新填充）' + (fontFound ? ' · 已自动识别字体目录' : ''), 'ok');
     } else {
       setStatus('未匹配到任何字幕（简 0 / 繁 0）' + (fontFound ? ' · 已自动识别字体目录' : ''), 'err');
@@ -775,7 +762,7 @@ window.addEventListener('drop', async e => {
   } else if (vids.length >= 1) {
     setStatus('正在匹配字幕…', 'run');
     switchMode('batch');
-    const ms = await Promise.all(vids.map(v => api('/api/match_subs?path=' + encodeURIComponent(v))));
+    const ms = await Promise.all(vids.map(v => identify(v)));
     vids.forEach((v, i) => addBatchVideo(v, subs, ms[i]));
     renderBatch();
     setStatus('已添加 ' + vids.length + ' 个视频到批量列表', 'ok');
