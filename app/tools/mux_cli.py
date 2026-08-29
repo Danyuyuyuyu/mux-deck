@@ -103,6 +103,17 @@ def probe_json(path):
     except Exception as ex:
         fail("视频信息解析失败: %s" % ex)
 
+def resolve_out_name(tmpl, base, height):
+    """命名模板 -> 实际文件名（无扩展名）。占位符：{src} 源文件名 {ep} 集数 {res} 分辨率(1080P)。
+    集数识别按优先级：EP01 / 第01话 / [01] / 分隔符包裹的独立数字 / 最后一串数字。"""
+    m = (re.search(r'EP\s*(\d{1,4})', base, re.I) or re.search(r'第\s*(\d{1,4})\s*[话話集]', base)
+         or re.search(r'\[\s*(\d{1,4})\s*\]', base)
+         or re.search(r'(?:^|[\s_\-\.])(\d{1,4})(?=[\s_\-\.]|$)', base))
+    ep = m.group(1) if m else ((re.findall(r'\d+', base) or [''])[-1])
+    name = tmpl.replace('{src}', base).replace('{ep}', ep).replace('{res}', (str(height) + 'P') if height else '')
+    name = re.sub(r'[<>:"/\\|?*]', '_', name).strip().strip('.')
+    return name or base
+
 def unique_path(dest):
     if not os.path.exists(dest):
         return dest
@@ -114,6 +125,59 @@ def unique_path(dest):
         if not os.path.exists(cand):
             return cand
         n += 1
+
+def collect_fonts(subs, fonts_dir, out_dir):
+    """仅收集模式：解析字幕引用的字体名（Style + \\fn），从字体目录匹配并全量复制（不裁字形）。
+    匹配口径 = fontTools name 表 nameID 1/4/6/16（族名/全名/PS 名/首选族名），与字体体检同源。"""
+    try:
+        from fontTools.ttLib import TTFont
+    except ImportError:
+        fail("仅收集模式需要 fonttools（pip install fonttools 或用 bootstrap 安装）")
+    need = set()
+    for sub in subs:
+        try:
+            with open(sub, encoding="utf-8-sig", errors="replace") as f:
+                txt = f.read()
+        except OSError as ex:
+            fail("读取字幕失败: %s" % ex)
+        for line in txt.splitlines():
+            if line.startswith("Style:"):
+                parts = line.split(",", 23)
+                if len(parts) >= 3:
+                    need.add(parts[1].strip().strip("@").strip('"').lower())
+        for m in re.findall(r"\\fn([^\\\}]+)", txt):
+            need.add(m.strip().strip('"').lower())
+    need.discard("")
+    os.makedirs(out_dir, exist_ok=True)
+    picked = {}
+    for fn in sorted(os.listdir(fonts_dir)):
+        if os.path.splitext(fn)[1].lower() not in (".ttf", ".otf", ".ttc", ".otc"):
+            continue
+        path = os.path.join(fonts_dir, fn)
+        try:
+            tt = TTFont(path, fontNumber=0, lazy=True)
+            names = set()
+            for rec in tt["name"].names:
+                if rec.nameID in (1, 4, 6, 16):
+                    names.add(str(rec).strip().lower())
+            tt.close()
+        except Exception:
+            continue
+        for fam in (need & names):
+            picked.setdefault(fam, path)
+    missing = need - set(picked)
+    fonts, seen = [], set()
+    for path in picked.values():
+        if path in seen:
+            continue
+        seen.add(path)
+        dest = os.path.join(out_dir, os.path.basename(path))
+        shutil.copy(path, dest)
+        fonts.append(dest)
+    print("Collect: matched %d fonts for %d referenced families" % (len(fonts), len(need)), flush=True)
+    if missing:
+        print("Collect-missing: %s" % "、".join(sorted(missing)[:12]) + ("…" if len(missing) > 12 else ""), flush=True)
+    return fonts
 
 def main():
     global TMP
@@ -139,6 +203,11 @@ def main():
     ap.add_argument("--tc-default", default="", help="覆盖 TC 默认轨旗标: 0|1（空=自动）")
     ap.add_argument("--sc-forced", action="store_true", help="SC 轨打 forced 旗标")
     ap.add_argument("--tc-forced", action="store_true", help="TC 轨打 forced 旗标")
+    ap.add_argument("--chapters", default="", help="章节文件（OGM txt / XML）；给出时替换源章节，留空保留源章节")
+    ap.add_argument("--out-name", default="", help="输出文件名模板，支持 {src} 源文件名 {ep} 集数 {res} 分辨率(如 1080P)；留空沿用源文件名")
+    ap.add_argument("--title", default="", help="MKV 标题（segment title）元数据")
+    ap.add_argument("--fonts-mode", default="subset", choices=["subset", "collect"],
+                    help="字体处理：subset=子集化（默认）；collect=仅收集被引用字体全量嵌入（不裁字形）")
     a = ap.parse_args()
 
     # ---------- 校验输入 ----------
@@ -171,6 +240,8 @@ def main():
         fail("未指定字体目录，且视频旁未找到 Fonts/Font 目录；请用 --fonts-dir")
     if fonts_dir and not os.path.isdir(fonts_dir):
         fail("字体目录不存在: " + fonts_dir)
+    if a.chapters and not os.path.isfile(a.chapters):
+        fail("章节文件不存在: " + a.chapters)
 
     print("Source : " + video, flush=True)
     print("Fonts  : " + (fonts_dir or "(none)"), flush=True)
@@ -189,11 +260,14 @@ def main():
     subset_dir = os.path.join(TMP, "subs")
     os.makedirs(subset_dir, exist_ok=True)
 
-    # ---------- 子集化（双轨：AFS 主用，assfonts 回退） ----------
-    tool = subset_tool() if subs else "-"
+    # ---------- 字体处理（subset=双轨子集化；collect=仅收集全量嵌入） ----------
+    fonts_mode = a.fonts_mode if a.fonts_mode in ("subset", "collect") else "subset"
+    tool = subset_tool() if (subs and fonts_mode == "subset") else "-"
     if subs:
-        print("Subset tool: " + tool, flush=True)
-    if subs and tool == "afs":
+        print("Fonts mode: " + fonts_mode + (" (tool: " + tool + ")" if fonts_mode == "subset" else ""), flush=True)
+    if subs and fonts_mode == "collect":
+        fonts = collect_fonts(subs, fonts_dir, os.path.join(TMP, "collected"))
+    elif subs and tool == "afs":
         # AFS：每个字幕独立一次调用（AFS 要求多文件同目录，且修正后的 ASS 按输入basename落在输出目录）
         corrected = []
         for i, sub in enumerate(subs):
@@ -274,6 +348,8 @@ def main():
     # ---------- 组装 mkvmerge ----------
     out_tmp = os.path.join(TMP, base + ".muxed" + ext)
     margs = ["-o", out_tmp]
+    if a.title:
+        margs += ["--title", a.title]
     if a.subtitle_tracks:
         margs += ["--subtitle-tracks", a.subtitle_tracks]
     elif subs:
@@ -282,6 +358,8 @@ def main():
     if subs and not a.keep_attachments:
         margs.append("--no-attachments")
     margs += audio_args
+    if a.chapters:
+        margs.append("--no-chapters")   # 提供新章节时替换源章节（--no-chapters 作用于紧随的源文件）
     margs.append(video)
     sc_def, tc_def = "0:1", "0:0"
     if not a.sc_sub and a.tc_sub:
@@ -312,6 +390,8 @@ def main():
         fext = os.path.splitext(fpath)[1].lower()
         mime = "application/font-woff" if fext in (".woff", ".woff2") else "application/x-truetype-font"
         margs += ["--attachment-mime-type", mime, "--attach-file", fpath]
+    if a.chapters:
+        margs += ["--chapters", a.chapters]
 
     print("Muxing...", flush=True)
     rc = run_stream([MKVMERGE] + margs, os.path.join(TMP, "mux.log"))
@@ -336,6 +416,35 @@ def main():
     expect = len(subs) + kept
     if st != expect:
         fail("封装校验失败：预期 %d 条字幕轨，实际 %d 条" % (expect, st))
+
+    # ---------- 发布前 QC（封装后校验：轨道语言/旗标硬校验，附件/章节软提醒） ----------
+    vtracks = vo.get("tracks") or []
+    # mkvmerge -J 的 language 是 ISO 639-2 老码（中文=chi），BCP47 标签在 language_ietf
+    lang_of = lambda tr: str((tr.get("properties") or {}).get("language_ietf")
+                             or (tr.get("properties") or {}).get("language") or "").lower()
+    got_sc = any(tr.get("type") == "subtitles" and lang_of(tr) == a.sc_lang.lower() for tr in vtracks)
+    got_tc = any(tr.get("type") == "subtitles" and lang_of(tr) == a.tc_lang.lower() for tr in vtracks)
+    qc_hard = []
+    if a.sc_sub and not got_sc:
+        qc_hard.append("SC 轨缺失或语言不是 " + a.sc_lang)
+    if a.tc_sub and not got_tc:
+        qc_hard.append("TC 轨缺失或语言不是 " + a.tc_lang)
+    sc_expect_default = (a.sc_default or ("1" if a.sc_sub else "0")) == "1"
+    sc_got_default = any(tr.get("type") == "subtitles" and lang_of(tr) == a.sc_lang.lower()
+                         and (tr.get("properties") or {}).get("default_track") for tr in vtracks)
+    if a.sc_sub and sc_expect_default and not sc_got_default:
+        qc_hard.append("SC 轨应为默认轨但未打 default 旗标")
+    qc_soft = []
+    att_got = len(vo.get("attachments") or [])
+    if fonts and att_got < len(fonts):
+        qc_soft.append("附件 %d 个少于待嵌字体 %d 个" % (att_got, len(fonts)))
+    if a.chapters and not (vo.get("chapters") or []):
+        qc_soft.append("提供了章节文件但成品无章节")
+    for w in qc_soft:
+        print("QC-WARN: " + w, flush=True)
+    if qc_hard:
+        fail("QC 失败：" + "；".join(qc_hard))
+    print("QC: 通过（字幕轨 %d 条，语言/旗标符合预期；附件 %d）" % (st, att_got), flush=True)
     print("--- Result ---", flush=True)
     for tr in (vo.get("tracks") or []):
         pr = tr.get("properties") or {}
@@ -345,13 +454,30 @@ def main():
     print("  attachments: %d" % len(vo.get("attachments") or []), flush=True)
 
     # ---------- 安装 ----------
+    out_base = base
+    if a.out_name:
+        vh = 0
+        for tr in (j.get("tracks") or []):
+            if tr.get("type") == "video":
+                pr = tr.get("properties") or {}
+                vh = int(pr.get("height") or 0)
+                if not vh:
+                    dd = str(pr.get("display_dimensions") or "")
+                    if "x" in dd:
+                        try:
+                            vh = int(dd.split("x")[1])
+                        except ValueError:
+                            vh = 0
+                break
+        out_base = resolve_out_name(a.out_name, base, vh)
+        print("Output name: " + out_base, flush=True)
     if a.out_dir:
         os.makedirs(a.out_dir, exist_ok=True)
-        dest = os.path.join(a.out_dir, base + ext)
+        dest = os.path.join(a.out_dir, out_base + ext)
         shutil.move(out_tmp, dest)
         print("OK -> " + dest, flush=True)
     else:
-        dest = os.path.join(video_dir, base + ext)
+        dest = os.path.join(video_dir, out_base + ext)
         if a.no_backup:
             # 安全顺序：原件先进临时区 -> 成品落位 -> 成功后才删原件
             staged = os.path.join(TMP, base + ext)

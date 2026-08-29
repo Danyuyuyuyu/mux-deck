@@ -68,6 +68,9 @@ function buildMuxCommon(prefix) {
   return {
     fonts_dir: v('fonts_dir').trim(),
     out_dir: v('out_dir').trim(),
+    out_name: v('out_name_tmpl').trim(),
+    title: v('title').trim(),
+    fonts_mode: v('fonts_mode') || 'subset',
     force: c('force'),
     no_backup: !c('backup'),
     sc_default: v('sc_default') || '',

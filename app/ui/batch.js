@@ -1,5 +1,17 @@
 /* ==================== 批量封装 ==================== */
 const batchItems = [];  // {video, sc, tc}
+/* 队列持久化：批量列表与公共选项存 localStorage（断点续跑：页面刷新/服务重启后自动恢复） */
+function saveBatchQueue() {
+  try {
+    localStorage.setItem('muxui_batch_queue', JSON.stringify({
+      items: batchItems,
+      b_fonts: $('b_fonts').value, b_out: $('b_out').value, b_out_name_tmpl: $('b_out_name_tmpl').value,
+      b_force: $('b_force').checked, b_backup: $('b_backup').checked,
+      b_sc_default: $('b_sc_default').value, b_tc_default: $('b_tc_default').value,
+      b_sc_forced: $('b_sc_forced').checked, b_tc_forced: $('b_tc_forced').checked,
+    }));
+  } catch (e) {}
+}
 function renderBatch() {
   lastBatchResult = null;   // 列表变更（增/删/清空）：清除上次批量结果
   const list = $('batchList'); list.innerHTML = '';
@@ -32,21 +44,23 @@ function renderBatch() {
       lastBatchResult = null;
       var v = vin.value.trim();
       batchItems[i].video = v;
-      if (!v) return;
+      if (!v) { saveBatchQueue(); return; }
       var m = await identify(v);
       if (m.sc && !$('b_s_' + i).value) $('b_s_' + i).value = m.sc;
       if (m.tc && !$('b_t_' + i).value) $('b_t_' + i).value = m.tc;
       batchItems[i].sc = $('b_s_' + i).value; batchItems[i].tc = $('b_t_' + i).value;
+      saveBatchQueue();
       refreshBatchSticky();
     });
   });
   refreshBatchSticky();
+  saveBatchQueue();
 }
 function batchBrowse(i, kind) {
   const id = kind === 'video' ? 'b_v_' + i : kind === 'sc' ? 'b_s_' + i : 'b_t_' + i;
   openBrowser(v => { $('b_' + kind.charAt(0) + '_' + i).value = v; if (kind === 'video') { batchItems[i].video = v; fireChange($('b_v_' + i)); } }, kind === 'video' ? 'video' : 'sub', $('b_' + kind.charAt(0) + '_' + i).value, kind === 'video' ? 'video' : 'sub');
 }
-function batchDel(i) { batchItems.splice(i, 1); renderBatch(); }
+function batchDel(i) { batchItems.splice(i, 1); renderBatch(); }   // renderBatch 内含 saveBatchQueue
 /* 移除行内字幕（输入框与数据同步清空，sticky 即时刷新） */
 function batchDelSub(i, kind) {
   const inp = $('b_' + (kind === 'sc' ? 's' : 't') + '_' + i);
@@ -129,6 +143,7 @@ $('btnBatchClear').onclick = () => {
   $('bStickyElapsed').textContent = '--:--:--';
   $('bStickyEta').textContent = '--:--:--';
   $('bStickyCur').style.display = 'none';
+  try { localStorage.removeItem('muxui_batch_queue'); } catch (e) {}
   refreshBatchSticky();
   setStatus('已重置批量封装设置（输出文件保留在磁盘）', 'ok');
 };
@@ -258,8 +273,8 @@ $('btnBatchStart').onclick = async () => {
       setLog('batch', s.log);
       const resBox = $('batchResults');
       if (s.results && s.results.length) {
-        resBox.innerHTML = '<div class="table-wrap" style="margin-top:8px;"><table style="min-width:560px;"><tr><th>#</th><th>输出文件</th><th>结果</th><th style="width:80px"></th></tr>' + s.results.map((r, i) =>
-          '<tr><td>' + (i + 1) + '</td><td class="mono" style="word-break:break-all">' + esc(r.output || r.video) + '</td><td>' + (r.ok ? '<span class="chip sm ok">' + ic('check') + '成功</span>' : '<span class="chip sm err">' + ic('xCircle') + '失败' + (r.reason ? '：' + esc(r.reason) : ' (exit ' + r.exit + ')') + '</span>') + '</td><td><button class="btn small" data-open-dir="' + encodeURIComponent(r.output || r.video) + '">打开</button></td></tr>').join('') + '</table></div>';
+        resBox.innerHTML = '<div class="table-wrap" style="margin-top:8px;"><table style="min-width:560px;"><tr><th>#</th><th>输出文件</th><th>结果</th><th style="width:130px"></th></tr>' + s.results.map((r, i) =>
+          '<tr><td>' + (i + 1) + '</td><td class="mono" style="word-break:break-all">' + esc(r.output || r.video) + '</td><td>' + (r.ok ? '<span class="chip sm ok">' + ic('check') + '成功</span>' : '<span class="chip sm err">' + ic('xCircle') + '失败' + (r.reason ? '：' + esc(r.reason) : ' (exit ' + r.exit + ')') + '</span>') + '</td><td><button class="btn small" data-open-dir="' + encodeURIComponent(r.output || r.video) + '">打开</button>' + (r.ok ? '' : ' <button class="btn small" onclick="rerunFailed(' + i + ')">重跑</button>') + '</td></tr>').join('') + '</table></div>';
       }
     },
     onTick: s => {
@@ -273,6 +288,39 @@ $('btnBatchStart').onclick = async () => {
   });
 };
 let bJob = null;
+/* 失败单集重跑：用列表中对应项（含已匹配字幕）重组为单项队列并直接开始 */
+function rerunFailed(i) {
+  if (bJob) { setStatus('批量任务进行中，不能重跑', 'err'); return; }
+  const it = batchItems[i];
+  if (!it || !it.video) { alert('找不到对应列表项（列表可能已被修改）'); return; }
+  batchItems.splice(0, batchItems.length);
+  batchItems.push({ video: it.video, sc: it.sc || '', tc: it.tc || '' });
+  renderBatch();
+  setStatus('已重组为单项队列并开始重跑：' + it.video.split(/[\\/]/).pop(), 'ok');
+  $('btnBatchStart').click();
+}
+/* 页面加载恢复上次批量队列（断点续跑） */
+(function restoreBatchQueue() {
+  try {
+    const q = JSON.parse(localStorage.getItem('muxui_batch_queue') || 'null');
+    if (!q) return;
+    (q.items || []).forEach(function (it) {
+      if (it && (it.video || it.sc || it.tc)) batchItems.push({ video: it.video || '', sc: it.sc || '', tc: it.tc || '' });
+    });
+    if (!batchItems.length) return;
+    if (q.b_fonts) $('b_fonts').value = q.b_fonts;
+    if (q.b_out) $('b_out').value = q.b_out;
+    if (q.b_out_name_tmpl) $('b_out_name_tmpl').value = q.b_out_name_tmpl;
+    $('b_force').checked = !!q.b_force;
+    $('b_backup').checked = q.b_backup !== false;
+    if (q.b_sc_default) $('b_sc_default').value = q.b_sc_default;
+    if (q.b_tc_default) $('b_tc_default').value = q.b_tc_default;
+    $('b_sc_forced').checked = !!q.b_sc_forced;
+    $('b_tc_forced').checked = !!q.b_tc_forced;
+    renderBatch();
+    setStatus('已恢复上次的批量列表（' + batchItems.length + ' 项）与选项，可续跑', 'ok');
+  } catch (e) {}
+})();
 /* ===== 底部批量状态条：总体进度 / 当前文件 / 耗时与剩余（纯展示，不改任务逻辑） ===== */
 let bStickyStartTs = 0;   // 本轮批量开始时刻
 function bStickyOverall(s) {   // 总体进度 = (已完成文件数 + 当前文件内部进度) / 总数，区别于单文件进度

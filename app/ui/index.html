@@ -185,9 +185,22 @@
             <p class="t-sec">留空 = 直接替换源视频（原件备份到 __mux_tmp_manual）</p>
           </div>
           <div class="field">
+            <label for="chapters">章节文件</label>
+            <input id="chapters" type="text" placeholder="留空 = 保留源章节；可选 OGM txt / XML 章节文件替换" autocomplete="off">
+            <button class="btn" id="btnChapters">浏览</button>
+          </div>
+          <div class="field">
+            <label for="title">MKV 标题</label>
+            <input id="title" type="text" placeholder="可选：成品标题元数据（segment title），留空沿用源" autocomplete="off">
+          </div>
+          <div class="field">
             <label for="out_dir">输出目录</label>
             <input id="out_dir" type="text" placeholder="留空 = 替换源视频" autocomplete="off">
             <button class="btn" id="btnOut">浏览</button>
+          </div>
+          <div class="field">
+            <label for="out_name_tmpl">命名模板</label>
+            <input id="out_name_tmpl" type="text" placeholder="留空 = 沿用源文件名；支持 {src} 源文件名、{ep} 集数、{res} 分辨率（如 1080P）" autocomplete="off">
           </div>
         </div>
 
@@ -197,7 +210,21 @@
             <span data-ic="chevron-down" aria-hidden="true"></span>
           </button>
           <div class="adv-body" id="advBody">
+            <div class="field" style="margin-bottom:10px;">
+              <label for="preset_sel">封装预设</label>
+              <select id="preset_sel" style="height:34px;"><option value="">选择预设…</option></select>
+              <button class="btn" id="btnPresetSave">保存当前为预设</button>
+              <button class="btn ghost" id="btnPresetDel">删除所选</button>
+              <span class="t-cap">保存轨道名 / 默认与强制旗标 / 字体目录 / 输出目录 / 子集工具等，切换即套用（面向字幕组规范）</span>
+            </div>
             <label class="check"><input id="backup" type="checkbox" checked> 备份原件到 __mux_tmp_manual（不勾选则直接删除原件，有输出目录则不进行备份）</label>
+            <div class="field" style="margin-top:10px;">
+              <label for="fonts_mode">字体处理</label>
+              <select id="fonts_mode" style="height:34px;">
+                <option value="subset">子集化（默认：只嵌用到的字形，体积小）</option>
+                <option value="collect">仅收集（全量嵌入被引用的字体，不裁字形）</option>
+              </select>
+            </div>
             <label class="check"><input id="force" type="checkbox"> 强制封装（源视频已有字体附件时）</label>
             <div class="field" style="margin-top:10px;">
               <label for="cfg_scan">工作目录（扫描根）</label>
@@ -260,11 +287,23 @@
           <label for="b_fonts">字体目录</label>
           <input id="b_fonts" type="text" placeholder="留空自动" autocomplete="off">
           <button class="btn" id="btnBFonts">浏览</button>
+          <select id="b_fonts_mode" style="height:34px;" title="字体处理">
+            <option value="subset">子集化</option>
+            <option value="collect">仅收集</option>
+          </select>
         </div>
         <div class="field">
           <label for="b_out">输出目录</label>
           <input id="b_out" type="text" placeholder="留空 = 替换各自源文件" autocomplete="off">
           <button class="btn" id="btnBOut">浏览</button>
+        </div>
+        <div class="field">
+          <label for="b_title">MKV 标题</label>
+          <input id="b_title" type="text" placeholder="可选：成品标题元数据" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="b_out_name_tmpl">命名模板</label>
+          <input id="b_out_name_tmpl" type="text" placeholder="留空 = 沿用源文件名；支持 {src} {ep} {res}" autocomplete="off">
         </div>
         <div class="field">
           <label class="check"><input id="b_force" type="checkbox" aria-label="强制封装"> 强制封装</label>
@@ -363,6 +402,11 @@
             </select>
             <input id="pv_sub" type="text" placeholder="外部字幕文件路径（.ass / .ssa / .srt）" style="flex:1;" autocomplete="off">
             <button class="btn" id="btnPvSub">浏览</button>
+          </div>
+          <div class="field">
+            <label for="pv_sub_b">对比字幕 B</label>
+            <input id="pv_sub_b" type="text" placeholder="可选：填写后渲染帧 A/B 并排对比" style="flex:1;" autocomplete="off">
+            <button class="btn" id="btnPvSubB">浏览</button>
           </div>
           <div class="field">
             <label for="pv_time">时间点</label>

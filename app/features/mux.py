@@ -10,7 +10,7 @@ MUX_CLI = os.path.join(core.TOOLS_DIR, "mux_cli.py")
 COMMON_KEYS = ("fonts_dir", "audio", "audio_mode", "keep_src_audio", "audio_lang", "audio_name",
                "out_dir", "force", "sc_name", "tc_name", "no_backup", "audio_tracks",
                "subtitle_tracks", "keep_attachments", "sc_default", "tc_default",
-               "sc_forced", "tc_forced")
+               "sc_forced", "tc_forced", "chapters", "out_name", "title", "fonts_mode")
 
 # ---------------- 命令构造 ----------------
 
@@ -57,6 +57,11 @@ def build_cmd(it, common):
         cmd.append("--sc-forced")
     if full.get("tc_forced"):
         cmd.append("--tc-forced")
+    add("--chapters", full.get("chapters"))
+    add("--out-name", full.get("out_name"))
+    add("--title", full.get("title"))
+    if full.get("fonts_mode") in ("subset", "collect"):
+        cmd += ["--fonts-mode", full.get("fonts_mode")]
     return cmd
 
 # ---------------- 任务生命周期 ----------------

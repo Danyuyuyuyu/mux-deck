@@ -431,6 +431,9 @@ $('btnSingleReset').onclick = () => {
   $('sc_name').value = 'SC'; $('tc_name').value = 'TC';
   $('sc_enc').textContent = ''; $('tc_enc').textContent = '';
   $('fonts_dir').value = '';
+  $('chapters').value = '';
+  $('out_name_tmpl').value = '';
+  $('title').value = '';
   $('audio').value = ''; $('audio_lang').value = ''; $('audio_name').value = '';
   $('out_dir').value = '';
   $('backup').checked = true; $('force').checked = false;
@@ -598,6 +601,7 @@ $('btnStart').onclick = async () => {
     video: $('video').value.trim(), sc_sub: $('sc_sub').value.trim(), tc_sub: $('tc_sub').value.trim(),
     sc_name: $('sc_name').value.trim() || 'SC', tc_name: $('tc_name').value.trim() || 'TC',
     audio: $('audio').value.trim(),
+    chapters: $('chapters').value.trim(),
     audio_tracks: (trackSel.allAudio.length === 0) ? '' : (trackSel.audio.size === 0) ? 'none' : (trackSel.audio.size < trackSel.allAudio.length) ? [...trackSel.audio].join(',') : '',
     subtitle_tracks: trackSel.sub.size ? [...trackSel.sub].join(',') : '',
     keep_attachments: trackSel.keepAtt,
@@ -811,6 +815,7 @@ $('btnTcClear').onclick = () => { $('tc_sub').value = ''; $('tc_name').value = '
 $('btnFonts').onclick = () => openBrowser(v => $('fonts_dir').value = v, 'dir', $('fonts_dir').value, 'fonts');
 $('btnAudio').onclick = () => openBrowser(v => $('audio').value = v, 'audio', $('audio').value, 'audio');
 $('btnOut').onclick = () => openBrowser(v => $('out_dir').value = v, 'dir', $('out_dir').value, 'out');
+$('btnChapters').onclick = () => openBrowser(v => $('chapters').value = v, 'any', $('chapters').value, 'chapters');
 /* ==================== 历史 ==================== */
 let histItems = [];
 async function loadHistory() {
@@ -818,7 +823,8 @@ async function loadHistory() {
   const box = $('histBox');
   if (!d.items || !d.items.length) { box.innerHTML = '<div class="t-sec" style="padding:16px 16px;">暂无历史任务</div>'; return; }
   histItems = d.items;
-  let h = '<div class="table-wrap" style="margin:8px 16px;"><table style="min-width:640px;"><tr><th>时间</th><th>类型</th><th>视频</th><th>状态</th><th style="width:150px"></th></tr>';
+  let h = '<div style="display:flex;justify-content:flex-end;margin:8px 16px 0;"><button class="btn small" id="btnHistCsv">' + ic('download') + '<span>导出 CSV</span></button></div>';
+  h += '<div class="table-wrap" style="margin:8px 16px;"><table style="min-width:640px;"><tr><th>时间</th><th>类型</th><th>视频</th><th>状态</th><th style="width:150px"></th></tr>';
   d.items.forEach(function (it, i) {
     const dt = new Date(it.time).toLocaleString();
     h += '<tr><td class="mono" style="white-space:nowrap">' + esc(dt) + '</td><td>' + esc(it.type) + '</td><td class="mono" style="word-break:break-all">' + esc(it.video) + '</td><td>' + (it.status === 'done' ? '<span class="chip sm ok">' + ic('check') + '成功</span>' : '<span class="chip sm err">' + ic('xCircle') + '失败</span>') + '</td>' +
@@ -826,6 +832,19 @@ async function loadHistory() {
   });
   h += '</table></div>';
   box.innerHTML = h;
+  $('btnHistCsv').onclick = exportHistCsv;
+}
+function exportHistCsv() {
+  const rows = [['时间', '类型', '视频', '状态']].concat(
+    histItems.map(it => [new Date(it.time).toLocaleString(), it.type, it.video, it.status === 'done' ? '成功' : '失败']));
+  const csv = '\ufeff' + rows.map(r => r.map(c => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'mux_history.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 async function histView(i) {
   const it = histItems[i]; if (!it) return;
@@ -891,6 +910,80 @@ function beep() {
     toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
   };
 })();
+
+/* ==================== 封装预设（保存/套用/删除，存服务端 config.json） ==================== */
+let PRESETS = {};
+function presetData() {
+  return {
+    sc_name: $('sc_name').value.trim() || 'SC', tc_name: $('tc_name').value.trim() || 'TC',
+    sc_default: $('sc_default').value, tc_default: $('tc_default').value,
+    sc_forced: $('sc_forced').checked, tc_forced: $('tc_forced').checked,
+    fonts_dir: $('fonts_dir').value.trim(), out_dir: $('out_dir').value.trim(),
+    chapters: $('chapters').value.trim(),
+    backup: $('backup').checked, force: $('force').checked,
+    cfg_tool: $('cfg_tool').value, fonts_mode: $('fonts_mode').value,
+    out_name_tmpl: $('out_name_tmpl').value.trim(), title: $('title').value.trim(),
+  };
+}
+function applyPreset(d) {
+  if (!d || typeof d !== 'object') return;
+  if (d.sc_name) $('sc_name').value = d.sc_name;
+  if (d.tc_name) $('tc_name').value = d.tc_name;
+  $('sc_default').value = d.sc_default || '';
+  $('tc_default').value = d.tc_default || '';
+  $('sc_forced').checked = !!d.sc_forced;
+  $('tc_forced').checked = !!d.tc_forced;
+  if (d.fonts_dir) $('fonts_dir').value = d.fonts_dir;
+  if (d.out_dir) $('out_dir').value = d.out_dir;
+  if (d.chapters) $('chapters').value = d.chapters;
+  if (d.out_name_tmpl) $('out_name_tmpl').value = d.out_name_tmpl;
+  if (d.title) $('title').value = d.title;
+  $('backup').checked = d.backup !== false;
+  $('force').checked = !!d.force;
+  if (d.cfg_tool) { $('cfg_tool').value = d.cfg_tool; fireChange($('cfg_tool')); }
+  if (d.fonts_mode) $('fonts_mode').value = d.fonts_mode;
+  syncSubStatus(); refreshSticky();
+  setStatus('已套用预设', 'ok');
+}
+function refreshPresetSel() {
+  const sel = $('preset_sel');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">选择预设…</option>' +
+    Object.keys(PRESETS).map(n => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('');
+  if (PRESETS[cur]) sel.value = cur;
+}
+async function loadPresets() {
+  try {
+    const r = await api('/api/presets');
+    PRESETS = r.presets || {};
+    refreshPresetSel();
+  } catch (e) { /* 断线由横幅提示 */ }
+}
+$('preset_sel').onchange = function () { if (PRESETS[this.value]) applyPreset(PRESETS[this.value]); };
+$('btnPresetSave').onclick = async () => {
+  const name = (prompt('预设名称：') || '').trim();
+  if (!name) return;
+  try {
+    const r = await api('/api/presets', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, data: presetData() }) });
+    if (r.error) { setStatus('预设保存失败：' + r.error, 'err'); return; }
+    PRESETS = r.presets || {};
+    refreshPresetSel();
+    $('preset_sel').value = name;
+    setStatus('预设已保存：' + name, 'ok');
+  } catch (ex) { setStatus('预设保存失败：' + ex, 'err'); }
+};
+$('btnPresetDel').onclick = async () => {
+  const name = $('preset_sel').value;
+  if (!name) { alert('请先在下方选择要删除的预设'); return; }
+  if (!confirm('确定删除预设「' + name + '」？')) return;
+  try {
+    const r = await api('/api/presets/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name }) });
+    if (r.error) { setStatus('预设删除失败：' + r.error, 'err'); return; }
+    PRESETS = r.presets || {};
+    refreshPresetSel();
+    setStatus('预设已删除：' + name, 'ok');
+  } catch (ex) { setStatus('预设删除失败：' + ex, 'err'); }
+};
 /* ==================== 初始启动：设置工作目录 ==================== */
 function showSetup() {
   $('setup_scan').value = CFG.scanRoot || '';

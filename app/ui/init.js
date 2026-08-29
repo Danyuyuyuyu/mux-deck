@@ -19,10 +19,12 @@ $('cfg_tool').onchange = async () => {
 Promise.all([
   api('/api/env_check').catch(() => null),
   api('/api/config').catch(() => null),
-]).then(([env, c]) => {
+  api('/api/presets').catch(() => null),
+]).then(([env, c, ps]) => {
   if (env && env.items) envRender(env);
   if (c && c.scan_root) { CFG.scanRoot = c.scan_root; $('cfg_scan').value = c.scan_root; }
   if (c && c.subset_tool) { $('cfg_tool').value = c.subset_tool; }
+  if (ps && ps.presets) { PRESETS = ps.presets; refreshPresetSel(); }
   const needSetup = c && (!c.configured || !c.valid);
   const envBroken = env && env.overall === 'broken';
   if (envBroken) {

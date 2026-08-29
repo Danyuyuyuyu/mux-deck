@@ -13,6 +13,18 @@ $('btnPreview').onclick = async () => {
   try {
     const r = await api('/api/preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({video, sub, fonts_dir, time: t}) });
     const box = $('previewBox');
+    const subB = $('pv_sub_b').value.trim();
+    if (r.ok && subB) {   // 对比模式：A/B 并排
+      const rb = await api('/api/preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({video, sub: subB, fonts_dir, time: t}) });
+      if (rb.ok) {
+        box.innerHTML = '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;">'
+          + '<div style="flex:1;min-width:340px;"><div class="t-cap" style="margin-bottom:4px;">A · ' + esc(pvBaseName(sub)) + '</div><img id="previewImg" style="max-width:100%" src="' + r.url + '" alt="字幕 A"></div>'
+          + '<div style="flex:1;min-width:340px;"><div class="t-cap" style="margin-bottom:4px;">B · ' + esc(pvBaseName(subB)) + '</div><img style="max-width:100%" src="' + rb.url + '" alt="字幕 B"></div></div>';
+      } else {
+        box.innerHTML = '<img id="previewImg" src="' + r.url + '" alt="字幕预览帧"><div class="chip warn" style="margin-top:8px">' + ic('alertTriangle') + '<span>对比字幕 B 渲染失败：' + esc(rb.error || '') + '</span></div>';
+      }
+      return;
+    }
     if (r.ok) {
       box.innerHTML = '<img id="previewImg" src="' + r.url + '" alt="字幕预览帧">';
     } else {
@@ -103,6 +115,8 @@ $('btnPreviewSub').onclick = async () => {
 
 $('btnPvVideo').onclick = () => openBrowser(v => $('pv_video').value = v, 'video', $('pv_video').value, 'video');
 $('btnPvSub').onclick = () => openBrowser(v => $('pv_sub').value = v, 'sub', $('pv_sub').value, 'sub');
+$('btnPvSubB').onclick = () => openBrowser(v => $('pv_sub_b').value = v, 'sub', $('pv_sub_b').value, 'sub');
+const pvBaseName = p => (p || '').split(/[\\/]/).pop();
 function pvClearTracks() {
   [...$('pv_subsel').options].forEach(o => { if (String(o.value).indexOf('track:') === 0) o.remove(); });
   pvSyncSubInput();
