@@ -141,6 +141,11 @@
             <button class="btn" id="btnPrepSubs"><span data-ic="refresh-cw" aria-hidden="true"></span>检查 / 转换字幕编码</button>
             <span class="t-cap">自动检测 GBK / BIG5 / UTF-16 并转为 UTF-8（不改动原文件）</span>
           </div>
+          <div class="field" style="align-items:center;">
+            <button class="btn" id="btnSubCheck"><span data-ic="shieldCheck" aria-hidden="true"></span>内容体检</button>
+            <span class="t-cap">时间轴重叠 / 空行 / 坏样式 / CPS 超速 / 单行过长预警（校对参考，纯文本分析）</span>
+          </div>
+          <div id="subCheckBox"></div>
         </div>
 
         <div class="panel-sec">

@@ -537,6 +537,41 @@ $('btnPrepSubs').onclick = async () => {
   }
 };
 
+/* ==================== 字幕内容体检（时间轴/CPS/行宽/样式，纯文本分析） ==================== */
+const SUBCHECK_TYPE = { overlap: '时间重叠', empty: '空台词', bad_time: '时间错误', bad_style: '坏样式', cps: 'CPS 超速', long_line: '单行过长' };
+$('btnSubCheck').onclick = async () => {
+  const subs = [$('sc_sub').value.trim(), $('tc_sub').value.trim()].filter(Boolean);
+  if (!subs.length) { alert('请先填写字幕路径'); return; }
+  $('btnSubCheck').disabled = true;
+  $('subCheckBox').innerHTML = '<div class="chip run" style="margin-top:8px">' + ic('loader', 'spin') + '<span>正在分析…</span></div>';
+  const blocks = [];
+  try {
+    for (const sub of subs) {
+      let r;
+      try {
+        r = await api('/api/sub_check', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sub }) });
+      } catch (ex) {
+        blocks.push('<div class="chip err" style="margin-top:8px">' + ic('xCircle') + '<span>' + esc(pvBaseName ? pvBaseName(sub) : sub) + ' 连接失败：' + esc(ex) + '</span></div>');
+        continue;
+      }
+      const name = esc(sub.split(/[\\/]/).pop());
+      if (r.error) { blocks.push('<div class="chip err" style="margin-top:8px">' + ic('xCircle') + '<span>' + name + '：' + esc(r.error) + '</span></div>'); continue; }
+      if (r.status === 'ok') {
+        blocks.push('<div class="chip ok" style="margin-top:8px">' + ic('checkCircle') + '<span>' + name + '：内容体检通过（' + r.dialogue + ' 行 Dialogue）</span></div>');
+        continue;
+      }
+      const cnt = r.counts || {};
+      const parts = Object.keys(SUBCHECK_TYPE).filter(k => cnt[k]).map(k => SUBCHECK_TYPE[k] + ' ' + cnt[k]);
+      let h = '<div class="chip warn" style="margin-top:8px">' + ic('alertTriangle') + '<span>' + name + '：' + (parts.join(' · ') || (r.total_issues + ' 项预警')) + '（' + r.dialogue + ' 行）</span></div>';
+      h += '<pre class="log-pre">' + esc(r.issues.map(i => '第' + i.line + '行 [' + (SUBCHECK_TYPE[i.type] || i.type) + '] ' + i.detail).join('\n')) + (r.truncated ? '\n…（仅显示前 200 条）' : '') + '</pre>';
+      blocks.push(h);
+    }
+    $('subCheckBox').innerHTML = blocks.join('');
+  } finally {
+    $('btnSubCheck').disabled = false;
+  }
+};
+
 /* ==================== 字体体检 ==================== */
 $('btnCheckFonts').onclick = async () => {
   const subs = [$('sc_sub').value.trim(), $('tc_sub').value.trim()].filter(Boolean);
