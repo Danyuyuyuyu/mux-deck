@@ -1,0 +1,11 @@
+{
+  "name": "mux-deck-jsdom-tests",
+  "private": true,
+  "description": "整页交互回归：jsdom 加载 app/ui 全部前端（外部 script 内联组装 + mock fetch），验证弹窗/点击/轮询/状态条全交互",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
+  }
+}
