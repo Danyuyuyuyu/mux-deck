@@ -43,6 +43,9 @@ function mockFetch(url, opts) {
   else if (u === '/api/detect_chapters') { data = { path: q.replace('path=', ''), chapters: chaptersRet.chapters }; }
   else if (u === '/api/list') data = { path: 'D:\\Video', dirs: [], files: [['EP01.sc.ass', 1024], ['EP01.chs.ass', 2048], ['EP01.mkv', 999]] };
   else if (u === '/api/probe') data = { tracks: [{ id: 1, type: 'video', codec: 'AVC' }, { id: 2, type: 'audio', codec: 'AAC' }, { id: 3, type: 'subtitles', codec: 'ASS', lang: 'zh' }], attachments: 0 };
+  else if (u === '/api/chapters/extract') data = { chapters: [{ time: '00:00:00.000', name: 'OP' }] };
+  else if (u === '/api/chapters/parse') data = { chapters: [{ time: '00:00:00.000', name: 'OP' }] };
+  else if (u === '/api/chapters/save') data = { path: 'C:\\ch_edited.txt', count: 1 };
   else if (u === '/api/propedit') data = { ok: true, log: '', probe: {} };
   else if (u === '/api/sub_check') data = { ok: true, dialogue: 120, counts: { overlap: 1, empty: 0, bad_time: 0, bad_style: 0, cps: 2, long_line: 1 }, issues: [{ line: 12, type: 'cps', detail: 'CPS 18.0 超过 15（27 字 / 1.50s）' }], total_issues: 4, truncated: false, status: 'warn' };
   else if (u === '/api/history') data = { items: [] };
@@ -64,7 +67,7 @@ function mockFetch(url, opts) {
       batchJobCalls++;
       data = batchJobCalls <= 2
         ? { status: 'running', total: 1, current: 1, progress: 68, current_video: 'D:\\Video\\EP01.mkv', log: 'Muxing' }
-        : { status: 'done', total: 1, current: 1, log: '', results: [{ ok: true, output: 'D:\\Video\\EP01.out.mkv', cmd: 'mkvmerge -o out.mkv in.mkv sub.ass' }] };
+        : { status: 'done', total: 1, current: 1, log: '', qc_summary: { total: 1, ok: 1, warn: 0, fail: 0 }, results: [{ ok: true, output: 'D:\\Video\\EP01.out.mkv', cmd: 'mkvmerge -o out.mkv in.mkv sub.ass', qc: { status: 'ok', ok: ['通过（字幕轨 2 条）'] } }] };
     } else {
       jobCalls++;
       data = jobCalls <= 2 ? { status: 'running', progress: 68, log: 'Muxing' } : { status: 'done', progress: 100, log: '', result: 'D:\\Video\\out.mkv' };
@@ -239,7 +242,7 @@ function mockFetch(url, opts) {
   check('批量运行中耗时格式正确', /^\d{2}:\d{2}:\d{2}$/.test($('bStickyElapsed').textContent), $('bStickyElapsed').textContent);
   ok = await waitUntil(() => !$('bStickyProgress').classList.contains('run'), 8000);
   check('批量终态：run 态移除', ok);
-  check('批量完成文案=批量封装完成 · 1 个文件', $('batchStickyNote').querySelector('.sticky-txt').textContent === '批量封装完成 · 1 个文件', $('batchStickyNote').textContent);
+  check('批量完成文案含批量封装完成 · 1 个文件', $('batchStickyNote').querySelector('.sticky-txt').textContent.includes('批量封装完成 · 1 个文件'), $('batchStickyNote').textContent);
   check('批量终态 pct=100%、计数 1 / 1、剩余归 --、当前文件隐藏', $('bStickyPct').textContent === '100%' && $('bStickyCountNum').textContent === '1 / 1' && $('bStickyEta').textContent === '--:--:--' && $('bStickyCur').style.display === 'none', $('bStickyPct').textContent + '/' + $('bStickyCountNum').textContent);
   check('批量按钮恢复开始批量封装', $('btnBatchStart').textContent.includes('开始批量封装'));
 
@@ -345,6 +348,19 @@ function mockFetch(url, opts) {
   $('btnPeApply').click();
   await sleep(60);
   check('应用修补成功提示', $('peRes').innerHTML.indexOf('修改已应用') >= 0, $('peRes').innerHTML.slice(0, 100));
+
+  /* ---- 场景19：QC 汇总/结果 chip + 章节编辑器 ---- */
+  check('批量结果行 QC chip', $('batchResults').innerHTML.indexOf('QC通过') >= 0, $('batchResults').innerHTML.slice(0, 200));
+  check('批量终态 QC 汇总', $('batchState').textContent.includes('QC 通过 1/1'), $('batchState').textContent);
+  $('chapters').value = '';
+  $('btnChEdit').click();
+  check('空章节直接打开编辑器', $('chEditModal').style.display === 'flex');
+  $('btnChFromVideo').click();
+  ok = await waitUntil(() => $('chEditText').value.indexOf('CHAPTER01') >= 0);
+  check('从源视频提取章节进编辑器', ok && $('chEditText').value.indexOf('OP') >= 0, $('chEditText').value.slice(0, 60));
+  $('btnChSave').click();
+  ok = await waitUntil(() => $('chapters').value.indexOf('ch_edited.txt') >= 0);
+  check('保存章节生成文件并回填', ok && $('chEditModal').style.display === 'none', $('chapters').value);
 
   const failed = results.filter(r => !r.ok);
   console.log('\n=== ' + (results.length - failed.length) + '/' + results.length + ' PASS ===');

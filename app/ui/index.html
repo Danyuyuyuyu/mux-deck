@@ -194,6 +194,7 @@
             <label for="chapters">章节文件</label>
             <input id="chapters" type="text" placeholder="留空 = 保留源章节；可选 OGM txt / XML 章节文件替换" autocomplete="off">
             <button class="btn" id="btnChapters">浏览</button>
+            <button class="btn" id="btnChEdit" type="button">编辑</button>
           </div>
           <div class="field">
             <label for="title">MKV 标题</label>
@@ -572,6 +573,24 @@
     <div style="display:flex;align-items:center;gap:10px;">
       <button class="btn primary" id="btnBackupsClean" style="padding:6px 22px;"><span data-ic="trash" aria-hidden="true"></span>删除勾选目录</button>
       <a id="backupsClose" href="javascript:void(0)" class="t-cap" style="cursor:pointer;">关闭</a>
+    </div>
+  </div>
+</div>
+<!-- 章节编辑器（OGM txt 明文编辑；可从源视频提取或加载文件） -->
+<div id="chEditModal" style="position:fixed;inset:0;background:rgba(7,10,15,0.75);z-index:95;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--surface-1,#20202a);border:1px solid var(--border,#333);border-radius:12px;padding:24px 26px;max-width:760px;width:94%;max-height:86vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.5);">
+    <h3 style="margin:0 0 6px;">章节编辑</h3>
+    <p class="t-sec" style="margin:0 0 12px;">OGM 明文格式，直接编辑；保存后生成章节文件填入「章节文件」框，随封装写入。</p>
+    <div class="field" style="margin-bottom:10px;flex-wrap:wrap;">
+      <button class="btn" id="btnChFromVideo" type="button"><span data-ic="download" aria-hidden="true"></span>从源视频提取</button>
+      <button class="btn" id="btnChLoadFile" type="button"><span data-ic="folderOpen" aria-hidden="true"></span>加载章节文件</button>
+      <span class="t-cap">格式：CHAPTER01=H:MM:SS.ms 换行 CHAPTER01NAME=标题</span>
+    </div>
+    <textarea id="chEditText" class="mono" spellcheck="false" style="width:100%;height:320px;background:var(--input);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font:12.5px/1.7 var(--mono);color:var(--text-primary);resize:vertical;box-sizing:border-box;"></textarea>
+    <div id="chEditNote" class="t-sec" style="min-height:18px;margin:10px 0;"></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="btn primary" id="btnChSave" style="padding:6px 22px;"><span data-ic="check" aria-hidden="true"></span>保存并填入</button>
+      <a id="chEditClose" href="javascript:void(0)" class="t-cap" style="cursor:pointer;">关闭</a>
     </div>
   </div>
 </div>

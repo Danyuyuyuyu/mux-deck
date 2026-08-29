@@ -114,5 +114,49 @@ class CheckSubTest(unittest.TestCase):
         self.assertIn("error", check_sub(os.path.join(ROOT, "no_such.ass")))
 
 
+class ChaptersTest(unittest.TestCase):
+    CHS = [
+        {"time": "00:00:00.000", "name": "OP"},
+        {"time": "00:01:30.500", "name": "Part A"},
+        {"time": "01:20:00.250", "name": "ED"},
+    ]
+
+    def test_save_parse_roundtrip(self):
+        from app.features import chapters
+        r = chapters.handle_save({"chapters": self.CHS})
+        self.assertIn("path", r)
+        try:
+            r2 = chapters.handle_parse({"path": r["path"]})
+            self.assertEqual(r2["chapters"], self.CHS)
+        finally:
+            os.remove(r["path"])
+
+    def test_validation(self):
+        from app.features import chapters
+        self.assertIn("无效", chapters.handle_save({"chapters": [{"time": "bad"}]})["error"])
+        self.assertIn("早于", chapters.handle_save({"chapters": [{"time": "0:00:10.000"}, {"time": "0:00:05.000"}]})["error"])
+
+    def test_xml_parse(self):
+        from app.features import chapters
+        fd, path = tempfile.mkstemp(suffix=".xml")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write('<Chapters><EditionEntry><ChapterAtom><ChapterTimeStart>00:00:00.000000000</ChapterTimeStart>'
+                    '<ChapterDisplay><ChapterString>Intro</ChapterString></ChapterDisplay></ChapterAtom></EditionEntry></Chapters>')
+        try:
+            r = chapters.handle_parse({"path": path})
+            self.assertEqual(r["chapters"], [{"time": "00:00:00.000", "name": "Intro"}])
+        finally:
+            os.remove(path)
+
+
+class QcFromLogTest(unittest.TestCase):
+    def test_statuses(self):
+        from app.features.mux import _qc_from_log
+        self.assertEqual(_qc_from_log("QC: 通过")["status"], "ok")
+        self.assertEqual(_qc_from_log('QC-WARN: a\nQC-WARN: b')["status"], "warn")
+        self.assertEqual(_qc_from_log("FAIL: QC 失败：x")["status"], "fail")
+        self.assertIsNone(_qc_from_log("nothing"))
+
+
 if __name__ == "__main__":
     unittest.main()

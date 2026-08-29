@@ -75,6 +75,29 @@ def _fail_reason(txt):
     m = re.findall(r"^FAIL: (.+)$", txt or "", re.M)
     return m[-1].strip() if m else ""
 
+def _qc_from_log(txt):
+    """从 item 日志解析 mux_cli 的 QC 输出（QC: / QC-WARN: / FAIL: QC 失败：）。"""
+    hard = re.findall(r"^FAIL: QC 失败：(.+)$", txt or "", re.M)
+    warn = re.findall(r"^QC-WARN: (.+)$", txt or "", re.M)
+    ok = re.findall(r"^QC: (.+)$", txt or "", re.M)
+    if hard:
+        return {"status": "fail", "hard": hard, "warn": warn}
+    if warn:
+        return {"status": "warn", "warn": warn, "ok": ok}
+    if ok:
+        return {"status": "ok", "ok": ok}
+    return None
+
+def _qc_summary(state):
+    qc_list = state.get("qc_list") or []
+    if not qc_list:
+        return None
+    s = {"total": len(qc_list), "ok": 0, "warn": 0, "fail": 0}
+    for e in qc_list:
+        st = (e.get("qc") or {}).get("status")
+        s[st if st in ("ok", "warn", "fail") else "warn"] += 1
+    return s
+
 def _finalize_job(state):
     jid, jdir = state["id"], state["dir"]
     if state.get("stopped"):
@@ -83,6 +106,12 @@ def _finalize_job(state):
     else:
         state["status"] = "done" if state["failed"] == 0 else "error"
         state["exit"] = 0 if state["failed"] == 0 else 1
+    try:   # QC 报告落盘（逐集 QC 结论，发布前汇总用）
+        if state.get("qc_list"):
+            with open(os.path.join(jdir, "qc_report.json"), "w", encoding="utf-8") as f:
+                json.dump({"items": state["qc_list"], "summary": _qc_summary(state)}, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
     try:
         with open(os.path.join(jdir, "state.json"), "w", encoding="utf-8") as f:
             json.dump({"status": state["status"], "exit": state["exit"], "failed": state.get("failed", 0),
@@ -157,9 +186,12 @@ def start_batch(body):
                     continue
                 rc = core.run_to_file(cmd, log, jid=jid, stop_flag=state["stop_event"])
                 reason = "" if (rc == 0 or state.get("stopped")) else _fail_reason(core.read_tail(log, 200))
+                qc = _qc_from_log(core.read_tail(log, 200))
+                if qc:
+                    state.setdefault("qc_list", []).append({"video": it.get("video", ""), "qc": qc})
                 state["results"].append({"video": it.get("video", ""), "output": out_path,
                                          "ok": rc == 0 and not state.get("stopped"), "exit": rc,
-                                         "reason": reason, "cmd": state["last_cmd"]})
+                                         "reason": reason, "cmd": state["last_cmd"], "qc": qc})
                 if rc != 0 and not state.get("stopped"):
                     state["failed"] += 1
             except Exception as ex:
@@ -207,7 +239,8 @@ def job_status(jid):
             "current": cur, "total": total_items, "failed": s.get("failed", 0),
             "current_video": s.get("current_video", ""), "progress": progress,
             "results": s.get("results", []), "result": s.get("result", ""), "log": merged,
-            "reason": _fail_reason(merged), "cmd": s.get("last_cmd", "")}
+            "reason": _fail_reason(merged), "cmd": s.get("last_cmd", ""), "qc": s.get("results", [{}])[-1].get("qc") if s.get("results") else None,
+            "qc_summary": _qc_summary(s)}
 
 def stop_job(jid):
     st = core.JOBS.get(jid)

@@ -257,6 +257,8 @@ $('btnBatchStart').onclick = async () => {
   const bfin = (s, lastR, stateText, statusMsg, statusCls) => {
     bJob = null;
     setRunButton($('btnBatchStart'), false, '停止批量', '开始批量封装');
+    const qs = s && s.qc_summary;
+    if (qs && qs.total) stateText += ' · QC 通过 ' + qs.ok + '/' + qs.total + (qs.warn ? '，预警 ' + qs.warn : '') + (qs.fail ? '，失败 ' + qs.fail : '');
     $('batchState').textContent = stateText;
     bStickyFreeze();
     setStatus(statusMsg, statusCls);
@@ -286,7 +288,7 @@ $('btnBatchStart').onclick = async () => {
       const resBox = $('batchResults');
       if (s.results && s.results.length) {
         resBox.innerHTML = '<div class="table-wrap" style="margin-top:8px;"><table style="min-width:560px;"><tr><th>#</th><th>输出文件</th><th>结果</th><th style="width:130px"></th></tr>' + s.results.map((r, i) =>
-          '<tr><td>' + (i + 1) + '</td><td class="mono" style="word-break:break-all">' + esc(r.output || r.video) + '</td><td>' + (r.skipped ? '<span class="chip sm info">' + ic('info') + '已存在，跳过</span>' : r.ok ? '<span class="chip sm ok">' + ic('check') + '成功</span>' : '<span class="chip sm err">' + ic('xCircle') + '失败' + (r.reason ? '：' + esc(r.reason) : ' (exit ' + r.exit + ')') + '</span>') + '</td><td><button class="btn small" data-open-dir="' + encodeURIComponent(r.output || r.video) + '">打开</button>' + (r.cmd ? ' <button class="btn small" data-cmd="' + b64e(r.cmd) + '" title="查看本次封装的 mkvmerge 命令">' + ic('terminal') + '命令</button>' : '') + (r.ok ? '' : ' <button class="btn small" onclick="rerunFailed(' + i + ')">重跑</button>') + '</td></tr>').join('') + '</table></div>';
+          '<tr><td>' + (i + 1) + '</td><td class="mono" style="word-break:break-all">' + esc(r.output || r.video) + '</td><td>' + (r.skipped ? '<span class="chip sm info">' + ic('info') + '已存在，跳过</span>' : r.ok ? '<span class="chip sm ok">' + ic('check') + '成功</span>' : '<span class="chip sm err">' + ic('xCircle') + '失败' + (r.reason ? '：' + esc(r.reason) : ' (exit ' + r.exit + ')') + '</span>') + (r.qc ? '<span class="chip sm ' + (r.qc.status === 'ok' ? 'ok' : r.qc.status === 'warn' ? 'warn' : 'err') + '" title="' + esc(((r.qc.warn || []).concat(r.qc.hard || [])).join('\n')) + '">QC' + (r.qc.status === 'ok' ? '通过' : r.qc.status === 'warn' ? '预警' + (r.qc.warn || []).length : '失败') + '</span>' : '') + '</td><td><button class="btn small" data-open-dir="' + encodeURIComponent(r.output || r.video) + '">打开</button>' + (r.cmd ? ' <button class="btn small" data-cmd="' + b64e(r.cmd) + '" title="查看本次封装的 mkvmerge 命令">' + ic('terminal') + '命令</button>' : '') + (r.ok ? '' : ' <button class="btn small" onclick="rerunFailed(' + i + ')">重跑</button>') + '</td></tr>').join('') + '</table></div>';
       }
     },
     onTick: s => {
