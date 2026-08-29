@@ -244,7 +244,7 @@
   .sub-paths input { min-width:120px; }
   .sub-name-row { display:flex; align-items:center; gap:10px; }
   .sub-name-row label { font-size:12px; color:var(--text-secondary); flex:none; }
-  .sub-name-row input { flex:.3; min-width:90px; max-width:200px; height:34px; }
+  .sub-name-row input[type=text] { flex:.3; min-width:90px; max-width:200px; height:34px; }
   .sub-card-foot { display:flex; align-items:center; gap:8px; min-height:26px; flex-wrap:wrap; }
   .sub-status { display:inline-flex; align-items:center; gap:6px; font-size:12px; }
   .sub-status.on { color:var(--success); }
@@ -448,7 +448,7 @@
     .file-card { flex-wrap:wrap; }
     .file-actions { width:100%; justify-content:flex-end; }
     .b-grid { grid-template-columns:auto 1fr; }
-    .sub-name-row input { max-width:none; flex:1; }
+    .sub-name-row input[type=text] { max-width:none; flex:1; }
     .file-path { white-space:normal; word-break:break-all; }
     .file-name { white-space:normal; word-break:break-all; }
   }
