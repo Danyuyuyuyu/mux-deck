@@ -514,6 +514,12 @@ def main():
         else:
             bak_dir = os.path.join(video_dir, "__mux_tmp_manual")
             os.makedirs(bak_dir, exist_ok=True)
+            try:   # 记录备份目录供「备份清理」列出（app/features/misc.py 读取 data/backups.log）
+                os.makedirs(os.path.join(BASE, "data"), exist_ok=True)
+                with open(os.path.join(BASE, "data", "backups.log"), "a", encoding="utf-8") as bf:
+                    bf.write(bak_dir + "\n")
+            except OSError:
+                pass
             # 永不覆盖已有备份：取第一个空闲名字
             bak_dest = unique_path(os.path.join(bak_dir, base + ext))
             shutil.move(video, bak_dest)

@@ -10,7 +10,7 @@ MUX_CLI = os.path.join(core.TOOLS_DIR, "mux_cli.py")
 COMMON_KEYS = ("fonts_dir", "audio", "audio_mode", "keep_src_audio", "audio_lang", "audio_name",
                "out_dir", "force", "sc_name", "tc_name", "no_backup", "audio_tracks",
                "subtitle_tracks", "keep_attachments", "sc_default", "tc_default",
-               "sc_forced", "tc_forced", "chapters", "out_name", "title", "fonts_mode")
+               "sc_forced", "tc_forced", "chapters", "out_name", "title", "fonts_mode", "skip_existing")
 
 # ---------------- 命令构造 ----------------
 
@@ -147,9 +147,15 @@ def start_batch(body):
             try:
                 cmd = build_cmd(it, common)
                 state["last_cmd"] = display_cmd(cmd)   # 实际执行的封装命令（可复现/进流水线）
-                rc = core.run_to_file(cmd, log, jid=jid, stop_flag=state["stop_event"])
                 od = (common.get("out_dir") or "").strip()
                 out_path = os.path.join(od, os.path.basename(it.get("video", ""))) if od else it.get("video", "")
+                # 跳过已存在输出（仅输出目录模式；替换模式的目标即源文件，恒存在无意义）
+                if od and common.get("skip_existing") and os.path.isfile(out_path):
+                    state["results"].append({"video": it.get("video", ""), "output": out_path,
+                                             "ok": True, "exit": 0, "skipped": True,
+                                             "reason": "输出已存在，跳过", "cmd": ""})
+                    continue
+                rc = core.run_to_file(cmd, log, jid=jid, stop_flag=state["stop_event"])
                 reason = "" if (rc == 0 or state.get("stopped")) else _fail_reason(core.read_tail(log, 200))
                 state["results"].append({"video": it.get("video", ""), "output": out_path,
                                          "ok": rc == 0 and not state.get("stopped"), "exit": rc,

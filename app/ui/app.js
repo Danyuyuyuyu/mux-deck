@@ -1056,6 +1056,44 @@ $('btnPresetDel').onclick = async () => {
     setStatus('预设已删除：' + name, 'ok');
   } catch (ex) { setStatus('预设删除失败：' + ex, 'err'); }
 };
+
+/* ==================== 备份清理（替换模式的 __mux_tmp_manual） ==================== */
+function fmtSize(n) {
+  if (n >= 1073741824) return (n / 1073741824).toFixed(2) + ' GB';
+  if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+  return (n / 1024).toFixed(1) + ' KB';
+}
+function backupsLoad() {
+  const list = $('backupsList');
+  return api('/api/backups').then(r => {
+    const items = r.items || [];
+    if (!items.length) {
+      list.innerHTML = '<div class="t-sec" style="padding:8px 0;">没有记录到备份目录（替换模式封装后才会产生）</div>';
+      return;
+    }
+    list.innerHTML = items.map((it, i) =>
+      '<label class="check" style="display:flex;align-items:center;gap:8px;padding:6px 0;">'
+      + '<input type="checkbox" class="bk-check" data-path="' + esc(it.path) + '" style="width:auto;height:auto">'
+      + '<span style="flex:1;word-break:break-all;" class="mono t-cap">' + esc(it.path) + '</span>'
+      + '<span class="chip sm info">' + fmtSize(it.size) + '</span></label>').join('');
+    $('backupsNote').textContent = '共 ' + items.length + ' 个目录，合计 ' + fmtSize(items.reduce((s, x) => s + x.size, 0));
+  }).catch(ex => { $('backupsNote').textContent = '加载失败：' + ex; });
+}
+$('btnBackups').onclick = () => { $('backupsModal').style.display = 'flex'; $('backupsNote').textContent = ''; backupsLoad(); };
+$('backupsClose').onclick = () => { $('backupsModal').style.display = 'none'; };
+$('btnBackupsClean').onclick = async () => {
+  const paths = [...document.querySelectorAll('#backupsList .bk-check')].filter(c => c.checked).map(c => c.dataset.path);
+  if (!paths.length) { $('backupsNote').textContent = '请先勾选要删除的目录'; return; }
+  if (!confirm('确定删除勾选的 ' + paths.length + ' 个备份目录？删除后无法找回这些原件！')) return;
+  $('btnBackupsClean').disabled = true;
+  try {
+    const r = await api('/api/backups/clean', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ paths }) });
+    if (r.error) { $('backupsNote').textContent = '清理失败：' + r.error; return; }
+    setStatus('已清理 ' + (r.cleaned || []).length + ' 个备份目录' + ((r.errors || []).length ? '（' + r.errors.length + ' 个失败）' : ''), (r.errors || []).length ? 'err' : 'ok');
+    backupsLoad();
+  } catch (ex) { $('backupsNote').textContent = '清理失败：' + ex; }
+  finally { $('btnBackupsClean').disabled = false; }
+};
 /* ==================== 初始启动：设置工作目录 ==================== */
 function showSetup() {
   $('setup_scan').value = CFG.scanRoot || '';

@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: windows-latest   # 项目面向 Windows（路径/编码行为与生产一致）
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile check (全量 py_compile)
+        run: python -m compileall app -q
+
+      - name: Unit tests (unittest)
+        run: python -m unittest discover -s tests -v
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install jsdom
+        working-directory: tests/jsdom
+        run: npm ci
+
+      - name: jsdom 整页回归
+        working-directory: tests/jsdom
+        run: npm test

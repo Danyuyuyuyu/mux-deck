@@ -6,7 +6,7 @@ function saveBatchQueue() {
     localStorage.setItem('muxui_batch_queue', JSON.stringify({
       items: batchItems,
       b_fonts: $('b_fonts').value, b_out: $('b_out').value, b_out_name_tmpl: $('b_out_name_tmpl').value,
-      b_force: $('b_force').checked, b_backup: $('b_backup').checked,
+      b_force: $('b_force').checked, b_backup: $('b_backup').checked, b_skip: $('b_skip').checked,
       b_sc_default: $('b_sc_default').value, b_tc_default: $('b_tc_default').value,
       b_sc_forced: $('b_sc_forced').checked, b_tc_forced: $('b_tc_forced').checked,
     }));
@@ -132,7 +132,7 @@ $('btnBatchFiles').onclick = () => openBrowser(async v => {
 $('btnBatchClear').onclick = () => {
   if (bJob) { setStatus('批量任务进行中，不能重置', 'err'); return; }
   const dirty = batchItems.length || $('batchResults').innerHTML || $('b_fonts').value.trim() || $('b_out').value.trim() ||
-    $('b_force').checked || !$('b_backup').checked || $('b_sc_default').value || $('b_tc_default').value ||
+    $('b_force').checked || !$('b_backup').checked || $('b_skip').checked || $('b_sc_default').value || $('b_tc_default').value ||
     $('b_sc_forced').checked || $('b_tc_forced').checked;
   if (!dirty) return;
   if (!confirm('确定重置批量封装的全部设置？\n将清空批量列表、结果展示与字体目录/输出目录等选项（已生成的输出文件保留在磁盘，不会被删除）')) return;
@@ -144,6 +144,7 @@ $('btnBatchClear').onclick = () => {
   $('b_out').value = '';         // 输出目录
   $('b_force').checked = false;  // 强制封装
   $('b_backup').checked = true;  // 备份原件（默认勾选）
+  $('b_skip').checked = false;   // 跳过已存在输出
   $('b_sc_default').value = ''; $('b_tc_default').value = '';   // 字幕旗标
   $('b_sc_forced').checked = false; $('b_tc_forced').checked = false;
   // 底部批量状态条一并复位（与启动时初态一致）
@@ -285,7 +286,7 @@ $('btnBatchStart').onclick = async () => {
       const resBox = $('batchResults');
       if (s.results && s.results.length) {
         resBox.innerHTML = '<div class="table-wrap" style="margin-top:8px;"><table style="min-width:560px;"><tr><th>#</th><th>输出文件</th><th>结果</th><th style="width:130px"></th></tr>' + s.results.map((r, i) =>
-          '<tr><td>' + (i + 1) + '</td><td class="mono" style="word-break:break-all">' + esc(r.output || r.video) + '</td><td>' + (r.ok ? '<span class="chip sm ok">' + ic('check') + '成功</span>' : '<span class="chip sm err">' + ic('xCircle') + '失败' + (r.reason ? '：' + esc(r.reason) : ' (exit ' + r.exit + ')') + '</span>') + '</td><td><button class="btn small" data-open-dir="' + encodeURIComponent(r.output || r.video) + '">打开</button>' + (r.cmd ? ' <button class="btn small" data-cmd="' + b64e(r.cmd) + '" title="查看本次封装的 mkvmerge 命令">' + ic('terminal') + '命令</button>' : '') + (r.ok ? '' : ' <button class="btn small" onclick="rerunFailed(' + i + ')">重跑</button>') + '</td></tr>').join('') + '</table></div>';
+          '<tr><td>' + (i + 1) + '</td><td class="mono" style="word-break:break-all">' + esc(r.output || r.video) + '</td><td>' + (r.skipped ? '<span class="chip sm info">' + ic('info') + '已存在，跳过</span>' : r.ok ? '<span class="chip sm ok">' + ic('check') + '成功</span>' : '<span class="chip sm err">' + ic('xCircle') + '失败' + (r.reason ? '：' + esc(r.reason) : ' (exit ' + r.exit + ')') + '</span>') + '</td><td><button class="btn small" data-open-dir="' + encodeURIComponent(r.output || r.video) + '">打开</button>' + (r.cmd ? ' <button class="btn small" data-cmd="' + b64e(r.cmd) + '" title="查看本次封装的 mkvmerge 命令">' + ic('terminal') + '命令</button>' : '') + (r.ok ? '' : ' <button class="btn small" onclick="rerunFailed(' + i + ')">重跑</button>') + '</td></tr>').join('') + '</table></div>';
       }
     },
     onTick: s => {
@@ -324,6 +325,7 @@ function rerunFailed(i) {
     if (q.b_out_name_tmpl) $('b_out_name_tmpl').value = q.b_out_name_tmpl;
     $('b_force').checked = !!q.b_force;
     $('b_backup').checked = q.b_backup !== false;
+    $('b_skip').checked = !!q.b_skip;
     if (q.b_sc_default) $('b_sc_default').value = q.b_sc_default;
     if (q.b_tc_default) $('b_tc_default').value = q.b_tc_default;
     $('b_sc_forced').checked = !!q.b_sc_forced;

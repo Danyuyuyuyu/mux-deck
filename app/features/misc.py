@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-# 杂项：GET /api/version、GET/POST /api/config（工作目录 + 子集化工具）、/api/presets（封装预设）
+# 杂项：GET /api/version、GET/POST /api/config（工作目录 + 子集化工具）、/api/presets（封装预设）、
+#       /api/backups（替换模式备份目录列出/清理）
 # 字体体检/补给已拆至 app/features/fonts.py（字体域）
-import os, time
+import os, shutil, time
 from app import core
 
 # ---------------- version / config ----------------
@@ -66,8 +67,66 @@ def handle_presets_delete(body):
         return {"error": "删除失败: %s" % ex}
     return {"ok": True, "presets": presets}
 
+# ---------------- 备份目录（替换模式产生的 __mux_tmp_manual，列出/清理） ----------------
+
+BACKUPS_LOG = os.path.join(core.APP_DIR, "data", "backups.log")
+
+def _backup_log_paths():
+    seen, out = set(), []
+    try:
+        with open(BACKUPS_LOG, encoding="utf-8", errors="replace") as f:
+            for ln in f:
+                p = ln.strip()
+                if p and p not in seen:
+                    seen.add(p)
+                    out.append(p)
+    except OSError:
+        pass
+    return out
+
+def _dir_size(path):
+    total = 0
+    for root, _, files in os.walk(path):
+        for fn in files:
+            try:
+                total += os.path.getsize(os.path.join(root, fn))
+            except OSError:
+                pass
+    return total
+
+def handle_backups_get(q):
+    items = []
+    for p in _backup_log_paths():
+        if not os.path.isdir(p):
+            continue   # 已被手动删除的记录自动视为失效，清理时一并从记录移除
+        items.append({"path": p, "size": _dir_size(p)})
+    return {"items": items}
+
+def handle_backups_clean(body):
+    paths = body.get("paths") or []
+    if not isinstance(paths, list):
+        return {"error": "无效的路径列表"}
+    keep = set(_backup_log_paths()) - set(paths)
+    cleaned, errors = [], []
+    for p in paths:
+        if os.path.isdir(p):
+            try:
+                shutil.rmtree(p)
+                cleaned.append(p)
+            except OSError as ex:
+                errors.append("%s: %s" % (p, ex))
+    try:
+        os.makedirs(os.path.dirname(BACKUPS_LOG), exist_ok=True)
+        with open(BACKUPS_LOG, "w", encoding="utf-8") as f:
+            f.write("".join(p + "\n" for p in sorted(keep)))
+    except OSError:
+        pass
+    return {"ok": True, "cleaned": cleaned, "errors": errors}
+
 handlers = {
-    "GET": {"/api/version": handle_version, "/api/config": handle_config_get, "/api/presets": handle_presets_get},
+    "GET": {"/api/version": handle_version, "/api/config": handle_config_get, "/api/presets": handle_presets_get,
+            "/api/backups": handle_backups_get},
     "POST": {"/api/config": handle_config_post,
-             "/api/presets": handle_presets_post, "/api/presets/delete": handle_presets_delete},
+             "/api/presets": handle_presets_post, "/api/presets/delete": handle_presets_delete,
+             "/api/backups/clean": handle_backups_clean},
 }

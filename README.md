@@ -57,7 +57,14 @@ start_mux_ui.bat            # 浏览器自动打开 http://127.0.0.1:8765
 封装与批量功能自带 CLI（也是换工具时的隔离试验场），运维/测试工具同目录：
 
 ```powershell
-py -3 app\tools\mux_cli.py --video V.mkv --sc-sub a.ass --fonts-dir Fonts  # 单任务封装
+py -3 app\tools\mux_cli.py --video V.mkv --sc-sub a.ass --fonts-dir Fonts   # 单任务封装
+    常用可选参数：
+      --tc-sub 繁体.ass              # 双语轨
+      --chapters 章节.txt            # OGM txt / XML 章节文件（给出时替换源章节，留空保留源章节）
+      --out-name "[组名] {ep} [{res}]"  # 输出命名模板（{src} 源文件名 / {ep} 集数 / {res} 分辨率）
+      --title 成品标题               # MKV 标题元数据
+      --fonts-mode collect           # 仅收集被引用字体全量嵌入（默认 subset 子集化）
+      --out-dir D:\out --force --no-backup --sc-default 1 --sc-forced ...
 py -3 app\tools\batch_cli.py --root "目录"                                 # 目录级批量（也可双击 app\tools\ass_subset_mux.bat）
 py -3 app\tools\smoke_test.py                                              # 一键冒烟回归（服务运行时）
 py -3 app\tools\font_dup_scan.py                                           # 字体目录重复扫描（AFS 口径）

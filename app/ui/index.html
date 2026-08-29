@@ -230,6 +230,11 @@
                 <option value="collect">仅收集（全量嵌入被引用的字体，不裁字形）</option>
               </select>
             </div>
+            <div class="field" style="margin-top:10px;">
+              <label>备份清理</label>
+              <button class="btn" id="btnBackups" type="button">查看替换备份（__mux_tmp_manual）</button>
+              <span class="t-cap">替换模式的原件备份会随使用累积，可在此查看占用并清理磁盘</span>
+            </div>
             <label class="check"><input id="force" type="checkbox"> 强制封装（源视频已有字体附件时）</label>
             <div class="field" style="margin-top:10px;">
               <label for="cfg_scan">工作目录（扫描根）</label>
@@ -313,6 +318,7 @@
         <div class="field">
           <label class="check"><input id="b_force" type="checkbox" aria-label="强制封装"> 强制封装</label>
           <label class="check"><input id="b_backup" type="checkbox" checked aria-label="备份原件"> 备份原件</label>
+          <label class="check"><input id="b_skip" type="checkbox" aria-label="跳过已存在输出"> 跳过已存在输出（输出目录模式）</label>
         </div>
         <div class="field" style="flex-wrap:wrap;">
           <label for="b_sc_default" style="font-size:12px;color:var(--text-secondary)">字幕旗标</label>
@@ -517,6 +523,19 @@
       <button class="btn" id="btnEnvRefresh"><span data-ic="refreshCw" aria-hidden="true"></span>重新检测</button>
       <span style="flex:1"></span>
       <a id="envClose" href="javascript:void(0)" class="t-cap" style="cursor:pointer;">关闭</a>
+    </div>
+  </div>
+</div>
+<!-- 备份清理（替换模式产生的 __mux_tmp_manual 目录） -->
+<div id="backupsModal" style="position:fixed;inset:0;background:rgba(7,10,15,0.75);z-index:95;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--surface-1,#20202a);border:1px solid var(--border,#333);border-radius:12px;padding:24px 26px;max-width:720px;width:94%;max-height:84vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.5);">
+    <h3 style="margin:0 0 6px;">备份清理</h3>
+    <p class="t-sec" style="margin:0 0 14px;">以下是无输出目录（替换模式）封装时产生的原件备份目录。删除后无法找回原件，请确认后再清理。</p>
+    <div id="backupsList" aria-live="polite"></div>
+    <div id="backupsNote" class="t-sec" style="min-height:18px;margin:10px 0;"></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="btn primary" id="btnBackupsClean" style="padding:6px 22px;"><span data-ic="trash" aria-hidden="true"></span>删除勾选目录</button>
+      <a id="backupsClose" href="javascript:void(0)" class="t-cap" style="cursor:pointer;">关闭</a>
     </div>
   </div>
 </div>
