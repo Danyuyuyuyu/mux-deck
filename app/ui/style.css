@@ -327,7 +327,7 @@
 
   /* 左侧状态区：定宽，避免文字变化时进度条跳动 */
   #stickySingle .sticky-note { flex:none; width:264px; }
-  #stickyBatch .sticky-note { flex:none; width:200px; }
+  #stickyBatch .sticky-note { flex:0 1 auto; max-width:220px; }   /* 随状态文字自适应，把空间让给当前文件名 */
   #stickySingle .sticky-note .ic, #stickyBatch .sticky-note .ic { font-size:15px; }
 
   /* 当前文件区（批量特有：辅助文字 + 短文件名，超长省略；flex-shrink:1 允许收缩，防止挤出不符 */
