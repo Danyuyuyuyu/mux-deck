@@ -89,18 +89,26 @@ $('btnBatchFiles').onclick = () => openBrowser(async v => {
 }, 'video', _lastBv ? _lastBv.value : '', 'batch', addVideosFromDir);
 
 $('btnBatchClear').onclick = () => {
-  if (bJob) { setStatus('批量任务进行中，不能清除列表', 'err'); return; }
-  if (!batchItems.length && !$('batchResults').innerHTML && !$('b_fonts').value.trim()) return;
-  if (!confirm('确定一键清除？\n将清空批量列表、结果展示与字体目录（已生成的输出文件保留在磁盘，不会被删除）')) return;
+  if (bJob) { setStatus('批量任务进行中，不能重置', 'err'); return; }
+  const dirty = batchItems.length || $('batchResults').innerHTML || $('b_fonts').value.trim() || $('b_out').value.trim() ||
+    $('b_force').checked || !$('b_backup').checked || $('b_sc_default').value || $('b_tc_default').value ||
+    $('b_sc_forced').checked || $('b_tc_forced').checked;
+  if (!dirty) return;
+  if (!confirm('确定重置批量封装的全部设置？\n将清空批量列表、结果展示与字体目录/输出目录等选项（已生成的输出文件保留在磁盘，不会被删除）')) return;
   batchItems.splice(0, batchItems.length);
   renderBatch();
   $('batchResults').innerHTML = '';
   $('batchState').textContent = '';
   $('batchBar').style.width = '0%';
   $('batchProgress').style.display = '';
-  $('b_fonts').value = '';   // 字体目录一并清除（自动识别项，下次批量会自动重填）
+  $('b_fonts').value = '';       // 字体目录（自动识别项，下次批量自动重填）
+  $('b_out').value = '';         // 输出目录
+  $('b_force').checked = false;  // 强制封装
+  $('b_backup').checked = true;  // 备份原件（默认勾选）
+  $('b_sc_default').value = ''; $('b_tc_default').value = '';   // 字幕旗标
+  $('b_sc_forced').checked = false; $('b_tc_forced').checked = false;
   refreshBatchSticky();
-  setStatus('已一键清除：列表、结果与字体目录已清空，输出文件保留', 'ok');
+  setStatus('已重置批量封装设置（输出文件保留在磁盘）', 'ok');
 };
 
 $('btnMatchAll').onclick = async () => {
