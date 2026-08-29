@@ -25,8 +25,18 @@ $('btnPreview').onclick = async () => {
   }
 };
 
-/* 连拍：按字幕行自动抽 8 个时间点，4x2 网格一图总览（忽略上方时间点） */
+/* 连拍：job 模式——逐帧渲染进度（复用任务轮询骨架），可中途停止 */
+let pvJob = null;
+function pvGridReset() {
+  pvJob = null;
+  setRunButton($('btnPreviewGrid'), false, '停止渲染', '连拍 8 帧');
+}
 $('btnPreviewGrid').onclick = async () => {
+  if (pvJob) {
+    setStatus('正在停止渲染…', 'run');
+    await api('/api/stop', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: pvJob }) });
+    return;
+  }
   const video = $('pv_video').value.trim() || $('video').value.trim();
   const sel = $('pv_subsel').value;
   let sub = String(sel).indexOf('track:') === 0 ? sel : $('pv_sub').value.trim();
@@ -34,20 +44,33 @@ $('btnPreviewGrid').onclick = async () => {
   if (!video) { alert('请选择视频文件'); return; }
   if (!sub) { alert('请选择字幕文件'); return; }
   $('btnPreviewGrid').disabled = true;
-  $('previewBox').innerHTML = '<div class="chip run" style="margin-top:12px">' + ic('loader', 'spin') + '<span>连拍渲染中（8 帧，约十几秒）…</span></div>';
+  $('previewBox').innerHTML = '<div class="chip run" style="margin-top:12px">' + ic('loader', 'spin') + '<span id="pvGridMsg">渲染中…</span></div>';
   try {
     const r = await api('/api/preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({video, sub, fonts_dir, mode: 'grid'}) });
-    const box = $('previewBox');
-    if (r.ok) {
-      const pts = (r.points || []).map(p => { const m = Math.floor(p / 60), s = Math.round(p % 60); return m + ':' + String(s).padStart(2, '0'); }).join(' · ');
-      box.innerHTML = '<img id="previewImg" src="' + r.url + '" alt="连拍网格">' + (pts ? '<div class="t-cap" style="margin-top:6px">抽帧时间点：' + esc(pts) + '</div>' : '');
-    } else {
-      box.innerHTML = '<div class="chip err" style="margin-top:12px">' + ic('xCircle') + '<span>连拍失败：' + esc(r.error || '') + '</span></div>' + (r.log ? '<pre class="log-pre">' + esc(r.log) + '</pre>' : '');
+    if (r.error || !r.job) {
+      pvGridReset();
+      $('previewBox').innerHTML = '<div class="chip err" style="margin-top:12px">' + ic('xCircle') + '<span>连拍失败：' + esc(r.error || '未知错误') + '</span></div>';
+      return;
     }
+    pvJob = r.job;
+    setRunButton($('btnPreviewGrid'), true, '停止渲染', '连拍 8 帧');
+    const fin = html => { pvGridReset(); $('previewBox').innerHTML = html; };
+    startTaskPolling({
+      job: pvJob, interval: 800,
+      onTick: s => {
+        const msg = $('pvGridMsg');
+        if (!msg) return;
+        const step = (s.current && s.total) ? ('（第 ' + Math.min(s.current, s.total) + ' / ' + s.total + ' 步' + (s.current_video ? ' · ' + s.current_video : '') + '）') : '';
+        msg.textContent = s.progress != null ? ('渲染中 ' + s.progress + '%' + step) : '渲染中…';
+      },
+      onDone: s => fin('<img id="previewImg" src="' + esc(s.result || '') + '" alt="连拍网格">'),
+      onError: s => fin('<div class="chip err" style="margin-top:12px">' + ic('xCircle') + '<span>连拍失败：' + esc(s.reason || ('退出码 ' + (s.exit != null ? s.exit : '?'))) + '</span></div>'),
+      onKilled: () => fin('<div class="chip info" style="margin-top:12px">' + ic('info') + '<span>连拍已停止</span></div>'),
+      onLost: () => fin('<div class="chip err" style="margin-top:12px">' + ic('xCircle') + '<span>连接丢失，请刷新页面后重试</span></div>')
+    });
   } catch (ex) {
+    pvGridReset();
     $('previewBox').innerHTML = '<div class="chip err" style="margin-top:12px">' + ic('xCircle') + '<span>连接失败：' + esc(ex) + '</span></div>';
-  } finally {
-    $('btnPreviewGrid').disabled = false;
   }
 };
 

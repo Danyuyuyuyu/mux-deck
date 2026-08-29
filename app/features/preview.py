@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # 预览帧渲染：POST /api/preview（ffmpeg+libass 烧录一帧；支持内封字幕轨与 SRT 转 ASS）
-import json, os, shutil, uuid
+# 单帧同步返回；连拍（grid）走 job 模式——逐帧回报进度，可中途停止
+import json, os, shutil, threading, time, uuid
 from app import core
 
 def _extract_embedded_fonts(video, pid):
@@ -63,7 +64,9 @@ def _grid_points(times, n=8, pad=0.05):
         pts = sorted(set(pts))
     return [min(p + pad, max(times)) for p in pts]
 
-def make_preview(video, sub, fonts_dir, t, mode="frame"):
+def make_preview(video, sub, fonts_dir, t, mode="frame", job=None):
+    """job 不为 None 时（grid 连拍）：逐步更新 job 状态（current/total/progress/current_video）、
+    按 step 写 item_NN.log 供 /api/job 合并日志、响应 stop_event；单帧/黑底模式忽略 job。"""
     ff = core.FFMPEG
     if not ff:
         return {"error": "未找到 ffmpeg（请安装并加入 PATH）"}
@@ -118,13 +121,30 @@ def make_preview(video, sub, fonts_dir, t, mode="frame"):
     if mode == "grid":
         pts = _grid_points(_ass_times(preview_ass), 8)
         vf_g = vf.replace("scale=1280:-2", "scale=640:-2")
+        steps = len(pts) + 1   # 8 帧 + 拼图
         log = os.path.join(core.LOG_DIR, "preview_%s.log" % pid)
+        if job is not None:
+            job["total"] = steps
         frames = []
         for i, tt in enumerate(pts):
+            if job is not None:
+                if job["stop_event"].is_set():
+                    return {"error": "已停止"}
+                job["current"] = i + 1
+                job["current_video"] = "渲染第 %d/%d 帧" % (i + 1, len(pts))
+                job["progress"] = int(round(i / float(steps) * 100))
+                ilog = os.path.join(job["dir"], "item_%02d.log" % (i + 1))
+            else:
+                ilog = log
             fp = os.path.join(core.PREVIEW_DIR, "%s_f%d.png" % (pid, i))
             c = [ff, "-y", "-ss", str(tt), "-i", video, "-vf", vf_g, "-frames:v", "1", fp]
-            if core.run_to_file(c, log, timeout=120, cwd=core.PREVIEW_DIR) == 0 and os.path.exists(fp):
+            rc = core.run_to_file(c, ilog, timeout=120, cwd=core.PREVIEW_DIR,
+                                  jid=(job["id"] if job else None),
+                                  stop_flag=(job["stop_event"] if job else None))
+            if rc == 0 and os.path.exists(fp):
                 frames.append(fp)
+            if job is not None:
+                job["progress"] = int(round((i + 1) / float(steps) * 100))
         if not frames:
             return {"error": "连拍渲染失败（一帧都没成功）", "log": core.read_tail(log, 60)}
         # 部分帧失败会导致 %d 模式断号 -> 重排成连续 seq
@@ -136,8 +156,20 @@ def make_preview(video, sub, fonts_dir, t, mode="frame"):
                 seqs.append(sp)
             except OSError:
                 pass
+        if job is not None:
+            if job["stop_event"].is_set():
+                return {"error": "已停止"}
+            job["current"] = steps
+            job["current_video"] = "拼接 4x2 网格"
+            ilog = os.path.join(job["dir"], "item_%02d.log" % steps)
+        else:
+            ilog = log
         rc = core.run_to_file([ff, "-y", "-start_number", "0", "-i", "%s_s%%d.png" % os.path.join(core.PREVIEW_DIR, pid),
-                               "-vf", "tile=4x2", "-frames:v", "1", out_png], log, timeout=120, cwd=core.PREVIEW_DIR)
+                               "-vf", "tile=4x2", "-frames:v", "1", out_png], ilog, timeout=120, cwd=core.PREVIEW_DIR,
+                              jid=(job["id"] if job else None),
+                              stop_flag=(job["stop_event"] if job else None))
+        if job is not None:
+            job["progress"] = 100
         for sp in seqs:
             try:
                 os.remove(sp)
@@ -159,14 +191,73 @@ def make_preview(video, sub, fonts_dir, t, mode="frame"):
     return {"ok": True, "url": "/api/file?path=" + pid + ".png", "pid": pid}
 
 
+def start_grid_job(video, sub, fonts_dir):
+    """连拍 job 化：轻校验同步返回 job id，重活（抽轨/字体/逐帧）在后台线程，进度经 /api/job 轮询。"""
+    if not core.FFMPEG:
+        return {"error": "未找到 ffmpeg（请安装并加入 PATH）"}
+    embedded = isinstance(sub, str) and sub.startswith("track:")
+    if not sub:
+        return {"error": "请选择字幕文件"}
+    if not video or not os.path.exists(video):
+        return {"error": "视频文件不存在"}
+    if not embedded and (not fonts_dir or not os.path.isdir(fonts_dir)):
+        return {"error": "字体目录不存在"}
+    with core.JOBS_LOCK:
+        if any(js.get("status") == "running" for js in core.JOBS.values()):
+            return {"error": "另一个任务正在运行，请等待完成"}
+    jid = uuid.uuid4().hex[:12]
+    jdir = os.path.join(core.PREVIEW_DIR, "job_" + jid)   # 放 PREVIEW_DIR：不进任务历史（预览无需重跑）
+    os.makedirs(jdir)
+    state = {"id": jid, "dir": jdir, "status": "running", "exit": None, "started": time.time(),
+             "current": 0, "total": 9, "current_video": "准备字幕与字体…", "progress": 0,
+             "failed": 0, "results": [], "result": "", "stop_event": threading.Event()}
+
+    def worker():
+        try:
+            r = make_preview(video, sub, fonts_dir, 0, mode="grid", job=state)
+            if state.get("stopped"):
+                state["status"] = "killed"
+            elif r.get("error"):
+                state["status"] = "error"
+                state["exit"] = -1
+                state["failed"] = 1
+                try:   # FAIL: 行 = job_status reason 的协议来源
+                    with open(os.path.join(jdir, "item_%02d.log" % max(state["current"], 1)), "a",
+                              encoding="utf-8", errors="replace") as f:
+                        f.write("\nFAIL: %s\n" % r.get("error"))
+                except OSError:
+                    pass
+            else:
+                state["status"] = "done"
+                state["exit"] = 0
+                state["progress"] = 100
+                state["result"] = r.get("url", "")
+        except Exception:
+            state["status"] = "error"
+            state["exit"] = -1
+            state["failed"] = 1
+        # 预览任务不落盘 state.json（无历史/重跑需求），JOBS 内存态够轮询用
+
+    with core.JOBS_LOCK:
+        if any(js.get("status") == "running" for js in core.JOBS.values()):
+            return {"error": "另一个任务正在运行，请等待完成"}
+        core.JOBS[jid] = state
+        threading.Thread(target=worker, daemon=True).start()
+    return {"job": jid}
+
+
 def handle_preview(body):
     try:
         tm = float(body.get("time") or 0)
     except (TypeError, ValueError):
         return {"error": "无效的时间参数"}
-    return make_preview((body.get("video") or "").strip(), (body.get("sub") or "").strip(),
-                        (body.get("fonts_dir") or "").strip(), tm,
-                        (body.get("mode") or "frame"))
+    video = (body.get("video") or "").strip()
+    sub = (body.get("sub") or "").strip()
+    fonts_dir = (body.get("fonts_dir") or "").strip()
+    mode = (body.get("mode") or "frame")
+    if mode == "grid":
+        return start_grid_job(video, sub, fonts_dir)
+    return make_preview(video, sub, fonts_dir, tm, mode)
 
 
 handlers = {"POST": {"/api/preview": handle_preview}}

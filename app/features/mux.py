@@ -181,10 +181,11 @@ def job_status(jid):
             if tl:
                 parts.append("---- item %d ----\n%s" % (i, tl))
     merged = "\n".join(parts)
-    progress = None
-    m = re.findall(r'(?:进度|Progress)[:：]\s*(\d+)%', merged)
-    if m:
-        progress = int(m[-1])
+    progress = s.get("progress")   # 显式进度优先（预览连拍直报）；缺省回落到日志解析
+    if progress is None:
+        m = re.findall(r'(?:进度|Progress)[:：]\s*(\d+)%', merged)
+        if m:
+            progress = int(m[-1])
     return {"id": s["id"], "status": s["status"], "exit": s["exit"],
             "current": cur, "total": total_items, "failed": s.get("failed", 0),
             "current_video": s.get("current_video", ""), "progress": progress,
