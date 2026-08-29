@@ -212,16 +212,17 @@ function renderVideoCard() {
 let lastVideo = '';
 function wireVideo() {
   const inp = $('video');
-  inp.onchange = function () {
+  inp.onchange = async function () {
     lastResult = null;   // 输入变更：清除上次任务结果，恢复静态状态
     const v = inp.value.trim();
-    if (v && v !== lastVideo) {
+    const replaced = v && v !== lastVideo;
+    if (replaced) {
       // 视频已更换：旧字幕属于旧视频，清空防止重新匹配时张冠李戴
       $('sc_sub').value = ''; $('tc_sub').value = '';
       $('sc_enc').textContent = ''; $('tc_enc').textContent = '';
       $('sc_name').value = 'SC'; $('tc_name').value = 'TC';
       syncSubStatus();
-      setStatus('视频已更换，字幕已清空；可点「自动匹配字幕」重新匹配', 'ok');
+      setStatus('视频已更换，字幕已清空；正在自动识别字幕与字体目录…', 'run');
     }
     lastVideo = v;
     trackSel.audio.clear(); trackSel.sub.clear();
@@ -229,6 +230,19 @@ function wireVideo() {
     $('probeBox').innerHTML = '';
     renderVideoCard();
     refreshSticky();
+    if (replaced) {
+      // 新视频自动识别（与批量添加文件同一入口，见 identify.js）；识别期间视频又被更换则丢弃结果
+      const id = await identify(v);
+      if (inp.value.trim() !== v) return;
+      applyIdentify($('sc_sub'), $('tc_sub'), $('fonts_dir'), id);   // 已有值不覆盖
+      autoTrackName('sc_sub', 'sc_name', 'sc');
+      autoTrackName('tc_sub', 'tc_name', 'tc');
+      syncSubStatus();
+      lastResult = null; refreshSticky();
+      const hits = [id.sc && '简体字幕', id.tc && '繁体字幕', id.fontsDir && '字体目录'].filter(Boolean);
+      if (hits.length) setStatus('已自动识别：' + hits.join('、'), 'ok');
+      else setStatus('未自动识别到字幕与字体目录，可手动填写或点「自动匹配字幕」重试', 'info');
+    }
   };
   inp.onkeydown = function (e) { if (e.key === 'Enter') inp.blur(); };
 }
@@ -753,13 +767,20 @@ function autoTrackName(subField, nameField, kind) {
   var tok = pickNameToken($(subField).value, kind);
   if (tok) $(nameField).value = tok;
 }
-$('sc_sub').addEventListener('change', function () { lastResult = null; autoTrackName('sc_sub', 'sc_name', 'sc'); syncSubStatus(); });
-$('tc_sub').addEventListener('change', function () { lastResult = null; autoTrackName('tc_sub', 'tc_name', 'tc'); syncSubStatus(); });
-$('sc_sub').addEventListener('input', syncSubStatus);
-$('tc_sub').addEventListener('input', syncSubStatus);
+/* 手动填字幕（手输 change/input、浏览按钮）后同步粘性操作栏与字幕状态 */
+function onManualSub(subField, nameField, kind) {
+  lastResult = null;
+  autoTrackName(subField, nameField, kind);
+  syncSubStatus();
+  refreshSticky();
+}
+$('sc_sub').addEventListener('change', function () { onManualSub('sc_sub', 'sc_name', 'sc'); });
+$('tc_sub').addEventListener('change', function () { onManualSub('tc_sub', 'tc_name', 'tc'); });
+$('sc_sub').addEventListener('input', function () { lastResult = null; syncSubStatus(); refreshSticky(); });
+$('tc_sub').addEventListener('input', function () { lastResult = null; syncSubStatus(); refreshSticky(); });
 $('sc_name').addEventListener('input', function () { });
-$('btnSc').onclick = () => openBrowser(v => { $('sc_sub').value = v; autoTrackName('sc_sub', 'sc_name', 'sc'); syncSubStatus(); }, 'sub', $('sc_sub').value, 'sub');
-$('btnTc').onclick = () => openBrowser(v => { $('tc_sub').value = v; autoTrackName('tc_sub', 'tc_name', 'tc'); syncSubStatus(); }, 'sub', $('tc_sub').value, 'sub');
+$('btnSc').onclick = () => openBrowser(v => { $('sc_sub').value = v; fireChange($('sc_sub')); }, 'sub', $('sc_sub').value, 'sub');
+$('btnTc').onclick = () => openBrowser(v => { $('tc_sub').value = v; fireChange($('tc_sub')); }, 'sub', $('tc_sub').value, 'sub');
 $('btnFonts').onclick = () => openBrowser(v => $('fonts_dir').value = v, 'dir', $('fonts_dir').value, 'fonts');
 $('btnAudio').onclick = () => openBrowser(v => $('audio').value = v, 'audio', $('audio').value, 'audio');
 $('btnOut').onclick = () => openBrowser(v => $('out_dir').value = v, 'dir', $('out_dir').value, 'out');
