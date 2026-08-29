@@ -151,7 +151,12 @@ async function bPoll() {
       const bnote = $('batchStickyNote');
       bnote.className = 'sticky-note run';
       bnote.firstElementChild.innerHTML = ic('loader', 'spin');
-      bnote.querySelector('.sticky-txt').textContent = s.total ? ('批量封装中：第 ' + s.current + ' / ' + s.total + ' 个' + (s.progress != null ? '（' + s.progress + '%）' : '')) : '批量封装中…';
+      const bl = s.log || '';
+      let bstage;
+      if (s.progress != null) bstage = '（' + s.progress + '%）';
+      else if (/Subset tool|subsetting|assfonts|AFS:/i.test(bl)) bstage = '（子集化中）';
+      else bstage = '';
+      bnote.querySelector('.sticky-txt').textContent = s.total ? ('批量封装中：第 ' + s.current + ' / ' + s.total + ' 个' + bstage) : '批量封装中…';
       setLog('batch', s.log);
       const resBox = $('batchResults');
       if (s.results && s.results.length) {

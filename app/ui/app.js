@@ -425,6 +425,7 @@ $('btnAutoMatch').onclick = async () => {
     if (m.sc && !scHad) { $('sc_sub').value = m.sc; autoTrackName('sc_sub', 'sc_name', 'sc'); sc = true; }
     if (m.tc && !tcHad) { $('tc_sub').value = m.tc; autoTrackName('tc_sub', 'tc_name', 'tc'); tc = true; }
     syncSubStatus();
+    lastResult = null; refreshSticky();   // 字幕已填充：同步底部操作栏状态
     if (sc || tc) {
       setStatus('字幕匹配完成：已填充 ' + (sc ? '简体' : '') + (sc && tc ? ' + ' : '') + (tc ? '繁体' : ''), 'ok');
     } else if (m.sc || m.tc) {
@@ -613,11 +614,17 @@ async function poll() {
         refreshSticky();
       }
       else {
-        // 运行中：sticky 栏随轮询自动刷新当前状态（进度）
+        // 运行中：sticky 栏随轮询自动刷新当前状态（子集化/封装分阶段 + 进度）
         const note = $('stickyNote');
         note.className = 'sticky-note run';
         note.firstElementChild.innerHTML = ic('loader', 'spin');
-        note.querySelector('.sticky-txt').textContent = s.progress != null ? ('封装中 ' + s.progress + '%') : '封装中…';
+        const lg = s.log || '';
+        let stage;
+        if (s.progress != null) stage = '封装中 ' + s.progress + '%';
+        else if (/Muxing/i.test(lg)) stage = '封装中…';
+        else if (/Subset tool|subsetting|assfonts|AFS:/i.test(lg)) stage = '子集化中…';
+        else stage = '处理中…';
+        note.querySelector('.sticky-txt').textContent = stage;
       }
     } catch (ex) {
       failCount++;
@@ -741,6 +748,7 @@ window.addEventListener('drop', async e => {
       else { if (!isScName(base)) plainSub = true; $('sc_sub').value = s; autoTrackName('sc_sub', 'sc_name', 'sc'); }
     }
     syncSubStatus();
+    lastResult = null; refreshSticky();
     setStatus('已填充：' + vids[0] + (plainSub ? ' · 无简/繁标识的字幕已按简体处理' : ''), 'ok');
     window.scrollTo({top: 0, behavior: 'smooth'});
   } else if (vids.length >= 1) {
@@ -759,6 +767,7 @@ window.addEventListener('drop', async e => {
       else { if (!isScName(base)) plainSub = true; $('sc_sub').value = s; autoTrackName('sc_sub', 'sc_name', 'sc'); }
     }
     syncSubStatus();
+    lastResult = null; refreshSticky();
     setStatus('已填充字幕' + (plainSub ? ' · 无简/繁标识的字幕已按简体处理' : ''), 'ok');
   }
 });
