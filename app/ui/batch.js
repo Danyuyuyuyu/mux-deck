@@ -284,7 +284,7 @@ function bStickyUpdate(s) {
   if (ov != null) $('batchStickyBar').style.width = ov + '%';
   if (s.total) $('bStickyCountNum').textContent = Math.min(Math.max(s.current || 1, 1), s.total) + ' / ' + s.total;
   if (s.current_video) {
-    $('bStickyCurName').textContent = s.current_video.split(/[\\/]/).pop();
+    $('bStickyCurName').textContent = truncMid(s.current_video.split(/[\\/]/).pop(), 40);   // 写入即截中段（CSS ellipsis 作窄屏兜底）
     $('bStickyCur').style.display = '';
   }
   const elapsed = Date.now() - bStickyStartTs;
