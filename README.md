@@ -1,6 +1,6 @@
 # Mux Deck · 字幕封装助手
 
-用 mkvmerge 把 视频 + ASS 字幕 + 字体附件 合成 MKV 的本地工具：字体子集化（AssFontSubset 主用 / assfonts 回退）、字体体检、编码转换、预览帧、批量队列、内封轨道预览与提取，全部在浏览器界面完成。
+用 mkvmerge 把 视频 + ASS 字幕 + 字体附件 合成 MKV 的本地工具：字体子集化（AssFontSubset 主用 / assfonts 回退）、字体体检、编码转换、预览帧、批量队列、内封轨道预览与提取，全部在浏览器界面完成。首次启动自动检测环境，缺失组件可直接在网页内一键下载安装。
 
 ## 界面预览
 
@@ -12,7 +12,7 @@
 
 ![批量封装界面](assets/ui-batch-dark.png)
 
-**便携部署**：整个文件夹拷走即用（Windows 10/11），服务端纯 Python 标准库。**仅需自行安装 Python 3.8+**（官方安装器勾选 Add to PATH），其余组件（MKVToolNix / ffmpeg / assfonts / AssFontSubset）由 `安装环境.bat` 自动下载到 `bin/`，并顺带安装 fonttools（AFS 默认后端依赖，唯一 pip 包）。
+**便携部署**：整个文件夹拷走即用（Windows 10/11），服务端纯 Python 标准库。**仅需自行安装 Python 3.8+**（官方安装器勾选 Add to PATH），其余组件（MKVToolNix / ffmpeg / assfonts / AssFontSubset / fonttools）既可由 `安装环境.bat`（bootstrap）自动下载到 `bin/`，也可以在打开网页后于「环境检测」弹窗内一键安装。
 
 ## 快速开始
 
@@ -30,7 +30,7 @@ py -3 scripts\bootstrap.py
 start_mux_ui.bat            # 浏览器自动打开 http://127.0.0.1:8765
 ```
 
-系统已装 Python / MKVToolNix / ffmpeg 时也可以不跑 bootstrap——程序按「自带 bin\ → 系统 PATH → 默认安装路径」自动回落。
+**不跑 bootstrap 也行**：直接启动后，页面会自动检测环境，缺失的组件（mkvmerge / ffmpeg / 子集工具 / fonttools）会在「环境检测」弹窗里列出，填好代理（直连不通时）点「一键安装缺失组件」即可下载补齐，完成后自动重新检测、无需重启服务。系统已装 Python / MKVToolNix / ffmpeg 时程序按「自带 bin\ → 系统 PATH → 默认安装路径」自动回落。
 
 ## 功能
 
@@ -60,7 +60,7 @@ py -3 scripts\preview_cli.py --video V.mkv --sub a.ass --fonts-dir Fonts  # 预�
 py -3 scripts\fontcheck_cli.py --fonts-dir Fonts a.ass                    # 字体体检
 py -3 scripts\smoke_test.py                                               # 一键冒烟回归（服务运行时）
 py -3 scripts\font_dup_scan.py                                            # 字体目录重复扫描（AFS 口径）
-py -3 scripts\bootstrap.py                                                # 运行时引导
+py -3 scripts\bootstrap.py                                                # 运行时引导（网页内「一键安装」复用同一逻辑）
 py -3 scripts\selfcheck.py                                                # 环境自检
 py -3 scripts\autostart.py install                                        # 开机自启
 ```
@@ -78,7 +78,7 @@ mux-deck/
 │   ├── assfonts/                             # 回退子集工具（v0.7.3）
 │   └── assfontsubset/                        # 主用子集工具 AssFontSubset（v2.2.0）
 ├── data/                                     # 运行时数据：mux（任务历史）/ preview / log / tmp（旧 jobs/previews 只读兼容）
-└── docs/                                     # CONTEXT.md（领域术语表）/ adr / BUG-REPORT.md（本地维护，不入库）
+└── docs/                                     # CONTEXT.md（领域术语表）/ adr/（架构决策）/ archive/（历史文献）/ README.md（交接索引，本地维护，不入库）
 ```
 
 ## 环境要求
@@ -93,9 +93,11 @@ mux-deck/
 | AssFontSubset | 可选 | ✅ v2.2.0 | 主用子集工具，bootstrap 自动下载 |
 | assfonts | 可选 | ✅ v0.7.3 | 回退子集工具，bootstrap 自动下载 |
 
+以上组件均可在网页内「环境检测」弹窗中一键下载安装（见「快速开始」）；缺失时页面加载会自动弹出引导。
+
 ## 工作目录（扫描根）
 
-「高级选项 → 工作目录」可切换拖放识别搜索的根目录（默认 `D:\Video`），持久化在 `config.json`。
+「高级选项 → 工作目录」可切换拖放识别搜索的根目录（默认 `D:\Video`），持久化在 `config.json`。**首次启动**（未配置或配置失效）会强制弹出引导设置工作目录；可跳过，之后在「高级选项」随时补设。
 
 ## 许可与第三方声明
 
