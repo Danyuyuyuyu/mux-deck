@@ -116,8 +116,6 @@ $('btnBatchClear').onclick = () => {
   renderBatch();
   $('batchResults').innerHTML = '';
   $('batchState').textContent = '';
-  $('batchBar').style.width = '0%';
-  $('batchProgress').style.display = '';
   $('b_fonts').value = '';       // 字体目录（自动识别项，下次批量自动重填）
   $('b_out').value = '';         // 输出目录
   $('b_force').checked = false;  // 强制封装
@@ -229,12 +227,10 @@ $('btnBatchStart').onclick = async () => {
   $('bStickyEta').textContent = '计算中…';
   setRunButton($('btnBatchStart'), true, '停止批量', '开始批量封装');
   showLogTab('batch'); setLog('batch', '');
-  $('batchBar').style.width = '0%';
   const bfin = (s, lastR, stateText, statusMsg, statusCls) => {
     bJob = null;
     setRunButton($('btnBatchStart'), false, '停止批量', '开始批量封装');
     $('batchState').textContent = stateText;
-    $('batchProgress').style.display = 'none';
     bStickyFreeze();
     setStatus(statusMsg, statusCls);
     // 终态：用结果表填充文件计数/百分比，并按 成功/部分失败/全部失败 生成状态文案
@@ -258,7 +254,6 @@ $('btnBatchStart').onclick = async () => {
   startTaskPolling({
     job: bJob, interval: 1200,
     onAny: s => {
-      if (s.total) $('batchBar').style.width = Math.round(s.current / s.total * 100) + '%';
       $('batchState').textContent = s.total ? ('第 ' + s.current + ' / ' + s.total + ' 个：' + (s.current_video || '') + (s.progress != null ? ('  当前项 ' + s.progress + '%') : '')) : '';
       setLog('batch', s.log);
       const resBox = $('batchResults');

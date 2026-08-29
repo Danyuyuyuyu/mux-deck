@@ -360,10 +360,7 @@ function syncDefaultBadge() {
       note.querySelector('.sticky-txt').textContent = t;
     }
   }).observe($('status'), { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
-  new MutationObserver(function () {
-    $('stickyBar').style.width = $('singleBar').style.width;   // 镜像真实进度（观察内层 bar 的宽度变化）
-  }).observe($('singleBar'), { attributes: true, attributeFilter: ['style'] });
-  // 批量状态条的进度由 batch.js 的 onAny 直接写入（总体进度含当前文件内部进度，非简单文件计数）
+  // 单封装面板内进度条已删除，进度直接写底部状态条（onAny 内）；批量同理由 batch.js 直写
 })();
 
 /* ==================== 文件浏览器 ==================== */
@@ -614,11 +611,9 @@ $('btnStart').onclick = async () => {
   $('stickyEta').textContent = '计算中…';
   setRunButton($('btnStart'), true, '停止封装', '开始封装');
   showLogTab('mux'); setLog('mux', '');
-  $('singleBarWrap').style.display = ''; $('singleBar').style.width = '0%';
   const fin = (s, lastR, statusMsg, statusCls, resultHtml) => {
     job = null;
     setRunButton($('btnStart'), false, '停止封装', '开始封装');
-    $('singleBarWrap').style.display = 'none';
     $('stickyProgress').classList.remove('run');
     stickyTimesFreeze();   // 耗时定格、剩余清空（进度条与百分比一致定格，下次启动时归零）
     setStatus(statusMsg, statusCls);
@@ -628,7 +623,7 @@ $('btnStart').onclick = async () => {
   };
   startTaskPolling({
     job, interval: 1200,
-    onAny: s => { setLog('mux', s.log); if (s.progress != null) $('singleBar').style.width = s.progress + '%'; },
+    onAny: s => { setLog('mux', s.log); if (s.progress != null) $('stickyBar').style.width = s.progress + '%'; },
     onTick: s => {
       setStickyRun($('stickyNote'), muxStage(s).label);   // 运行中：分阶段 + 进度
       stickyTimesRunning(s.progress);
