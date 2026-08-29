@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# smoke_test.py — mux-deck 一键冒烟回归（10 端点 + 前端可达性）
+# smoke_test.py — mux-deck 一键冒烟回归（11 端点 + 前端可达性）
 # 用法: py -3 scripts/smoke_test.py [--video 某个.mkv]
 # 约束: 127.0.0.1 请求会被系统代理劫持，必须用空 ProxyHandler 绕开。
 # 退出码: 0 = 全 PASS / SKIP；1 = 有 FAIL；2 = 服务未运行。
@@ -143,12 +143,23 @@ def main():
     except Exception as ex:
         check("stop(不存在任务)", False, str(ex))
 
-    # 11) 前端页面可达且带双轨切换器
+    # 11) 前端页面可达且带双轨切换器 + 环境引导弹窗
     try:
         body = op.open("http://127.0.0.1:8765/", timeout=10).read().decode("utf-8", errors="replace")
-        check("前端页面", len(body) > 50000 and "cfg_tool" in body, "%d bytes" % len(body))
+        check("前端页面", len(body) > 50000 and "cfg_tool" in body and "envList" in body and "btnEnvInstall" in body,
+              "%d bytes" % len(body))
     except Exception as ex:
         check("前端页面", False, str(ex))
+
+    # 12) env_check（环境检测：overall 合法 + 6 项组件齐全）
+    try:
+        ec = get("/api/env_check")
+        keys = {i.get("key") for i in ec.get("items", [])}
+        ok = ec.get("overall") in ("ready", "partial", "broken") and \
+             keys == {"mkvtoolnix", "mkvextract", "ffmpeg", "afs", "assfonts", "fonttools"}
+        check("env_check", ok, "overall=%s %d 项" % (ec.get("overall"), len(ec.get("items", []))))
+    except Exception as ex:
+        check("env_check", False, str(ex))
 
     # 汇总
     print()
