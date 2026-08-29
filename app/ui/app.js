@@ -436,6 +436,12 @@ $('btnSingleReset').onclick = () => {
   $('backup').checked = true; $('force').checked = false;
   $('fontCheckBox').innerHTML = '';
   setResult('');
+  // 底部状态条一并复位（与启动时初态一致）
+  $('stickyProgress').classList.remove('run');
+  $('stickyBar').style.width = '0%';
+  $('stickyPct').textContent = '--';
+  $('stickyElapsed').textContent = '--:--:--';
+  $('stickyEta').textContent = '--:--:--';
   syncSubStatus();
   refreshSticky();
   setStatus('已重置单个封装设置', 'ok');
