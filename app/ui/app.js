@@ -252,12 +252,12 @@ function wireVideo() {
       // 新视频自动识别（与批量添加文件同一入口，见 identify.js）；识别期间视频又被更换则丢弃结果
       const id = await identify(v);
       if (inp.value.trim() !== v) return;
-      applyIdentify($('sc_sub'), $('tc_sub'), $('fonts_dir'), id);   // 已有值不覆盖
+      applyIdentify($('sc_sub'), $('tc_sub'), $('fonts_dir'), id, $('chapters'));   // 已有值不覆盖
       autoTrackName('sc_sub', 'sc_name', 'sc');
       autoTrackName('tc_sub', 'tc_name', 'tc');
       syncSubStatus();
       lastResult = null; refreshSticky();
-      const hits = [id.sc && '简体字幕', id.tc && '繁体字幕', id.fontsDir && '字体目录'].filter(Boolean);
+      const hits = [id.sc && '简体字幕', id.tc && '繁体字幕', id.fontsDir && '字体目录', id.chapters && '章节'].filter(Boolean);
       if (hits.length) setStatus('已自动识别：' + hits.join('、'), 'ok');
       else setStatus('未自动识别到字幕与字体目录，可手动填写或点「自动匹配字幕」重试', 'info');
     }
@@ -464,13 +464,15 @@ $('btnAutoMatch').onclick = async () => {
     if (id.tc && !tcHad) { $('tc_sub').value = id.tc; autoTrackName('tc_sub', 'tc_name', 'tc'); tc = true; }
     syncSubStatus();
     const fontFound = !!(id.fontsDir && !$('fonts_dir').value.trim() && ($('fonts_dir').value = id.fontsDir, true));
+    const chapFound = !!(id.chapters && !$('chapters').value.trim() && ($('chapters').value = id.chapters, true));
     lastResult = null; refreshSticky();   // 字幕已填充：同步底部操作栏状态
+    const extra = (fontFound ? ' · 已自动识别字体目录' : '') + (chapFound ? ' · 已自动识别章节' : '');
     if (sc || tc) {
-      setStatus('字幕匹配完成：已填充 ' + (sc ? '简体' : '') + (sc && tc ? ' + ' : '') + (tc ? '繁体' : '') + (fontFound ? ' · 已自动识别字体目录' : ''), 'ok');
+      setStatus('字幕匹配完成：已填充 ' + (sc ? '简体' : '') + (sc && tc ? ' + ' : '') + (tc ? '繁体' : '') + extra, 'ok');
     } else if (id.sc || id.tc) {
-      setStatus('匹配到的字幕槽位已有内容，未覆盖（重置后可重新填充）' + (fontFound ? ' · 已自动识别字体目录' : ''), 'ok');
+      setStatus('匹配到的字幕槽位已有内容，未覆盖（重置后可重新填充）' + extra, 'ok');
     } else {
-      setStatus('未匹配到任何字幕（简 0 / 繁 0）' + (fontFound ? ' · 已自动识别字体目录' : ''), 'err');
+      setStatus('未匹配到任何字幕（简 0 / 繁 0）' + extra, 'err');
     }
   } catch (ex) {
     setStatus('字幕匹配失败：' + ex, 'err');
@@ -942,8 +944,13 @@ function applyPreset(d) {
   $('force').checked = !!d.force;
   if (d.cfg_tool) { $('cfg_tool').value = d.cfg_tool; fireChange($('cfg_tool')); }
   if (d.fonts_mode) $('fonts_mode').value = d.fonts_mode;
+  // 同步套用到批量公共字段（有对应项才写）
+  const bm = { fonts_mode: 'b_fonts_mode', out_name_tmpl: 'b_out_name_tmpl', title: 'b_title',
+               sc_default: 'b_sc_default', tc_default: 'b_tc_default', sc_forced: 'b_sc_forced', tc_forced: 'b_tc_forced' };
+  Object.keys(bm).forEach(k => { if (d[k] !== undefined && d[k] !== '' && $(bm[k])) { if (bm[k].endsWith('_forced')) $(bm[k]).checked = !!d[k]; else $(bm[k]).value = d[k]; } });
+  if (d.fonts_dir && $('b_fonts')) $('b_fonts').value = d.fonts_dir;
   syncSubStatus(); refreshSticky();
-  setStatus('已套用预设', 'ok');
+  setStatus('已套用预设（含批量公共选项）', 'ok');
 }
 function refreshPresetSel() {
   const sel = $('preset_sel');

@@ -238,6 +238,7 @@
   }
   .sub-badge.sc { background:var(--ok-bg); color:var(--success); border:1px solid var(--ok-line); }
   .sub-badge.tc { background:var(--warn-bg); color:var(--warning); border:1px solid var(--warn-line); }
+  .sub-badge.ch { background:var(--surface-3); color:var(--text-secondary); border:1px solid var(--border); }
   .sub-title { display:flex; align-items:baseline; gap:7px; font-size:13.5px; font-weight:600; min-width:0; }
   .sub-card-head .tag-track { margin-left:auto; }
   .sub-paths { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }

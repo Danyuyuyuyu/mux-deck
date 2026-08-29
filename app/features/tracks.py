@@ -110,6 +110,23 @@ def handle_fonts_dir(q):
     return detect_fonts_dir((q.get("path") or [""])[0])
 
 
+def detect_chapters(video):
+    """识别视频旁同名章节文件（stem.txt / stem.xml / stem.chapters.txt）；服务端 exists 直判。"""
+    if not video or not os.path.isfile(video):
+        return {"chapters": ""}
+    d = os.path.dirname(video)
+    stem = os.path.splitext(os.path.basename(video))[0]
+    for cand in (stem + ".chapters.txt", stem + ".txt", stem + ".xml", stem + ".chapters.xml"):
+        p = os.path.join(d, cand)
+        if os.path.isfile(p):
+            return {"chapters": p}
+    return {"chapters": ""}
+
+
+def handle_detect_chapters(q):
+    return detect_chapters((q.get("path") or [""])[0])
+
+
 # ---------------- 字幕编码预处理 ----------------
 BOM_UTF8 = bytes([239, 187, 191])
 BOM_UTF16 = (bytes([255, 254]), bytes([254, 255]))
@@ -186,6 +203,7 @@ def handle_prep(body):
 
 
 handlers = {
-    "GET": {"/api/probe": handle, "/api/match_subs": handle_match, "/api/detect_fonts_dir": handle_fonts_dir},
+    "GET": {"/api/probe": handle, "/api/match_subs": handle_match, "/api/detect_fonts_dir": handle_fonts_dir,
+            "/api/detect_chapters": handle_detect_chapters},
     "POST": {"/api/prep_subs": handle_prep},
 }

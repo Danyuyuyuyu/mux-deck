@@ -1,5 +1,5 @@
 /* ==================== 批量封装 ==================== */
-const batchItems = [];  // {video, sc, tc}
+const batchItems = [];  // {video, sc, tc, chapters}
 /* 队列持久化：批量列表与公共选项存 localStorage（断点续跑：页面刷新/服务重启后自动恢复） */
 function saveBatchQueue() {
   try {
@@ -37,6 +37,11 @@ function renderBatch() {
           '<button type="button" class="btn icon-btn" title="浏览繁体字幕" aria-label="浏览繁体字幕" onclick="batchBrowse(' + i + ',\'tc\')">' + ic('folderOpen') + '</button>' +
           '<button type="button" class="btn icon-btn ghost" title="移除繁体字幕" aria-label="移除繁体字幕" onclick="batchDelSub(' + i + ',\'tc\')">' + ic('trash') + '</button>' +
         '</div>' +
+        '<span class="sub-badge ch">章</span>' +
+        '<div class="b-sub"><input id="b_c_' + i + '" type="text" value="' + esc(it.chapters || '') + '" placeholder="章节文件（自动匹配视频旁同名 txt/xml，可留空）" autocomplete="off">' +
+          '<button type="button" class="btn icon-btn" title="浏览章节文件" aria-label="浏览章节文件" onclick="batchBrowse(' + i + ',\'chapters\')">' + ic('folderOpen') + '</button>' +
+          '<button type="button" class="btn icon-btn ghost" title="移除章节" aria-label="移除章节" onclick="batchDelSub(' + i + ',\'chapters\')">' + ic('trash') + '</button>' +
+        '</div>' +
       '</div>';
     list.appendChild(div);
     var vin = $('b_v_' + i);
@@ -48,7 +53,9 @@ function renderBatch() {
       var m = await identify(v);
       if (m.sc && !$('b_s_' + i).value) $('b_s_' + i).value = m.sc;
       if (m.tc && !$('b_t_' + i).value) $('b_t_' + i).value = m.tc;
+      if (m.chapters && !$('b_c_' + i).value) $('b_c_' + i).value = m.chapters;
       batchItems[i].sc = $('b_s_' + i).value; batchItems[i].tc = $('b_t_' + i).value;
+      batchItems[i].chapters = $('b_c_' + i).value;
       saveBatchQueue();
       refreshBatchSticky();
     });
@@ -57,18 +64,21 @@ function renderBatch() {
   saveBatchQueue();
 }
 function batchBrowse(i, kind) {
-  const id = kind === 'video' ? 'b_v_' + i : kind === 'sc' ? 'b_s_' + i : 'b_t_' + i;
-  openBrowser(v => { $('b_' + kind.charAt(0) + '_' + i).value = v; if (kind === 'video') { batchItems[i].video = v; fireChange($('b_v_' + i)); } }, kind === 'video' ? 'video' : 'sub', $('b_' + kind.charAt(0) + '_' + i).value, kind === 'video' ? 'video' : 'sub');
+  const id = kind === 'video' ? 'b_v_' + i : kind === 'sc' ? 'b_s_' + i : kind === 'tc' ? 'b_t_' + i : 'b_c_' + i;
+  openBrowser(v => { $(id).value = v; if (kind === 'video') { batchItems[i].video = v; fireChange($('b_v_' + i)); } else { batchItems[i][kind] = v; saveBatchQueue(); } },
+    kind === 'video' ? 'video' : kind === 'chapters' ? 'any' : 'sub', $(id).value, kind === 'video' ? 'video' : kind);
 }
 function batchDel(i) { batchItems.splice(i, 1); renderBatch(); }   // renderBatch 内含 saveBatchQueue
-/* 移除行内字幕（输入框与数据同步清空，sticky 即时刷新） */
+/* 移除行内字幕/章节（输入框与数据同步清空，sticky 即时刷新） */
 function batchDelSub(i, kind) {
-  const inp = $('b_' + (kind === 'sc' ? 's' : 't') + '_' + i);
+  const id = kind === 'video' ? 'b_v_' + i : kind === 'sc' ? 'b_s_' + i : kind === 'tc' ? 'b_t_' + i : 'b_c_' + i;
+  const inp = $(id);
   if (!inp) return;
   inp.value = '';
   batchItems[i][kind] = '';
   lastBatchResult = null;
   refreshBatchSticky();
+  saveBatchQueue();
 }
 $('btnBatchAdd').onclick = () => { batchItems.push({video:'', sc:'', tc:''}); renderBatch(); };
 
@@ -155,10 +165,11 @@ $('btnMatchAll').onclick = async () => {
     let hit = 0, miss = 0, noVideo = 0, hitSc = 0, hitTc = 0, firstId = null;
     await Promise.all(batchItems.map(async function (it) {
       if (!it.video) { noVideo++; return; }
-      const id = await identify(it.video);   // 统一识别：字幕 + 字体目录
+      const id = await identify(it.video);   // 统一识别：字幕 + 字体目录 + 章节
       if (!firstId) firstId = id;
       if (id.sc) hitSc++;
       if (id.tc) hitTc++;
+      if (id.chapters && !it.chapters) it.chapters = id.chapters;
       const matched = !!(id.sc || id.tc);
       if (id.sc && !it.sc) it.sc = id.sc;
       if (id.tc && !it.tc) it.tc = id.tc;
@@ -190,7 +201,7 @@ function addBatchVideo(video, subPool, matched) {
   }
   if (!sc && matched && matched.sc) sc = matched.sc;
   if (!tc && matched && matched.tc) tc = matched.tc;
-  batchItems.push({video, sc, tc});
+  batchItems.push({video, sc, tc, chapters: (matched && matched.chapters) || ''});
 }
 $('btnBatchStart').onclick = async () => {
   if (bJob) {
@@ -198,7 +209,7 @@ $('btnBatchStart').onclick = async () => {
     await api('/api/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: bJob }) });
     return;
   }
-  batchItems.forEach((it, i) => { it.video = $('b_v_' + i).value.trim(); it.sc = $('b_s_' + i).value.trim(); it.tc = $('b_t_' + i).value.trim(); });
+  batchItems.forEach((it, i) => { it.video = $('b_v_' + i).value.trim(); it.sc = $('b_s_' + i).value.trim(); it.tc = $('b_t_' + i).value.trim(); it.chapters = ($('b_c_' + i) ? $('b_c_' + i).value.trim() : ''); });
   let items = batchItems.filter(it => it.video);
   if (!items.length) { alert('批量列表为空'); return; }
   let autoMatched = 0;
@@ -294,7 +305,7 @@ function rerunFailed(i) {
   const it = batchItems[i];
   if (!it || !it.video) { alert('找不到对应列表项（列表可能已被修改）'); return; }
   batchItems.splice(0, batchItems.length);
-  batchItems.push({ video: it.video, sc: it.sc || '', tc: it.tc || '' });
+  batchItems.push({ video: it.video, sc: it.sc || '', tc: it.tc || '', chapters: it.chapters || '' });
   renderBatch();
   setStatus('已重组为单项队列并开始重跑：' + it.video.split(/[\\/]/).pop(), 'ok');
   $('btnBatchStart').click();
@@ -305,7 +316,7 @@ function rerunFailed(i) {
     const q = JSON.parse(localStorage.getItem('muxui_batch_queue') || 'null');
     if (!q) return;
     (q.items || []).forEach(function (it) {
-      if (it && (it.video || it.sc || it.tc)) batchItems.push({ video: it.video || '', sc: it.sc || '', tc: it.tc || '' });
+      if (it && (it.video || it.sc || it.tc)) batchItems.push({ video: it.video || '', sc: it.sc || '', tc: it.tc || '', chapters: it.chapters || '' });
     });
     if (!batchItems.length) return;
     if (q.b_fonts) $('b_fonts').value = q.b_fonts;
