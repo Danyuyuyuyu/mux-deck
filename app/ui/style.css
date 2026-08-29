@@ -314,23 +314,32 @@
   .sticky-note .sticky-txt { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
   .sticky-inner .btn { flex:none; }
 
-  /* -------- 单个封装：底部固定任务状态条（仅视觉重构，逻辑复用原 sticky 机制） -------- */
-  #stickySingle {
+  /* -------- 底部固定任务状态条（单个封装 + 批量封装；仅视觉重构，逻辑复用原 sticky 机制） -------- */
+  #stickySingle, #stickyBatch {
     position:fixed; bottom:0; left:0; right:0; z-index:60;
     margin-top:0; padding:0 24px 14px; pointer-events:none;
   }
-  #stickySingle .sticky-inner {
+  #stickySingle .sticky-inner, #stickyBatch .sticky-inner {
     pointer-events:auto; max-width:1152px; margin:0 auto;
     height:66px; padding:0 20px; gap:20px; border-radius:14px;
   }
-  body.single-active .main-inner { padding-bottom:104px; }   /* 固定栏让位，不遮挡页尾内容 */
+  body.single-active .main-inner, body.batch-active .main-inner { padding-bottom:104px; }   /* 固定栏让位，不遮挡页尾内容 */
 
   /* 左侧状态区：定宽，避免文字变化时进度条跳动 */
   #stickySingle .sticky-note { flex:none; width:264px; }
-  #stickySingle .sticky-note .ic { font-size:15px; }
+  #stickyBatch .sticky-note { flex:none; width:200px; }
+  #stickySingle .sticky-note .ic, #stickyBatch .sticky-note .ic { font-size:15px; }
+
+  /* 当前文件区（批量特有：辅助文字 + 短文件名，超长省略） */
+  .sp-cur { flex:none; max-width:320px; min-width:0; display:flex; flex-direction:column; gap:2px; }
+  .sp-cur-label { font-size:11.5px; color:var(--text-secondary); }
+  .sp-cur-name { display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--text-primary); min-width:0; }
+  .sp-cur-name > span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sp-file-ic { flex:none; display:inline-flex; color:var(--text-secondary); }
+  .sp-file-ic .ic { font-size:13px; }
 
   /* 中部：线性进度条（视觉重点） */
-  #stickySingle .sp-block { flex:1; min-width:180px; max-width:420px; display:flex; flex-direction:column; gap:6px; }
+  .sp-block { flex:1; min-width:160px; max-width:400px; display:flex; flex-direction:column; gap:6px; }
   .sp-head { display:flex; align-items:baseline; gap:8px; }
   .sp-label { font-size:13px; font-weight:500; color:var(--text-secondary); }
   .sp-pct { margin-left:auto; font-size:16px; font-weight:600; color:var(--primary); font-variant-numeric:tabular-nums; }
@@ -340,7 +349,7 @@
     transition:width .4s ease; position:relative; overflow:hidden;
   }
   /* 运行中的轻微流动高光（克制：细白光带缓慢平移） */
-  #stickySingle .sp-block.run .sp-fill::after {
+  .sp-block.run .sp-fill::after {
     content:''; position:absolute; inset:0;
     background:linear-gradient(90deg, transparent, rgba(255,255,255,0.28), transparent);
     background-size:160px 100%; background-repeat:no-repeat;
@@ -348,23 +357,31 @@
   }
   @keyframes progressShimmer { 0% { background-position:-160px 0; } 100% { background-position:calc(100% + 160px) 0; } }
 
-  /* 右侧时间信息（轻量化：小字 + 竖分隔线） */
-  #stickySingle .sp-times { flex:none; display:flex; align-items:center; gap:12px; }
+  /* 文件完成数量（批量特有：数字突出、单位灰色，不做成 badge） */
+  .sp-count { flex:none; display:flex; align-items:baseline; gap:5px; white-space:nowrap; }
+  .sp-count-num { font-size:14px; font-weight:600; color:var(--text-primary); font-variant-numeric:tabular-nums; }
+  .sp-count-unit { font-size:12px; color:var(--text-secondary); }
+
+  /* 时间信息（轻量化：小字 + 竖分隔线） */
+  #stickySingle .sp-times, #stickyBatch .sp-times { flex:none; display:flex; align-items:center; gap:12px; }
   .sp-time { display:flex; align-items:baseline; gap:6px; white-space:nowrap; }
   .sp-tlabel { font-size:12px; color:var(--text-secondary); }
   .sp-tval { font-size:12.5px; color:var(--text-primary); font-family:var(--mono); font-variant-numeric:tabular-nums; }
   .sp-vsep { width:1px; height:16px; background:var(--border); flex:none; }
 
-  /* 窄屏：先隐藏时间区，进度条自适应收缩，按钮永不挤压 */
+  /* 窄屏：先压缩/隐藏当前文件名，再隐藏时间区；进度条自适应收缩，按钮永不挤压 */
+  @media (max-width: 1240px) {
+    #stickyBatch .sp-cur { display:none !important; }
+  }
   @media (max-width: 1020px) {
-    #stickySingle .sp-times { display:none; }
+    #stickySingle .sp-times, #stickyBatch .sp-times { display:none; }
   }
   @media (max-width: 760px) {
-    #stickySingle { padding:0 12px 10px; }
-    #stickySingle .sticky-inner { height:auto; flex-wrap:wrap; gap:10px 14px; padding:10px 14px; }
-    #stickySingle .sticky-note { width:auto; flex:1 1 100%; }
-    #stickySingle .sp-block { flex:1 1 auto; max-width:none; }
-    #stickySingle .btn { flex:1 1 100%; }
+    #stickySingle, #stickyBatch { padding:0 12px 10px; }
+    #stickySingle .sticky-inner, #stickyBatch .sticky-inner { height:auto; flex-wrap:wrap; gap:10px 14px; padding:10px 14px; }
+    #stickySingle .sticky-note, #stickyBatch .sticky-note { width:auto; flex:1 1 100%; }
+    #stickySingle .sp-block, #stickyBatch .sp-block { flex:1 1 auto; max-width:none; }
+    #stickySingle .btn, #stickyBatch .btn { flex:1 1 100%; }
   }
 
   /* ================= console ================= */

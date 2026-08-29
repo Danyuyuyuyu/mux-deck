@@ -292,9 +292,22 @@
       <div class="sticky-bar" id="stickyBatch">
         <div class="sticky-inner">
           <div class="sticky-note info" id="batchStickyNote"><span data-ic="info" aria-hidden="true"></span><span class="sticky-txt">批量列表为空</span></div>
+          <div class="sp-cur" id="bStickyCur" style="display:none">
+            <div class="sp-cur-label">正在封装</div>
+            <div class="sp-cur-name"><span class="sp-file-ic" data-ic="film" aria-hidden="true"></span><span id="bStickyCurName"></span></div>
+          </div>
+          <div class="sp-block" id="bStickyProgress">
+            <div class="sp-head"><span class="sp-label">总体进度</span><span class="sp-pct" id="bStickyPct">--</span></div>
+            <div class="sp-track" id="batchStickyBarWrap"><div class="sp-fill" id="batchStickyBar"></div></div>
+          </div>
+          <div class="sp-count" id="bStickyCount"><span class="sp-count-num" id="bStickyCountNum">0 / 0</span><span class="sp-count-unit">个文件</span></div>
+          <div class="sp-times" id="bStickyTimes">
+            <span class="sp-time"><span class="sp-tlabel">已用时</span><span class="sp-tval" id="bStickyElapsed">--:--:--</span></span>
+            <span class="sp-vsep" aria-hidden="true"></span>
+            <span class="sp-time"><span class="sp-tlabel">预计剩余</span><span class="sp-tval" id="bStickyEta">--:--:--</span></span>
+          </div>
           <button class="btn lg primary" id="btnBatchStart" disabled><span data-ic="play" aria-hidden="true"></span>开始批量封装</button>
         </div>
-        <div class="progress sm" id="batchStickyBarWrap" style="display:none"><div id="batchStickyBar"></div></div>
       </div>
     </section>
 

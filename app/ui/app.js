@@ -176,6 +176,7 @@ function switchMode(mode) {
   document.querySelectorAll('.mode').forEach(function (m) { m.classList.toggle('active', m.id === 'mode-' + mode); });
   document.querySelectorAll('.mode-tab').forEach(function (b) { b.classList.toggle('active', b.dataset.mode === mode); });
   document.body.classList.toggle('single-active', mode === 'single');   // 单封装固定状态条：给页尾让位
+  document.body.classList.toggle('batch-active', mode === 'batch');     // 批量固定状态条同理
   refreshSticky();
   refreshBatchSticky();
 }
@@ -316,7 +317,7 @@ function refreshBatchSticky() {
   } else {
     note.className = 'sticky-note ok';
     note.firstElementChild.innerHTML = ic('checkCircle');
-    txt.textContent = '已就绪 ' + filled + ' 个任务 · 全部资源准备就绪';
+    txt.textContent = '已准备 ' + filled + ' 个文件';
     btn.disabled = false;
   }
 }
@@ -362,12 +363,7 @@ function syncDefaultBadge() {
   new MutationObserver(function () {
     $('stickyBar').style.width = $('singleBar').style.width;   // 镜像真实进度（观察内层 bar 的宽度变化）
   }).observe($('singleBar'), { attributes: true, attributeFilter: ['style'] });
-  new MutationObserver(function () {
-    if ($('batchProgress').style.display !== 'none') {
-      $('batchStickyBarWrap').style.display = '';
-      $('batchStickyBar').style.width = $('batchBar').style.width;
-    }
-  }).observe($('batchBar'), { attributes: true, attributeFilter: ['style'] });
+  // 批量状态条的进度由 batch.js 的 onAny 直接写入（总体进度含当前文件内部进度，非简单文件计数）
 })();
 
 /* ==================== 文件浏览器 ==================== */

@@ -212,6 +212,14 @@ $('btnBatchStart').onclick = async () => {
   const r = await api('/api/batch', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   if (r.error) { $('batchState').textContent = '错误：' + r.error; return; }
   bJob = r.job;
+  bStickyStartTs = Date.now();
+  $('bStickyProgress').classList.add('run');
+  $('batchStickyBar').style.width = '0%';
+  $('bStickyPct').textContent = '--';
+  $('bStickyCountNum').textContent = '0 / ' + items.length;
+  $('bStickyCur').style.display = 'none';
+  $('bStickyElapsed').textContent = '00:00:00';
+  $('bStickyEta').textContent = '计算中…';
   setRunButton($('btnBatchStart'), true, '停止批量', '开始批量封装');
   showLogTab('batch'); setLog('batch', '');
   $('batchBar').style.width = '0%';
@@ -220,13 +228,28 @@ $('btnBatchStart').onclick = async () => {
     setRunButton($('btnBatchStart'), false, '停止批量', '开始批量封装');
     $('batchState').textContent = stateText;
     $('batchProgress').style.display = 'none';
-    $('batchStickyBarWrap').style.display = 'none';
+    bStickyFreeze();
     setStatus(statusMsg, statusCls);
-    lastBatchResult = lastR;
+    // 终态：用结果表填充文件计数/百分比，并按 成功/部分失败/全部失败 生成状态文案
+    const res = (s && s.results) || [];
+    let last = lastR;
+    if (res.length) {
+      const okN = res.filter(r => r.ok).length, failN = res.length - okN;
+      const pct = okN === res.length ? 100 : Math.round(okN / res.length * 100);
+      $('bStickyCountNum').textContent = res.length + ' / ' + res.length;
+      $('bStickyPct').textContent = pct + '%';
+      $('batchStickyBar').style.width = pct + '%';
+      if (s && (s.status === 'done' || s.status === 'error')) {
+        last = okN === res.length ? { cls: 'ok', icon: 'checkCircle', text: '批量封装完成 · ' + res.length + ' 个文件' }
+          : okN === 0 ? { cls: 'err', icon: 'xCircle', text: '批量封装失败' }
+          : { cls: 'err', icon: 'alertTriangle', text: '已完成 ' + okN + ' 个，失败 ' + failN + ' 个' };
+      }
+    }
+    lastBatchResult = last;
     refreshBatchSticky();
   };
   startTaskPolling({
-    job, interval: 1200,
+    job: bJob, interval: 1200,
     onAny: s => {
       if (s.total) $('batchBar').style.width = Math.round(s.current / s.total * 100) + '%';
       $('batchState').textContent = s.total ? ('第 ' + s.current + ' / ' + s.total + ' 个：' + (s.current_video || '') + (s.progress != null ? ('  当前项 ' + s.progress + '%') : '')) : '';
@@ -238,16 +261,41 @@ $('btnBatchStart').onclick = async () => {
       }
     },
     onTick: s => {
-      const st = muxStage(s);
-      const bstage = st.progress != null ? ('（' + st.progress + '%）') : st.subsetting ? '（子集化中）' : '';
-      setStickyRun($('batchStickyNote'), s.total ? ('批量封装中：第 ' + s.current + ' / ' + s.total + ' 个' + bstage) : '批量封装中…');
+      setStickyRun($('batchStickyNote'), '正在批量封装');   // 当前文件/计数/进度在各自区块展示
+      bStickyUpdate(s);
     },
-    onDone: s => { beep(); bfin(s, { cls: 'ok', icon: 'checkCircle', text: '批量封装完成 · 全部成功' }, '全部完成', '批量封装完成', 'ok'); },
+    onDone: s => { beep(); bfin(s, { cls: 'ok', icon: 'checkCircle', text: '批量封装完成' }, '全部完成', '批量封装完成', 'ok'); },
     onError: s => bfin(s, { cls: 'err', icon: 'xCircle', text: '批量封装结束（有失败项）' }, '完成，但有失败项', '批量封装结束（有失败项）', 'err'),
     onKilled: s => bfin(s, { cls: 'info', icon: 'info', text: '批量已停止' }, '已停止', '批量已停止', 'err'),
     onLost: () => bfin(null, { cls: 'err', icon: 'xCircle', text: '连接丢失，请刷新' }, '连接丢失，请刷新', '连接丢失，请刷新', 'err')
   });
 };
 let bJob = null;
+/* ===== 底部批量状态条：总体进度 / 当前文件 / 耗时与剩余（纯展示，不改任务逻辑） ===== */
+let bStickyStartTs = 0;   // 本轮批量开始时刻
+function bStickyOverall(s) {   // 总体进度 = (已完成文件数 + 当前文件内部进度) / 总数，区别于单文件进度
+  if (!s.total) return null;
+  const cur = (s.progress != null ? s.progress : 0) / 100;
+  return Math.min(100, Math.round((s.current - 1 + cur) / s.total * 100));
+}
+function bStickyUpdate(s) {
+  const ov = bStickyOverall(s);
+  $('bStickyPct').textContent = ov != null ? ov + '%' : '--';
+  if (ov != null) $('batchStickyBar').style.width = ov + '%';
+  if (s.total) $('bStickyCountNum').textContent = Math.min(Math.max(s.current || 1, 1), s.total) + ' / ' + s.total;
+  if (s.current_video) {
+    $('bStickyCurName').textContent = s.current_video.split(/[\\/]/).pop();
+    $('bStickyCur').style.display = '';
+  }
+  const elapsed = Date.now() - bStickyStartTs;
+  $('bStickyElapsed').textContent = fmtDur(elapsed);
+  if (ov != null && ov > 0) $('bStickyEta').textContent = fmtDur(elapsed / ov * (100 - ov));
+  else $('bStickyEta').textContent = '计算中…';
+}
+function bStickyFreeze() {   // 终态：耗时定格、剩余清空、当前文件与高光退场
+  $('bStickyProgress').classList.remove('run');
+  $('bStickyCur').style.display = 'none';
+  $('bStickyEta').textContent = '--:--:--';
+}
 $('btnBFonts').onclick = () => openBrowser(v => $('b_fonts').value = v, 'dir', $('b_fonts').value, 'fonts');
 $('btnBOut').onclick = () => openBrowser(v => $('b_out').value = v, 'dir', $('b_out').value, 'out');
