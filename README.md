@@ -69,7 +69,8 @@ py -3 scripts\autostart.py install                                        # 开�
 
 ```
 mux-deck/
-├── app/                                       # 服务端：server.py 薄路由 + features/ 功能模块 + core.py 共享底座 + 前端 + config.json
+├── app/                                       # 服务端：server.py 薄路由 + features/ 功能模块 + core.py 共享底座 + config.json
+│   └── ui/                                    # 前端资源（拆分后，零构建）：index.html 骨架 + style.css + 按功能切分的 js（app/batch/extract/preview/env/init），server 白名单静态路由直接提供
 ├── start_mux_ui.bat / install_autostart.bat / 安装环境.bat / 环境自检.bat   # 操作入口（根目录，纯 ASCII 薄壳）
 ├── scripts/                                   # 各功能独立 CLI（见上节）
 ├── bin/                                       # 第三方运行时（scripts\bootstrap.py 获取，不随 git 分发）

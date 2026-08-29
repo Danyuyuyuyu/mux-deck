@@ -11,10 +11,27 @@ from app import core
 from app.features import ROUTES, find
 
 HOST = "127.0.0.1"
+UI_DIR = os.path.join(BASE, "app", "ui")          # 拆分后的前端资源（index.html + style.css + 各 js）
+STATIC_FILES = {
+    "style.css": "text/css; charset=utf-8",
+    "app.js": "application/javascript; charset=utf-8",
+    "batch.js": "application/javascript; charset=utf-8",
+    "extract.js": "application/javascript; charset=utf-8",
+    "preview.js": "application/javascript; charset=utf-8",
+    "env.js": "application/javascript; charset=utf-8",
+    "init.js": "application/javascript; charset=utf-8",
+}
 
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
+
+    def _serve_ui(self, name, ctype):
+        try:
+            with open(os.path.join(UI_DIR, name), "rb") as f:
+                self._send(200, f.read(), ctype)
+        except Exception as ex:
+            self._send(404, {"error": str(ex)})
 
     def _send(self, code, body, ctype="application/json; charset=utf-8"):
         if isinstance(body, dict):
@@ -48,11 +65,11 @@ class H(BaseHTTPRequestHandler):
             self.end_headers()
             return
         if u.path in ("/", "/index.html"):
-            try:
-                with open(os.path.join(BASE, "app", "index.html"), "rb") as f:
-                    self._send(200, f.read(), "text/html; charset=utf-8")
-            except Exception as ex:
-                self._send(500, {"error": str(ex)})
+            self._serve_ui("index.html", "text/html; charset=utf-8")
+            return
+        name = u.path.lstrip("/")
+        if name in STATIC_FILES:
+            self._serve_ui(name, STATIC_FILES[name])
             return
         fn = find("GET", u.path)
         if fn is None:

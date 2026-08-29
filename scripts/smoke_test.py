@@ -143,11 +143,17 @@ def main():
     except Exception as ex:
         check("stop(不存在任务)", False, str(ex))
 
-    # 11) 前端页面可达且带双轨切换器 + 环境引导弹窗
+    # 11) 前端页面可达（拆分后 index.html 为骨架）：关键元素 + 各静态资源可达
     try:
         body = op.open("http://127.0.0.1:8765/", timeout=10).read().decode("utf-8", errors="replace")
-        check("前端页面", len(body) > 50000 and "cfg_tool" in body and "envList" in body and "btnEnvInstall" in body,
-              "%d bytes" % len(body))
+        ui_ok = "cfg_tool" in body and "envList" in body and "btnEnvInstall" in body
+        need = ["style.css", "app.js", "batch.js", "extract.js", "preview.js", "env.js", "init.js"]
+        sizes = {}
+        for f in need:
+            r = op.open("http://127.0.0.1:8765/" + f, timeout=10)
+            sizes[f] = len(r.read())
+        all_ok = ui_ok and all(sizes.get(f, 0) > 100 for f in need)
+        check("前端页面", all_ok, "%d bytes + 静态资源 %s" % (len(body), "OK" if all_ok else str(sizes)))
     except Exception as ex:
         check("前端页面", False, str(ex))
 
