@@ -367,6 +367,10 @@
   .b-btns { display:flex; gap:6px; flex:none; }
   .b-grid { display:grid; grid-template-columns:auto 1fr; gap:8px 10px; align-items:center; }
   .b-grid input { min-width:0; height:34px; }
+  .b-sub { display:flex; gap:6px; align-items:center; min-width:0; }
+  .b-sub input { flex:1; height:34px; }
+  .b-sub .icon-btn { flex:none; height:30px; width:30px; }
+  .b-sub .icon-btn .ic { width:14px; height:14px; }
 
   /* ================= preview / result ================= */
   .result-zone { margin-top:16px; }

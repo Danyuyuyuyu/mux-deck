@@ -781,6 +781,9 @@ $('tc_sub').addEventListener('input', function () { lastResult = null; syncSubSt
 $('sc_name').addEventListener('input', function () { });
 $('btnSc').onclick = () => openBrowser(v => { $('sc_sub').value = v; fireChange($('sc_sub')); }, 'sub', $('sc_sub').value, 'sub');
 $('btnTc').onclick = () => openBrowser(v => { $('tc_sub').value = v; fireChange($('tc_sub')); }, 'sub', $('tc_sub').value, 'sub');
+/* 移除字幕：清空输入并联动状态（轨道名复位默认、编码徽章清除、sticky 刷新） */
+$('btnScClear').onclick = () => { $('sc_sub').value = ''; $('sc_name').value = 'SC'; $('sc_enc').textContent = ''; fireChange($('sc_sub')); };
+$('btnTcClear').onclick = () => { $('tc_sub').value = ''; $('tc_name').value = 'TC'; $('tc_enc').textContent = ''; fireChange($('tc_sub')); };
 $('btnFonts').onclick = () => openBrowser(v => $('fonts_dir').value = v, 'dir', $('fonts_dir').value, 'fonts');
 $('btnAudio').onclick = () => openBrowser(v => $('audio').value = v, 'audio', $('audio').value, 'audio');
 $('btnOut').onclick = () => openBrowser(v => $('out_dir').value = v, 'dir', $('out_dir').value, 'out');

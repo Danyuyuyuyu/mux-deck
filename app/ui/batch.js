@@ -15,8 +15,16 @@ function renderBatch() {
         '</span>' +
       '</div>' +
       '<div class="b-grid">' +
-        '<span class="sub-badge sc">SC</span>' + '<input id="b_s_' + i + '" type="text" value="' + esc(it.sc) + '" placeholder="可选" autocomplete="off">' +
-        '<span class="sub-badge tc">TC</span>' + '<input id="b_t_' + i + '" type="text" value="' + esc(it.tc) + '" placeholder="可选" autocomplete="off">' +
+        '<span class="sub-badge sc">SC</span>' +
+        '<div class="b-sub"><input id="b_s_' + i + '" type="text" value="' + esc(it.sc) + '" placeholder="可选" autocomplete="off">' +
+          '<button type="button" class="btn icon-btn" title="浏览简体字幕" aria-label="浏览简体字幕" onclick="batchBrowse(' + i + ',\'sc\')">' + ic('folderOpen') + '</button>' +
+          '<button type="button" class="btn icon-btn ghost" title="移除简体字幕" aria-label="移除简体字幕" onclick="batchDelSub(' + i + ',\'sc\')">' + ic('trash') + '</button>' +
+        '</div>' +
+        '<span class="sub-badge tc">TC</span>' +
+        '<div class="b-sub"><input id="b_t_' + i + '" type="text" value="' + esc(it.tc) + '" placeholder="可选" autocomplete="off">' +
+          '<button type="button" class="btn icon-btn" title="浏览繁体字幕" aria-label="浏览繁体字幕" onclick="batchBrowse(' + i + ',\'tc\')">' + ic('folderOpen') + '</button>' +
+          '<button type="button" class="btn icon-btn ghost" title="移除繁体字幕" aria-label="移除繁体字幕" onclick="batchDelSub(' + i + ',\'tc\')">' + ic('trash') + '</button>' +
+        '</div>' +
       '</div>';
     list.appendChild(div);
     var vin = $('b_v_' + i);
@@ -39,6 +47,15 @@ function batchBrowse(i, kind) {
   openBrowser(v => { $('b_' + kind.charAt(0) + '_' + i).value = v; if (kind === 'video') { batchItems[i].video = v; fireChange($('b_v_' + i)); } }, kind === 'video' ? 'video' : 'sub', $('b_' + kind.charAt(0) + '_' + i).value, kind === 'video' ? 'video' : 'sub');
 }
 function batchDel(i) { batchItems.splice(i, 1); renderBatch(); }
+/* 移除行内字幕（输入框与数据同步清空，sticky 即时刷新） */
+function batchDelSub(i, kind) {
+  const inp = $('b_' + (kind === 'sc' ? 's' : 't') + '_' + i);
+  if (!inp) return;
+  inp.value = '';
+  batchItems[i][kind] = '';
+  lastBatchResult = null;
+  refreshBatchSticky();
+}
 $('btnBatchAdd').onclick = () => { batchItems.push({video:'', sc:'', tc:''}); renderBatch(); };
 
 /* 添加文件：浏览器选视频 → 统一识别（字幕 + 字体目录，逻辑见 identify.js） */
