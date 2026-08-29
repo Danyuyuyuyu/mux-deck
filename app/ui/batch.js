@@ -124,6 +124,13 @@ $('btnBatchClear').onclick = () => {
   $('b_backup').checked = true;  // 备份原件（默认勾选）
   $('b_sc_default').value = ''; $('b_tc_default').value = '';   // 字幕旗标
   $('b_sc_forced').checked = false; $('b_tc_forced').checked = false;
+  // 底部批量状态条一并复位（与启动时初态一致）
+  $('bStickyPct').textContent = '--';
+  $('batchStickyBar').style.width = '0%';
+  $('bStickyCountNum').textContent = '0 / 0';
+  $('bStickyElapsed').textContent = '--:--:--';
+  $('bStickyEta').textContent = '--:--:--';
+  $('bStickyCur').style.display = 'none';
   refreshBatchSticky();
   setStatus('已重置批量封装设置（输出文件保留在磁盘）', 'ok');
 };

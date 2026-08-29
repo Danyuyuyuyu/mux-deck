@@ -327,7 +327,7 @@
 
   /* 左侧状态区：定宽，避免文字变化时进度条跳动 */
   #stickySingle .sticky-note { flex:none; width:264px; }
-  #stickyBatch .sticky-note { flex:0 1 auto; max-width:220px; }   /* 随状态文字自适应，把空间让给当前文件名 */
+  #stickyBatch .sticky-note { flex:0 1 auto; }   /* 随状态文字自适应，把空间让给当前文件名 */
   #stickySingle .sticky-note .ic, #stickyBatch .sticky-note .ic { font-size:15px; }
 
   /* 当前文件区（批量特有：辅助文字 + 短文件名，超长省略；flex-shrink:1 允许收缩，防止挤出不符 */
@@ -338,8 +338,8 @@
   .sp-file-ic { flex:none; display:inline-flex; color:var(--text-secondary); }
   .sp-file-ic .ic { font-size:13px; }
 
-  /* 中部：线性进度条（视觉重点） */
-  .sp-block { flex:1; min-width:120px; max-width:400px; display:flex; flex-direction:column; gap:6px; }
+  /* 中部：线性进度条（视觉重点）；宽度动态伸缩，吃满剩余空间，右侧计数/时间/按钮位置稳定 */
+  .sp-block { flex:1; min-width:120px; display:flex; flex-direction:column; gap:6px; }
   .sp-head { display:flex; align-items:baseline; gap:8px; }
   .sp-label { font-size:13px; font-weight:500; color:var(--text-secondary); }
   .sp-pct { margin-left:auto; font-size:16px; font-weight:600; color:var(--primary); font-variant-numeric:tabular-nums; }
