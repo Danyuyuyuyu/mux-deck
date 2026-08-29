@@ -82,6 +82,13 @@ $('btnPvVideo').onclick = () => openBrowser(v => $('pv_video').value = v, 'video
 $('btnPvSub').onclick = () => openBrowser(v => $('pv_sub').value = v, 'sub', $('pv_sub').value, 'sub');
 function pvClearTracks() {
   [...$('pv_subsel').options].forEach(o => { if (String(o.value).indexOf('track:') === 0) o.remove(); });
+  pvSyncSubInput();
+}
+/* 外部字幕输入框/浏览按钮仅在下拉=自定义路径时显示（选内封轨后隐藏） */
+function pvSyncSubInput() {
+  const ext = $('pv_subsel').value === 'custom';
+  $('pv_sub').style.display = ext ? '' : 'none';
+  $('btnPvSub').style.display = ext ? '' : 'none';
 }
 $('pv_video').addEventListener('change', pvClearTracks);
 $('btnPvTracks').onclick = async () => {
@@ -104,9 +111,9 @@ $('btnPvTracks').onclick = async () => {
       sel.appendChild(o);
       if (!first && ext !== 'sup') first = o.value;
     });
-    if (first) sel.value = first;
+    if (first) { sel.value = first; pvSyncSubInput(); }   // 程序赋值不触发 change，显隐需手动同步
     setStatus('已读取 ' + subs.length + ' 条内封字幕轨，可在「字幕」下拉中选择', 'ok');
   } catch (ex) { setStatus('内封轨道探测失败：' + ex, 'err'); }
 };
 $('btnPvFonts').onclick = () => openBrowser(v => $('pv_fonts').value = v, 'dir', $('pv_fonts').value, 'fonts');
-$('pv_subsel').onchange = () => { const ext = $('pv_subsel').value === 'custom'; $('pv_sub').style.display = ext ? '' : 'none'; $('btnPvSub').style.display = ext ? '' : 'none'; };
+$('pv_subsel').onchange = pvSyncSubInput;
