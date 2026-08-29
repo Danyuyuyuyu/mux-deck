@@ -70,7 +70,7 @@ py -3 app\tools\autostart.py install                                       # 开
 mux-deck/
 ├── app/                                       # 服务端：server.py 薄路由 + features/ 功能模块 + core.py 共享底座 + config.json
 │   ├── features/                              # Web 功能模块（browse/files/tracks/mux/extract/preview/misc/fonts/env）
-│   ├── ui/                                    # 前端资源（零构建）：index.html 骨架 + style.css + 按功能切分的 js，server 白名单静态路由直接提供
+│   ├── ui/                                    # 前端资源（零构建）：index.html 骨架 + style.css + 按功能切分的 js（app 核心 / identify 识别服务 / batch / extract / preview / env / init），server 白名单静态路由直接提供
 │   └── tools/                                 # 可独立执行的脚本/工具：mux_cli（封装引擎）/ bootstrap / batch_cli / smoke_test / selfcheck / font_dup_scan / autostart
 ├── start_mux_ui.bat / install_autostart.bat / 安装环境.bat / 环境自检.bat   # 操作入口（根目录，纯 ASCII 薄壳）
 ├── bin/                                       # 第三方运行时（app\tools\bootstrap.py 获取，不随 git 分发）
