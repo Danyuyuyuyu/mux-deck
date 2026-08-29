@@ -14,6 +14,10 @@ COMMON_KEYS = ("fonts_dir", "audio", "audio_mode", "keep_src_audio", "audio_lang
 
 # ---------------- 命令构造 ----------------
 
+def display_cmd(cmd):
+    """命令列表 -> 可复制执行的命令行（含空格的参数加引号）。"""
+    return " ".join(('"%s"' % c) if (" " in c) else c for c in cmd)
+
 def build_cmd(it, common):
     full = dict(common)
     for k, v in it.items():
@@ -141,13 +145,15 @@ def start_batch(body):
             state["current_video"] = it.get("video", "")
             log = os.path.join(jdir, "item_%02d.log" % (i + 1))
             try:
-                rc = core.run_to_file(build_cmd(it, common), log, jid=jid, stop_flag=state["stop_event"])
+                cmd = build_cmd(it, common)
+                state["last_cmd"] = display_cmd(cmd)   # 实际执行的封装命令（可复现/进流水线）
+                rc = core.run_to_file(cmd, log, jid=jid, stop_flag=state["stop_event"])
                 od = (common.get("out_dir") or "").strip()
                 out_path = os.path.join(od, os.path.basename(it.get("video", ""))) if od else it.get("video", "")
                 reason = "" if (rc == 0 or state.get("stopped")) else _fail_reason(core.read_tail(log, 200))
                 state["results"].append({"video": it.get("video", ""), "output": out_path,
                                          "ok": rc == 0 and not state.get("stopped"), "exit": rc,
-                                         "reason": reason})
+                                         "reason": reason, "cmd": state["last_cmd"]})
                 if rc != 0 and not state.get("stopped"):
                     state["failed"] += 1
             except Exception as ex:
@@ -195,7 +201,7 @@ def job_status(jid):
             "current": cur, "total": total_items, "failed": s.get("failed", 0),
             "current_video": s.get("current_video", ""), "progress": progress,
             "results": s.get("results", []), "result": s.get("result", ""), "log": merged,
-            "reason": _fail_reason(merged)}
+            "reason": _fail_reason(merged), "cmd": s.get("last_cmd", "")}
 
 def stop_job(jid):
     st = core.JOBS.get(jid)

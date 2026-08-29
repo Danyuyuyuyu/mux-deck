@@ -642,7 +642,8 @@ $('btnStart').onclick = async () => {
       if (s.progress != null) $('stickyPct').textContent = s.progress + '%';
     },
     onDone: s => { beep(); $('stickyPct').textContent = '100%'; fin(s, { cls: 'ok', icon: 'checkCircle', text: '封装完成' }, '封装完成', 'ok',
-      '<span class="t-sec">输出：</span><code class="mono" style="color:var(--text-primary)">' + esc(s.result || '') + '</code> <button class="btn small" data-open-dir="' + encodeURIComponent(s.result || '') + '">' + ic('arrowUpRight') + '打开文件夹</button>'); },
+      '<span class="t-sec">输出：</span><code class="mono" style="color:var(--text-primary)">' + esc(s.result || '') + '</code> <button class="btn small" data-open-dir="' + encodeURIComponent(s.result || '') + '">' + ic('arrowUpRight') + '打开文件夹</button>'
+      + (s.cmd ? ' <button class="btn small" data-cmd="' + b64e(s.cmd) + '">' + ic('terminal') + '查看命令</button>' : '')); },
     onError: s => { const reason = s.reason || ('退出码 ' + (s.exit ?? '?')); fin(s, { cls: 'err', icon: 'xCircle', text: '封装失败：' + reason }, '封装失败：' + reason, 'err',
       '<span class="chip err">' + ic('xCircle') + '<span>封装失败：' + esc(reason) + '</span></span>'); },
     onKilled: s => fin(s, { cls: 'info', icon: 'info', text: '任务已停止' }, '已停止', 'err',
@@ -869,6 +870,35 @@ function openDir(enc) { fetch('/api/open?path=' + enc); }
 document.addEventListener('click', function (e) {
   const el = e.target.closest('[data-open-dir]');
   if (el) openDir(el.dataset.openDir || '');
+});
+/* mkvmerge 命令查看/复制（结果区的 data-cmd 按钮，命令 base64 存于属性） */
+function b64e(s) { return btoa(unescape(encodeURIComponent(s))); }
+function b64d(s) { try { return decodeURIComponent(escape(atob(s))); } catch (e) { return ''; } }
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('[data-cmd]');
+  if (!btn) return;
+  const cmd = b64d(btn.dataset.cmd || '');
+  const old = document.getElementById('cmdPop');
+  if (old) old.remove();
+  if (btn.dataset.cmdOpen === '1') { btn.dataset.cmdOpen = ''; return; }   // 再点一次收起
+  btn.dataset.cmdOpen = '1';
+  const ov = document.createElement('div');
+  ov.id = 'cmdPop';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:120;display:flex;align-items:center;justify-content:center;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:18px 20px;max-width:860px;width:92%;box-shadow:0 10px 40px rgba(0,0,0,.5);';
+  box.innerHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;"><b>mkvmerge 封装命令</b><span class="t-cap">可直接复制到流水线/CI 复现本次封装</span><span style="flex:1"></span>'
+    + '<button class="btn small" id="cmdCopy">' + ic('download') + '<span>复制</span></button>'
+    + '<button class="btn small ghost" id="cmdClose">关闭</button></div>'
+    + '<pre class="log-pre" style="max-height:50vh;white-space:pre-wrap;word-break:break-all;margin:0">' + esc(cmd) + '</pre>';
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+  ov.addEventListener('click', ev => { if (ev.target === ov) ov.remove(); });
+  $('cmdClose').onclick = () => { ov.remove(); btn.dataset.cmdOpen = ''; };
+  $('cmdCopy').onclick = async () => {
+    try { await navigator.clipboard.writeText(cmd); $('cmdCopy').innerHTML = ic('check') + '<span>已复制</span>'; }
+    catch (ex) { setStatus('复制失败：' + ex, 'err'); }
+  };
 });
 /* ==================== 统一日志 / 任务控制台 ==================== */
 const logStore = { mux: '', batch: '', xt: '' };
