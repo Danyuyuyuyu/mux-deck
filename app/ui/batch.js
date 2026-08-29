@@ -1,6 +1,7 @@
 /* ==================== 批量封装 ==================== */
 const batchItems = [];  // {video, sc, tc}
 function renderBatch() {
+  lastBatchResult = null;   // 列表变更（增/删/清空）：清除上次批量结果
   const list = $('batchList'); list.innerHTML = '';
   batchItems.forEach((it, i) => {
     const div = document.createElement('div'); div.className = 'b-item';
@@ -20,6 +21,7 @@ function renderBatch() {
     list.appendChild(div);
     var vin = $('b_v_' + i);
     vin.addEventListener('change', async function () {
+      lastBatchResult = null;
       var v = vin.value.trim();
       batchItems[i].video = v;
       if (!v) return;
@@ -146,6 +148,10 @@ async function bPoll() {
       failCount = 0;
       if (s.total) $('batchBar').style.width = Math.round(s.current / s.total * 100) + '%';
       $('batchState').textContent = s.total ? ('第 ' + s.current + ' / ' + s.total + ' 个：' + (s.current_video || '') + (s.progress != null ? ('  当前项 ' + s.progress + '%') : '')) : '';
+      const bnote = $('batchStickyNote');
+      bnote.className = 'sticky-note run';
+      bnote.firstElementChild.innerHTML = ic('loader', 'spin');
+      bnote.querySelector('.sticky-txt').textContent = s.total ? ('批量封装中：第 ' + s.current + ' / ' + s.total + ' 个' + (s.progress != null ? '（' + s.progress + '%）' : '')) : '批量封装中…';
       setLog('batch', s.log);
       const resBox = $('batchResults');
       if (s.results && s.results.length) {
@@ -159,6 +165,11 @@ async function bPoll() {
         $('batchProgress').style.display = 'none';
         $('batchStickyBarWrap').style.display = 'none';
         setStatus(s.status === 'done' ? '批量封装完成' : (s.status === 'killed' ? '批量已停止' : '批量封装结束（有失败项）'), s.status === 'done' ? 'ok' : 'err');
+        lastBatchResult = s.status === 'done'
+          ? { cls: 'ok', icon: 'checkCircle', text: '批量封装完成 · 全部成功' }
+          : s.status === 'killed'
+            ? { cls: 'info', icon: 'info', text: '批量已停止' }
+            : { cls: 'err', icon: 'xCircle', text: '批量封装结束（有失败项）' };
         if (s.status === 'done') beep();
         refreshBatchSticky();
       }
@@ -171,6 +182,7 @@ async function bPoll() {
         $('batchProgress').style.display = 'none';
         $('batchStickyBarWrap').style.display = 'none';
         setStatus('连接丢失，请刷新', 'err');
+        lastBatchResult = { cls: 'err', icon: 'xCircle', text: '连接丢失，请刷新' };
         refreshBatchSticky();
       }
     }

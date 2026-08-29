@@ -213,6 +213,7 @@ let lastVideo = '';
 function wireVideo() {
   const inp = $('video');
   inp.onchange = function () {
+    lastResult = null;   // 输入变更：清除上次任务结果，恢复静态状态
     const v = inp.value.trim();
     if (v && v !== lastVideo) {
       // 视频已更换：旧字幕属于旧视频，清空防止重新匹配时张冠李戴
@@ -233,10 +234,18 @@ function wireVideo() {
 }
 
 /* ==================== 状态刷新（粘性操作条） ==================== */
+let lastResult = null;   // 最近一次任务结果（完成/失败/停止），输入变更后清除
 function refreshSticky() {
   const note = $('stickyNote'), txt = note.querySelector('.sticky-txt');
   const btn = $('btnStart');
   if (job) return;
+  if (lastResult) {
+    note.className = 'sticky-note ' + lastResult.cls;
+    note.firstElementChild.innerHTML = ic(lastResult.icon);
+    txt.textContent = lastResult.text;
+    btn.disabled = false;
+    return;
+  }
   const video = $('video').value.trim(), sc = $('sc_sub').value.trim(), tc = $('tc_sub').value.trim();
   if (!video) {
     note.className = 'sticky-note info';
@@ -255,10 +264,18 @@ function refreshSticky() {
     btn.disabled = false;
   }
 }
+let lastBatchResult = null;   // 最近一次批量任务结果，列表变更后清除
 function refreshBatchSticky() {
   const note = $('batchStickyNote'), txt = note.querySelector('.sticky-txt');
   const btn = $('btnBatchStart');
   if (bJob) return;
+  if (lastBatchResult) {
+    note.className = 'sticky-note ' + lastBatchResult.cls;
+    note.firstElementChild.innerHTML = ic(lastBatchResult.icon);
+    txt.textContent = lastBatchResult.text;
+    btn.disabled = false;
+    return;
+  }
   const filled = batchItems.filter(function (it) { return (it.video || '').trim(); }).length;
   if (!filled) {
     note.className = 'sticky-note info';
@@ -570,10 +587,10 @@ async function poll() {
       failCount = 0;
       setLog('mux', s.log);
       if (s.progress != null) $('singleBar').style.width = s.progress + '%';
-      if (s.status === 'done') {
-        clearInterval(timer); timer = null; job = null;
+      if (s.status === 'done') {        clearInterval(timer); timer = null; job = null;
         $('btnStart').disabled = false; $('btnStart').innerHTML = ic('play') + '<span>开始封装</span>'; $('btnStart').classList.add('primary'); $('btnStart').classList.remove('danger');
         $('singleBarWrap').style.display = 'none'; setStatus('封装完成', 'ok'); beep();
+        lastResult = { cls: 'ok', icon: 'checkCircle', text: '封装完成' };
         $('result').innerHTML = '<span class="t-sec">输出：</span><code class="mono" style="color:var(--text-primary)">' + esc(s.result || '') + '</code> <button class="btn small" data-open-dir="' + encodeURIComponent(s.result || '') + '">' + ic('arrowUpRight') + '打开文件夹</button>';
         refreshSticky();
       }
@@ -583,6 +600,7 @@ async function poll() {
         $('singleBarWrap').style.display = 'none';
         const reason = s.reason || ('退出码 ' + (s.exit ?? '?'));
         setStatus('封装失败：' + reason, 'err');
+        lastResult = { cls: 'err', icon: 'xCircle', text: '封装失败：' + reason };
         $('result').innerHTML = '<span class="chip err">' + ic('xCircle') + '<span>封装失败：' + esc(reason) + '</span></span>';
         refreshSticky();
       }
@@ -590,8 +608,16 @@ async function poll() {
         clearInterval(timer); timer = null; job = null;
         $('btnStart').disabled = false; $('btnStart').innerHTML = ic('play') + '<span>开始封装</span>'; $('btnStart').classList.add('primary'); $('btnStart').classList.remove('danger');
         $('singleBarWrap').style.display = 'none'; setStatus('已停止', 'err');
+        lastResult = { cls: 'info', icon: 'info', text: '任务已停止' };
         $('result').innerHTML = '<span class="chip info">' + ic('info') + '<span>任务已停止</span></span>';
         refreshSticky();
+      }
+      else {
+        // 运行中：sticky 栏随轮询自动刷新当前状态（进度）
+        const note = $('stickyNote');
+        note.className = 'sticky-note run';
+        note.firstElementChild.innerHTML = ic('loader', 'spin');
+        note.querySelector('.sticky-txt').textContent = s.progress != null ? ('封装中 ' + s.progress + '%') : '封装中…';
       }
     } catch (ex) {
       failCount++;
@@ -600,6 +626,7 @@ async function poll() {
         $('btnStart').disabled = false; $('btnStart').innerHTML = ic('play') + '<span>开始封装</span>'; $('btnStart').classList.add('primary'); $('btnStart').classList.remove('danger');
         $('singleBarWrap').style.display = 'none';
         setStatus('连接丢失，请刷新', 'err');
+        lastResult = { cls: 'err', icon: 'xCircle', text: '连接丢失，请刷新' };
         $('result').innerHTML = '<span class="chip err">' + ic('xCircle') + '<span>连接丢失，请刷新页面后重试</span></span>';
         refreshSticky();
       }
@@ -750,8 +777,8 @@ function autoTrackName(subField, nameField, kind) {
   var tok = pickNameToken($(subField).value, kind);
   if (tok) $(nameField).value = tok;
 }
-$('sc_sub').addEventListener('change', function () { autoTrackName('sc_sub', 'sc_name', 'sc'); syncSubStatus(); });
-$('tc_sub').addEventListener('change', function () { autoTrackName('tc_sub', 'tc_name', 'tc'); syncSubStatus(); });
+$('sc_sub').addEventListener('change', function () { lastResult = null; autoTrackName('sc_sub', 'sc_name', 'sc'); syncSubStatus(); });
+$('tc_sub').addEventListener('change', function () { lastResult = null; autoTrackName('tc_sub', 'tc_name', 'tc'); syncSubStatus(); });
 $('sc_sub').addEventListener('input', syncSubStatus);
 $('tc_sub').addEventListener('input', syncSubStatus);
 $('sc_name').addEventListener('input', function () { });
