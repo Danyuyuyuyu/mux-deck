@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 # batch_cli.py — 目录级批量：自动按集数匹配 sc/tc 字幕、子集化并封装（ass_subset_mux.ps1 的 Python 继任者）
-# 用法: py -3 scripts/batch_cli.py --root "目标目录" [--fonts-dir D] [--out-dir D] [--force]
+# 用法: py -3 app\tools\batch_cli.py --root "目标目录" [--fonts-dir D] [--out-dir D] [--force]
 # 目标目录内应包含 MKV + .sc.ass/.tc.ass + Fonts（或 Font）文件夹。
 # 默认替换模式：原 MKV 移入视频旁 __mux_tmp_manual（同名加序号，永不覆盖）；--out-dir 则输出到指定目录（同名冲突拒绝）。
 import argparse, json, os, re, shutil, subprocess, sys, tempfile
 
-BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def first_existing(*paths):
     for p in paths:

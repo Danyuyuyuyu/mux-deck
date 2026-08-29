@@ -2,6 +2,6 @@
 setlocal
 title Mux Deck - Autostart Installer
 cd /d "%~dp0"
-py -3 scripts\autostart.py install
+py -3 app\tools\autostart.py install
 echo.
 pause

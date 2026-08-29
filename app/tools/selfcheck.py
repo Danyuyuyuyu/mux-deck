@@ -2,7 +2,7 @@
 # selfcheck.py — Mux Deck 环境自检（环境自检.bat 的 Python 继任者）
 import os, shutil, socket, subprocess, sys
 
-BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 FAIL = 0
 
 def ok(msg):

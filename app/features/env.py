@@ -3,8 +3,8 @@
 #   GET  /api/env_check           检测 mkvmerge/mkvextract/ffmpeg/assfonts/AFS/fonttools
 #   POST /api/env_install         触发安装缺失组件（后台线程，立即返回任务 id）
 #   GET  /api/env_install?id=xxx  查询安装进度与日志
-# 安装逻辑复用 scripts/bootstrap.py 的 run_bootstrap()（与 CLI 同一份实现）。
-import os, shutil, sys, threading, uuid
+# 安装逻辑复用 app/tools/bootstrap.py 的 run_bootstrap()（与 CLI 同一份实现）。
+import os, shutil, threading, uuid
 from app import core
 
 # ---------------- 检测 ----------------
@@ -72,9 +72,7 @@ def _worker(jid, proxy, keys):
     st = INSTALL[jid]
     log = st["log"]
     try:
-        if core.SCRIPTS_DIR not in sys.path:
-            sys.path.insert(0, core.SCRIPTS_DIR)   # scripts/bootstrap.py 所在
-        import bootstrap
+        from app.tools import bootstrap
         res = bootstrap.run_bootstrap(proxy=proxy, items=keys, log=lambda s: log.append(s))
         st["ok"] = not res["fail"]
         st["fail"] = res["fail"]

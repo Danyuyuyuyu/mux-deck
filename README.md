@@ -19,8 +19,8 @@
 ```powershell
 # 0. 先安装 Python 3.8+（https://www.python.org/downloads/，勾选 Add to PATH）
 # 1. 首次使用（或 bin/ 为空时）拉取运行时：
-py -3 scripts\bootstrap.py
-#    需要代理： py -3 scripts\bootstrap.py --proxy http://127.0.0.1:7890
+py -3 app\tools\bootstrap.py
+#    需要代理： py -3 app\tools\bootstrap.py --proxy http://127.0.0.1:7890
 #    或直接双击 安装环境.bat
 
 # 2. 自检依赖（可选）：
@@ -50,30 +50,30 @@ start_mux_ui.bat            # 浏览器自动打开 http://127.0.0.1:8765
 
 ## 命令行入口（脱离界面单跑）
 
-每个功能都有独立 CLI（与 Web 同一份实现），也是换工具时的隔离试验场：
+封装与批量功能自带 CLI（也是换工具时的隔离试验场），运维/测试工具同目录：
 
 ```powershell
-py -3 scripts\mux_cli.py --video V.mkv --sc-sub a.ass --fonts-dir Fonts   # 单任务封装
-py -3 scripts\batch_cli.py --root "目录"                                  # 目录级批量（也可双击 scripts\ass_subset_mux.bat）
-py -3 scripts\extract_cli.py --video V.mkv --track 2:ass:zh-Hans          # 字幕提取
-py -3 scripts\preview_cli.py --video V.mkv --sub a.ass --fonts-dir Fonts  # 预览帧
-py -3 scripts\fontcheck_cli.py --fonts-dir Fonts a.ass                    # 字体体检
-py -3 scripts\smoke_test.py                                               # 一键冒烟回归（服务运行时）
-py -3 scripts\font_dup_scan.py                                            # 字体目录重复扫描（AFS 口径）
-py -3 scripts\bootstrap.py                                                # 运行时引导（网页内「一键安装」复用同一逻辑）
-py -3 scripts\selfcheck.py                                                # 环境自检
-py -3 scripts\autostart.py install                                        # 开机自启
+py -3 app\tools\mux_cli.py --video V.mkv --sc-sub a.ass --fonts-dir Fonts  # 单任务封装
+py -3 app\tools\batch_cli.py --root "目录"                                 # 目录级批量（也可双击 app\tools\ass_subset_mux.bat）
+py -3 app\tools\smoke_test.py                                              # 一键冒烟回归（服务运行时）
+py -3 app\tools\font_dup_scan.py                                           # 字体目录重复扫描（AFS 口径）
+py -3 app\tools\bootstrap.py                                               # 运行时引导（网页内「一键安装」复用同一逻辑）
+py -3 app\tools\selfcheck.py                                               # 环境自检
+py -3 app\tools\autostart.py install                                       # 开机自启
 ```
+
+> 说明：字幕提取 / 预览帧 / 字体体检不再有独立 CLI——Web 内（features 模块）已有完整功能，界面即可完成。
 
 ## 目录结构
 
 ```
 mux-deck/
 ├── app/                                       # 服务端：server.py 薄路由 + features/ 功能模块 + core.py 共享底座 + config.json
-│   └── ui/                                    # 前端资源（拆分后，零构建）：index.html 骨架 + style.css + 按功能切分的 js（app/batch/extract/preview/env/init），server 白名单静态路由直接提供
+│   ├── features/                              # Web 功能模块（browse/files/tracks/mux/extract/preview/misc/fonts/env）
+│   ├── ui/                                    # 前端资源（零构建）：index.html 骨架 + style.css + 按功能切分的 js，server 白名单静态路由直接提供
+│   └── tools/                                 # 可独立执行的脚本/工具：mux_cli（封装引擎）/ bootstrap / batch_cli / smoke_test / selfcheck / font_dup_scan / autostart
 ├── start_mux_ui.bat / install_autostart.bat / 安装环境.bat / 环境自检.bat   # 操作入口（根目录，纯 ASCII 薄壳）
-├── scripts/                                   # 各功能独立 CLI（见上节）
-├── bin/                                       # 第三方运行时（scripts\bootstrap.py 获取，不随 git 分发）
+├── bin/                                       # 第三方运行时（app\tools\bootstrap.py 获取，不随 git 分发）
 │   ├── mkvtoolnix/                           # mkvmerge / mkvextract
 │   ├── ffmpeg/                               # 含 libass（预览必需）
 │   ├── assfonts/                             # 回退子集工具（v0.7.3）

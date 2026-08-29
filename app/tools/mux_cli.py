@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 # mux_cli.py — 单任务封装编排（ass_mux_manual.ps1 的 Python 继任者）
-# 独立运行：py -3 scripts/mux_cli.py --video V [--sc-sub A] [--tc-sub B] [--fonts-dir D] ...
+# 独立运行：py -3 app\tools\mux_cli.py --video V [--sc-sub A] [--tc-sub B] [--fonts-dir D] ...
 # 行为与旧 ps1 完全对齐：assfonts 两阶段子集化 -> mkvmerge 组装 -> 校验 -> 安装(替换/备份)。
 import argparse, json, os, re, shutil, subprocess, sys, tempfile, uuid
 
-BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 项目根（本文件位于 scripts/）
+BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # 项目根（本文件位于 app/tools/）
 
 TMP = ""
 

@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 # 封装编排：POST /api/mux（单任务）、POST /api/batch（批量）、GET /api/job、POST /api/stop、POST /api/rerun、GET /api/history
-# 单任务实际执行由 scripts/mux_cli.py 完成（Python 编排，PowerShell 已退役）
+# 单任务实际执行由 app/tools/mux_cli.py 完成（Python 编排，PowerShell 已退役）
 import json, os, re, sys, threading, time, uuid
 from app import core
 from app.features import tracks as tracks_mod
 
-MUX_CLI = os.path.join(core.SCRIPTS_DIR, "mux_cli.py")
+MUX_CLI = os.path.join(core.TOOLS_DIR, "mux_cli.py")
 
 COMMON_KEYS = ("fonts_dir", "audio", "audio_mode", "keep_src_audio", "audio_lang", "audio_name",
                "out_dir", "force", "sc_name", "tc_name", "no_backup", "audio_tracks",

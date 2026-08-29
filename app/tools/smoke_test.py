@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-# smoke_test.py — mux-deck 一键冒烟回归（11 端点 + 前端可达性）
-# 用法: py -3 scripts/smoke_test.py [--video 某个.mkv]
+# smoke_test.py — mux-deck 一键冒烟回归（12 端点 + 前端可达性）
+# 用法: py -3 app\tools\smoke_test.py [--video 某个.mkv]
 # 约束: 127.0.0.1 请求会被系统代理劫持，必须用空 ProxyHandler 绕开。
 # 退出码: 0 = 全 PASS / SKIP；1 = 有 FAIL；2 = 服务未运行。
 import argparse, glob, json, os, sys, urllib.error, urllib.parse, urllib.request
 
-BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 已知可用测试素材（按优先级探测；都没有时 probe/history 相关用 SKIP 不 FAIL）
 KNOWN_VIDEOS = [

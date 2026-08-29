@@ -7,7 +7,7 @@ rem Prerequisite: install Python 3.8+ yourself (https://www.python.org/downloads
 rem Downloads MKVToolNix / ffmpeg / assfonts into bin\ (skips what already exists).
 rem Proxy: pass --proxy http://127.0.0.1:7890 or set BOOTSTRAP_PROXY.
 
-py -3 scripts\bootstrap.py %*
+py -3 app\tools\bootstrap.py %*
 if errorlevel 1 (
   echo.
   echo [FAILED] Runtime install incomplete, see messages above.

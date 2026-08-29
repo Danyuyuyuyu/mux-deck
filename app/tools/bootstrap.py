@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 # bootstrap.py — Mux Deck 运行时引导：下载 MKVToolNix / ffmpeg / assfonts / AssFontSubset 到 bin\（可重复运行，已存在则跳过）
-# 用法: py -3 scripts/bootstrap.py [--proxy http://127.0.0.1:7890]
+# 用法: py -3 app\tools\bootstrap.py [--proxy http://127.0.0.1:7890]
 # 也可用环境变量 BOOTSTRAP_PROXY 指定代理。
 #
 # 核心逻辑函数化（ensure_xxx + run_bootstrap），同一份实现同时服务两处：
-#   - CLI：py -3 scripts/bootstrap.py（main）
+#   - CLI：py -3 app\tools\bootstrap.py（main）
 #   - 网页内安装：app/features/env.py 通过 run_bootstrap(proxy, items, log=...) 复用，
 #     log 回调负责把进度输出捕获进安装日志，而非只打到终端。
 import argparse, os, shutil, subprocess, sys, tempfile, urllib.request, zipfile
 
-BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BIN = os.path.join(BASE, "bin")
 
 def get_file(url, out, proxy="", min_bytes=1000000):

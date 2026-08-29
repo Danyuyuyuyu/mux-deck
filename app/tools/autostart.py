@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 # autostart.py — 开机自启安装/卸载（install_autostart.bat 的 Python 继任者）
-# 用法: py -3 scripts/autostart.py install | uninstall
+# 用法: py -3 app\tools\autostart.py install | uninstall
 import json, os, subprocess, sys, time, urllib.request
 
-BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRV = os.path.join(BASE, "app", "server.py")
 VBS = os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "muxui.vbs")
 

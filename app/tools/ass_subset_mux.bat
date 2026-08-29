@@ -5,7 +5,7 @@ if "%~1"=="" (
   echo Usage: ass_subset_mux.bat "target folder"
   echo The folder should contain MKV + .sc.ass/.tc.ass + Fonts folder.
   echo Default mode replaces original MKV; originals are kept in __mux_tmp_manual next to the video.
-  echo For a separate output dir: py -3 scripts\batch_cli.py --root "folder" --out-dir "out"
+  echo For a separate output dir: py -3 app\tools\batch_cli.py --root "folder" --out-dir "out"
   pause
   exit /b 1
 )

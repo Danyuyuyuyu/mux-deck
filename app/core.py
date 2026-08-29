@@ -5,7 +5,7 @@ import json, os, re, shutil, subprocess, sys, threading, time, uuid
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 项目根（本文件位于 app/）
 APP_DIR = os.path.join(BASE, "app")
-SCRIPTS_DIR = os.path.join(BASE, "scripts")
+TOOLS_DIR = os.path.join(APP_DIR, "tools")  # 可独立执行的脚本/工具（mux_cli/bootstrap/冒烟/自检…）
 DATA_DIR = os.path.join(BASE, "data")
 # 新写入路径按功能分目录；LEGACY_* 为旧位置，只读兼容（历史文件原地不动）
 JOBS_DIR = os.path.join(DATA_DIR, "mux")
