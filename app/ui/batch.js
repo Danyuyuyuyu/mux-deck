@@ -40,14 +40,46 @@ function batchBrowse(i, kind) {
 }
 function batchDel(i) { batchItems.splice(i, 1); renderBatch(); }
 $('btnBatchAdd').onclick = () => { batchItems.push({video:'', sc:'', tc:''}); renderBatch(); };
+
+/* 添加文件：浏览器选视频 → 自动匹配字幕 + 自动识别字体文件夹（视频旁 Fonts/Font） */
+async function autoFontDir(v) {
+  if ($('b_fonts').value.trim()) return;   // 已有字体目录不覆盖
+  const dir = v.slice(0, v.lastIndexOf('\\') + 1);
+  if (!dir) return;
+  try {
+    const d = await api('/api/list?path=' + encodeURIComponent(dir.replace(/\\$/, '')));
+    const idx = (d.dirs || []).findIndex(n => /^fonts?$/i.test(n));
+    if (idx >= 0) $('b_fonts').value = dir + d.dirs[idx];
+  } catch (e) { /* 目录探测失败静默 */ }
+}
+$('btnBatchFiles').onclick = () => openBrowser(async v => {
+  if (!v) return;
+  if (!/\.(mkv|mp4|m2ts|ts|avi|mov|webm|flv|wmv|m4v)$/i.test(v)) { setStatus('请选择视频文件（MKV/MP4/M2TS 等）', 'err'); return; }
+  if (batchItems.some(it => it.video && it.video.toLowerCase() === v.toLowerCase())) { setStatus('该视频已在列表中：' + v, 'err'); return; }
+  setStatus('正在识别字幕与字体目录…', 'run');
+  try {
+    const m = await api('/api/match_subs?path=' + encodeURIComponent(v));
+    addBatchVideo(v, [], m);   // addBatchVideo 内置 matched.sc/tc 填充
+    await autoFontDir(v);
+    renderBatch();
+    setStatus('已添加：' + v.split(/[\\/]/).pop() + (m.sc || m.tc ? ' · 已自动匹配字幕' : ''), 'ok');
+  } catch (ex) {
+    setStatus('添加失败：' + ex, 'err');
+  }
+}, 'video', $('b_v_' + Math.max(0, batchItems.length - 1)) || '', 'batch');
+
 $('btnBatchClear').onclick = () => {
   if (bJob) { setStatus('批量任务进行中，不能清除列表', 'err'); return; }
-  if (!batchItems.length) return;
-  if (!confirm('确定清空批量列表（共 ' + batchItems.length + ' 项）？')) return;
+  if (!batchItems.length && !$('batchResults').innerHTML) return;
+  if (!confirm('确定一键清除？\n将清空批量列表与结果展示（已生成的输出文件保留在磁盘，不会被删除）')) return;
   batchItems.splice(0, batchItems.length);
   renderBatch();
+  $('batchResults').innerHTML = '';
+  $('batchState').textContent = '';
+  $('batchBar').style.width = '0%';
+  $('batchProgress').style.display = '';
   refreshBatchSticky();
-  setStatus('批量列表已清空', 'ok');
+  setStatus('已一键清除：列表与结果展示已清空，输出文件保留', 'ok');
 };
 
 $('btnMatchAll').onclick = async () => {
