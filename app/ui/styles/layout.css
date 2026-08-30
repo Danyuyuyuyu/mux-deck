@@ -1,0 +1,92 @@
+/* 页面骨架：container / header / main / panel / 折叠分区结构（含本模块的全局响应式） */
+
+  .container { max-width:1200px; margin:0 auto; padding:0 24px; }
+
+  /* ================= header ================= */
+  .app-header { padding:28px 0 14px; }
+  .header-inner { display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+  .brand { display:flex; align-items:center; gap:14px; min-width:0; }
+  .brand-mark {
+    width:40px; height:40px; flex:none; border-radius:10px;
+    background:var(--surface-2); border:1px solid var(--border);
+    display:inline-flex; align-items:center; justify-content:center;
+    color:var(--primary); font-size:20px;
+  }
+  .brand-name { font-size:22px; font-weight:700; letter-spacing:.4px; }
+  .brand-sub { font-size:12.5px; color:var(--text-secondary); margin-top:2px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .header-right { display:flex; align-items:center; gap:10px; flex:none; }
+  #status {
+    display:inline-flex; align-items:center; gap:7px; font-size:12px;
+    padding:4px 12px; border-radius:999px; line-height:1.5;
+    background:var(--info-bg); border:1px solid var(--info-line); color:var(--text-secondary);
+    font-family:var(--mono); max-width:min(70vw,420px); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    transition:border-color .15s, color .15s, background-color .15s;
+  }
+  #status .ic { font-size:13px; flex:none; }
+  #status.ok  { color:var(--success); border-color:var(--ok-line); background:var(--ok-bg); }
+  #status.err { color:var(--danger);  border-color:var(--err-line); background:var(--err-bg); }
+  #status.run { color:var(--warning); border-color:var(--warn-line); background:var(--warn-bg); }
+
+  /* ================= main / panels ================= */
+  .main-inner { padding:24px 0 0; }
+  .page-loading { padding:48px 0; text-align:center; }
+  .mode { display:none; }
+  .mode.active { display:block; }
+
+  .panel {
+    background:var(--surface-1); border:1px solid var(--border);
+    border-radius:var(--radius-lg); box-shadow:var(--shadow-1); padding:24px;
+  }
+  .panel-head {
+    display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;
+    padding-bottom:16px; border-bottom:1px solid var(--border); margin-bottom:4px;
+  }
+  .panel-sec { padding:20px 0 8px; }
+  .panel-sec + .panel-sec { border-top:1px solid var(--border); }
+  .sec-head { margin-bottom:16px; }
+  .sec-head .t-sec { margin-top:3px; }
+
+
+  /* ================= advanced collapsible ================= */
+  .advanced { border-top:1px solid var(--border); margin-top:12px; }
+  .adv-toggle {
+    display:inline-flex; align-items:center; gap:7px; width:100%; height:40px;
+    background:transparent; border:none; color:var(--text-secondary); font-size:13.5px; font-weight:500;
+    cursor:pointer; border-radius:var(--radius-md); padding:0 12px;
+    transition:color .15s, background-color .15s;
+  }
+  .adv-toggle:hover { color:var(--text-primary); background:var(--surface-2); }
+  .adv-toggle .ic { font-size:14px; margin-left:auto; transition:transform .18s ease-out; }
+  .adv-toggle.open .ic { transform:rotate(180deg); }
+  .adv-body { padding:4px 12px 16px; display:none; }
+  .adv-body.show { display:block; animation:advIn .18s ease-out; }
+
+  .adv-body .check { margin-right:24px; margin-bottom:6px; }
+
+  /* ================= 折叠分区（字体设置 / 外部音轨；与高级选项同一套克制风格） ================= */
+  .collapse-toggle {
+    display:flex; align-items:center; gap:10px; width:100%; min-height:32px;
+    background:transparent; border:none; cursor:pointer; padding:0; text-align:left;
+  }
+  .collapse-toggle .c-title { font-size:15px; font-weight:600; color:var(--text-primary); transition:color .15s; }
+  .collapse-toggle:hover .c-title { color:var(--primary); }
+  .collapse-toggle .c-summary { font-size:12px; color:var(--text-secondary); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .collapse-toggle .c-summary.ok  { color:var(--success); }
+  .collapse-toggle .c-summary.warn { color:var(--warning); }
+  .collapse-toggle .c-summary.err { color:var(--danger); }
+  .collapse-toggle .c-summary.run { color:var(--primary); }
+  .collapse-toggle .c-chev { margin-left:auto; color:var(--text-muted); display:inline-flex; transition:transform .18s ease-out; }
+  .collapse-toggle .c-chev .ic { font-size:15px; }
+  .collapse.open .c-chev { transform:rotate(180deg); }
+  .collapse-body { display:none; }
+  .collapse.open .collapse-body { display:block; padding-top:14px; animation:advIn .18s ease-out; }
+
+  /* ================= responsive ================= */
+  /* 原全局媒体块按模块拆分：其余规则在各自文件底部 */
+  @media (max-width:767px) {
+    .container { padding:0 16px; }
+    .app-header { padding:20px 0 10px; }
+    .header-inner { flex-direction:column; align-items:flex-start; gap:12px; }
+    #status { max-width:100%; }
+    .panel { padding:16px; }
+}

@@ -1,0 +1,42 @@
+/* Design tokens / 主题变量（深浅色 + 强调色）。变量值与命名未动。 */
+
+  /* ================= design tokens ================= */
+
+  :root {
+    --background:#0A0D12;
+    --surface-1:#11161F; --surface-2:#151B25; --surface-3:#1A2130;
+    --input:#0C1118;
+    --border:rgba(255,255,255,0.07); --border-hover:rgba(255,255,255,0.12);
+    --text-primary:#F1F5F9; --text-secondary:#8B95A7; --text-muted:#5E6878;
+    --primary:#4F8DFF; --primary-hover:#639CFF;
+    --success:#35C98A; --warning:#F3B64D; --danger:#F05B67;
+    --ok-bg:rgba(53,201,138,0.12);   --ok-line:rgba(53,201,138,0.38);
+    --warn-bg:rgba(243,182,77,0.12); --warn-line:rgba(243,182,77,0.38);
+    --err-bg:rgba(240,91,103,0.12);  --err-line:rgba(240,91,103,0.38);
+    --run-bg:rgba(79,141,255,0.14);  --run-line:rgba(79,141,255,0.4);
+    --info-bg:rgba(139,149,167,0.12);--info-line:rgba(139,149,167,0.32);
+    --radius-sm:6px; --radius-md:8px; --radius-lg:12px; --radius-xl:16px;
+    --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
+    --space-5:20px; --space-6:24px; --space-8:32px; --space-10:40px;
+    --shadow-1:0 8px 30px rgba(0,0,0,0.12);
+    --shadow-2:0 18px 50px rgba(0,0,0,0.5);
+    --mono:"Cascadia Code","JetBrains Mono",Consolas,monospace;
+    --sans:"Segoe UI","Microsoft YaHei","PingFang SC",system-ui,-apple-system,sans-serif;
+  }
+  body[data-theme="light"] {
+    --background:#E8ECF3; --surface-1:#F4F7FB; --surface-2:#FFFFFF; --surface-3:#E9EEF5;
+    --input:#FFFFFF;
+    --border:rgba(17,24,39,0.10); --border-hover:rgba(17,24,39,0.20);
+    --text-primary:#172033; --text-secondary:#5B6B84; --text-muted:#93A1B8;
+    --ok-bg:rgba(22,163,104,0.12);   --ok-line:rgba(22,163,104,0.5);
+    --warn-bg:rgba(217,119,6,0.12);  --warn-line:rgba(217,119,6,0.5);
+    --err-bg:rgba(225,29,72,0.10);   --err-line:rgba(225,29,72,0.5);
+    --run-bg:rgba(37,99,235,0.10);   --run-line:rgba(37,99,235,0.5);
+    --info-bg:rgba(71,85,105,0.10);  --info-line:rgba(71,85,105,0.45);
+    --shadow-1:0 8px 30px rgba(23,32,51,0.10);
+    --shadow-2:0 18px 50px rgba(23,32,51,0.28);
+  }
+  body[data-accent="purple"] { --primary:#A98BF5; --primary-hover:#B79DF7; }
+  body[data-accent="green"]  { --primary:#3FB97F; --primary-hover:#55C78F; }
+  body[data-accent="orange"] { --primary:#F5A35B; --primary-hover:#F7B173; }
+  body[data-accent="pink"]   { --primary:#F57FB8; --primary-hover:#F792C3; }

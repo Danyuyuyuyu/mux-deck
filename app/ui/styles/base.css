@@ -1,0 +1,80 @@
+/* 全局基础：reset / body / 滚动条 / 排版 / 通用原子(chip·badge·table) / 图标 / 动画 / a11y */
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scrollbar-color:#303B4F transparent; }
+  html, body { height:100%; }
+  body {
+    font-family:var(--sans); font-size:14px; line-height:1.55; color:var(--text-primary);
+    background:
+      radial-gradient(1100px 520px at 50% -15%, rgba(79,141,255,0.07), transparent 62%),
+      var(--background);
+    min-height:100vh; overflow-x:hidden;
+  }
+  body[data-theme="light"] {
+    background:
+      radial-gradient(1100px 520px at 50% -15%, rgba(37,99,235,0.05), transparent 62%),
+      var(--background);
+  }
+  ::-webkit-scrollbar { width:9px; height:9px; }
+  ::-webkit-scrollbar-thumb { background:#2A3447; border-radius:5px; }
+  ::-webkit-scrollbar-thumb:hover { background:#39445C; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  .mono { font-family:var(--mono); }
+
+  /* typography scale */
+  .t-page  { font-size:22px; font-weight:600; letter-spacing:.3px; }
+  .t-section { font-size:15px; font-weight:600; color:var(--text-primary); }
+  .t-sec   { font-size:12.5px; color:var(--text-secondary); }
+  .t-cap   { font-size:11.5px; color:var(--text-muted); }
+  .t-err   { color:var(--danger); }
+
+
+  .chip.track-default { background:var(--run-bg); color:var(--primary); border:1px solid var(--run-line); }
+
+  /* ================= chips / badges ================= */
+  .chip {
+    display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:999px;
+    font-size:12px; font-weight:500; line-height:1.6;
+    max-width:100%; overflow-wrap:anywhere;
+  }
+  .chip .ic { font-size:13px; }
+  .chip.ok   { background:var(--ok-bg);   color:var(--success); border:1px solid var(--ok-line); }
+  .chip.warn { background:var(--warn-bg); color:var(--warning); border:1px solid var(--warn-line); }
+  .chip.err  { background:var(--err-bg);  color:var(--danger);  border:1px solid var(--err-line); }
+  .chip.run  { background:var(--run-bg);  color:var(--primary); border:1px solid var(--run-line); }
+  .chip.info { background:var(--info-bg); color:var(--text-secondary); border:1px solid var(--info-line); }
+  .chip.sm  { font-size:11px; padding:2px 10px; }
+  .chip.sc  { background:var(--ok-bg);   color:var(--success); border:1px solid var(--ok-line); }
+  .chip.tc  { background:var(--warn-bg); color:var(--warning); border:1px solid var(--warn-line); }
+  /* legacy class kept for JS-generated markup */
+  .tag { display:inline-flex; align-items:center; gap:6px; padding:2px 10px; border-radius:999px; font-size:12px; font-family:var(--mono); }
+  .tag.ok   { background:var(--ok-bg);   color:var(--success); border:1px solid var(--ok-line); }
+  .tag.warn { background:var(--warn-bg); color:var(--warning); border:1px solid var(--warn-line); }
+  .tag.info { background:var(--info-bg); color:var(--text-secondary); border:1px solid var(--info-line); }
+  .badge { font-size:12px; color:var(--text-muted); font-family:var(--mono); }
+  .hint { font-size:12px; color:var(--text-muted); }
+  .res-ok { color:var(--success); } .res-fail { color:var(--danger); }
+
+  @keyframes advIn { from { opacity:0; transform:translateY(-3px); } to { opacity:1; transform:none; } }
+
+  /* ================= tables ================= */
+  .table-wrap { overflow:auto; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--input); }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th, td { padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); }
+  th { color:var(--text-secondary); font-weight:600; font-family:var(--mono); font-size:11px; letter-spacing:.07em; text-transform:uppercase; }
+  tbody tr { transition:background-color .12s; }
+  tbody tr:hover { background:var(--surface-2); }
+  tbody tr:last-child td { border-bottom:none; }
+  .tdot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:7px; vertical-align:middle; }
+  td .btn { margin:0; }
+
+  /* ================= icons ================= */
+  .ic { width:1em; height:1em; flex:none; display:inline-block; vertical-align:-0.125em; }
+
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .ic.spin { animation:spin 1s linear infinite; }
+
+  /* ================= focus / a11y ================= */
+  :focus-visible { outline:2px solid var(--primary); outline-offset:2px; border-radius:var(--radius-sm); }
+  .visually-hidden { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }

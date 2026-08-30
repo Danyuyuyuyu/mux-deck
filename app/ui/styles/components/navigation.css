@@ -1,0 +1,72 @@
+/* 顶部导航：mode-nav / 字幕工具下拉 / 设置弹层 */
+
+  /* settings popover */
+  .settings { position:relative; }
+
+  .settings-pop {
+    position:absolute; right:0; top:calc(100% + 8px); z-index:70;
+    width:210px; background:var(--surface-2); border:1px solid var(--border);
+    border-radius:var(--radius-lg); box-shadow:var(--shadow-2);
+    padding:14px; display:none;
+  }
+  .settings-pop.open { display:block; }
+  .pop-title { font-size:11px; font-weight:600; color:var(--text-muted); letter-spacing:.08em; margin:2px 0 8px; }
+  .pop-title:not(:first-child) { margin-top:12px; }
+  .pop-row { display:flex; gap:8px; }
+  .pref {
+    flex:1; height:32px; border-radius:var(--radius-md); cursor:pointer;
+    background:var(--input); border:1px solid var(--border); color:var(--text-secondary);
+    font-size:12px; display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    transition:border-color .15s, color .15s, background-color .15s;
+  }
+  .pref:hover { border-color:var(--border-hover); color:var(--text-primary); }
+  .pref.active { border-color:var(--primary); color:var(--primary); background:var(--run-bg); }
+  .pref.dot { width:24px; height:24px; border-radius:50%; background:var(--d); border:2px solid var(--border); }
+  .pref.dot.active { box-shadow:0 0 0 2px var(--background), 0 0 0 4px var(--d); border-color:transparent; }
+  .pop-row.dots { gap:12px; }
+
+  /* ================= mode nav ================= */
+  .mode-nav { margin-top:8px; }
+  .nav-inner {
+    display:flex; gap:6px; flex-wrap:wrap;
+    padding:4px; background:var(--surface-1); border:1px solid var(--border);
+    border-radius:var(--radius-lg); width:fit-content; max-width:100%;
+  }
+  .mode-tab {
+    display:inline-flex; align-items:center; gap:8px; height:34px; padding:0 16px;
+    border:none; background:transparent; color:var(--text-secondary); font-size:13.5px; font-weight:500;
+    border-radius:var(--radius-md); cursor:pointer; white-space:nowrap;
+    transition:background-color .15s, color .15s;
+  }
+  .mode-tab .ic { font-size:15px; }
+  .mode-tab:hover { background:var(--surface-2); color:var(--text-primary); }
+  .mode-tab.active { background:var(--surface-3); color:var(--text-primary); box-shadow:inset 0 0 0 1px var(--border-hover); }
+  .mode-tab.active .ic { color:var(--primary); }
+
+  /* 字幕工具下拉（一级导航第三项；item 选中态沿用 mode-tab 的样式语言） */
+  .nav-drop { position:relative; display:inline-flex; }
+  .drop-chev { display:inline-flex; transition:transform .15s; }
+  .nav-drop.open .drop-chev { transform:rotate(180deg); }
+  .drop-menu {
+    display:none; position:absolute; left:0; top:calc(100% + 6px); z-index:80; min-width:150px;
+    background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md);
+    box-shadow:var(--shadow-1); padding:5px;
+  }
+  .nav-drop.open .drop-menu { display:block; }
+  .drop-item {
+    display:flex; width:100%; align-items:center; gap:8px; padding:7px 10px;
+    background:transparent; border:none; border-radius:var(--radius-sm);
+    color:var(--text-primary); font-size:12.5px; font-family:var(--sans); cursor:pointer; text-align:left;
+    transition:background-color .12s;
+  }
+  .drop-item .ic { font-size:15px; color:var(--text-muted); }
+  .drop-item:hover { background:var(--surface-3); }
+  .drop-item.active { background:var(--surface-3); }
+  .drop-item.active .ic { color:var(--primary); }
+
+@media (max-width:767px) {
+    .nav-inner { width:100%; }
+    .mode-tab { flex:1 1 calc(50% - 3px); justify-content:center; padding:0 8px; }
+    .nav-drop { flex:1 1 calc(50% - 3px); }
+    .nav-drop .mode-tab { width:100%; justify-content:center; }
+}

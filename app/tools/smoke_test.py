@@ -149,7 +149,11 @@ def main():
         ui_ok = "pageRoot" in body and "consoleRoot" in body and "modalRoot" in body and "loader.js" in body
         need = ["style.css", "loader.js", "app.js", "batch.js", "extract.js", "preview.js", "env.js", "init.js",
                 "pages/single.html", "pages/batch.html", "pages/subtitle-tools.html",
-                "partials/console.html", "partials/modals.html"]
+                "partials/console.html", "partials/modals.html",
+                "styles/tokens.css", "styles/base.css", "styles/layout.css",
+                "styles/components/navigation.css", "styles/components/forms.css", "styles/components/buttons.css",
+                "styles/features/file-card.css", "styles/features/subtitle-tracks.css", "styles/features/task-status.css",
+                "styles/features/batch.css", "styles/features/overlays.css", "styles/features/environment.css"]
         sizes = {}
         for f in need:
             r = op.open("http://127.0.0.1:8765/" + f, timeout=10)

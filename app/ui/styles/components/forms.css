@@ -1,0 +1,23 @@
+/* 通用表单：field / input / select / checkbox / check */
+
+  /* form fields */
+  .field { display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap; min-width:0; }
+  .field > label, .field > .set-label { flex:none; width:180px; font-size:12.5px; color:var(--text-secondary); }
+  input[type=text], input:not([type]), select {
+    flex:1; min-width:140px; height:36px; padding:0 12px; background:var(--input); color:var(--text-primary);
+    border:1px solid var(--border); border-radius:var(--radius-md); font-size:13px;
+    font-family:var(--mono); transition:border-color .15s, box-shadow .15s, background-color .15s;
+  }
+  input::placeholder { color:var(--text-muted); }
+  input:focus, select:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(79,141,255,0.12); }
+  input:hover:not(:focus), select:hover:not(:focus) { border-color:var(--border-hover); }
+  select { padding-right:32px; cursor:pointer; appearance:none; background-image:linear-gradient(45deg,transparent 50%,var(--text-muted) 50%),linear-gradient(135deg,var(--text-muted) 50%,transparent 50%); background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%; background-size:5px 5px; background-repeat:no-repeat; }
+  input[type=checkbox] { accent-color:var(--primary); width:15px; height:15px; cursor:pointer; flex:none; }
+  .check { display:inline-flex; align-items:center; gap:7px; font-size:13px; color:var(--text-secondary); cursor:pointer; border-radius:var(--radius-sm); transition:color .15s; }
+  .check:hover { color:var(--text-primary); }
+  .check.sm { font-size:12px; }
+
+@media (max-width:767px) {
+    .field > label, .field > .set-label { width:100%; }
+    .field input { min-width:0; }
+}

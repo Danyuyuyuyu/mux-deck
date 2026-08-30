@@ -1,0 +1,37 @@
+/* 通用按钮：.btn 家族 / .icon-btn（业务特化按钮留在各 feature 文件） */
+
+  .btn.icon-btn { width:36px; height:36px; padding:0; }
+
+  /* ================= buttons ================= */
+  .btn {
+    display:inline-flex; align-items:center; justify-content:center; gap:7px;
+    height:36px; padding:0 16px; border-radius:var(--radius-md);
+    background:var(--surface-2); color:var(--text-primary);
+    border:1px solid var(--border); font-size:13px; font-weight:500; font-family:var(--sans);
+    cursor:pointer; white-space:nowrap; user-select:none;
+    transition:background-color .15s ease-out, border-color .15s ease-out, color .15s ease-out, transform .15s ease-out, box-shadow .15s ease-out;
+  }
+  .btn .ic { font-size:14px; }
+  .btn:hover { background:var(--surface-3); border-color:var(--border-hover); }
+  .btn:active { transform:translateY(1px); }
+  .btn:disabled { opacity:.6; cursor:not-allowed; transform:none; }
+  .btn.primary {
+    background:var(--primary); border-color:transparent; color:#fff; font-weight:600;
+    box-shadow:0 2px 12px rgba(79,141,255,0.25);
+  }
+  .btn.primary:hover { background:var(--primary-hover); transform:translateY(-1px); box-shadow:0 4px 16px rgba(79,141,255,0.32); }
+  .btn.primary:active { transform:translateY(0); }
+  .btn.danger {
+    background:var(--danger); border-color:transparent; color:#fff; font-weight:600;
+    box-shadow:0 2px 12px rgba(240,91,103,0.25);
+  }
+  .btn.danger:hover { background:#F5717C; border-color:transparent; transform:translateY(-1px); }
+  .btn.ghost { background:transparent; border-color:transparent; color:var(--text-secondary); }
+  .btn.ghost:hover { background:var(--surface-2); color:var(--text-primary); border-color:var(--border); }
+  .btn.small { height:28px; padding:0 12px; font-size:12px; border-radius:var(--radius-sm); }
+  .btn.small .ic { font-size:13px; }
+  .btn.lg { height:40px; padding:0 24px; font-size:14px; border-radius:var(--radius-md); }
+  .btn.lg .ic { font-size:16px; }
+
+  .icon-btn { color:var(--text-secondary); }
+  .icon-btn:hover { color:var(--text-primary); }

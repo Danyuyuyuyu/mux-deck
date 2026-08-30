@@ -1,0 +1,26 @@
+/* 批量封装列表 */
+
+  /* ================= batch list ================= */
+  .batch-list { display:flex; flex-direction:column; gap:10px; margin:4px 0 14px; }
+  .b-item {
+    background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md);
+    padding:12px 16px; display:flex; flex-direction:column; gap:10px; transition:border-color .15s;
+  }
+  .b-item:hover { border-color:var(--border-hover); }
+  .b-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .b-idx {
+    flex:none; width:24px; height:24px; border-radius:var(--radius-sm);
+    background:var(--surface-3); border:1px solid var(--border); color:var(--text-secondary);
+    font-family:var(--mono); font-size:11px; display:inline-flex; align-items:center; justify-content:center;
+  }
+  .b-btns { display:flex; gap:6px; flex:none; }
+  .b-grid { display:grid; grid-template-columns:auto 1fr; gap:8px 10px; align-items:center; }
+  .b-grid input { min-width:0; height:36px; }
+  .b-sub { display:flex; gap:6px; align-items:center; min-width:0; }
+  .b-sub input { flex:1; height:36px; }
+  .b-sub .icon-btn { flex:none; height:30px; width:30px; }
+  .b-sub .icon-btn .ic { width:14px; height:14px; }
+
+@media (max-width:767px) {
+    .b-grid { grid-template-columns:auto 1fr; }
+}

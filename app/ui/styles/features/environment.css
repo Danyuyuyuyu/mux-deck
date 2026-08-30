@@ -1,0 +1,21 @@
+/* 环境检测弹窗（envList / env-row） */
+
+  /* ================= env modal（环境检测与安装） ================= */
+  #envList { display:grid; gap:8px; max-height:300px; overflow:auto; margin-bottom:12px; padding-right:2px; }
+  .env-row {
+    display:flex; align-items:center; gap:10px; padding:10px 12px;
+    background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md);
+    max-width:100%;
+  }
+  .env-row .env-ic { flex:none; font-size:15px; line-height:1; }
+  .env-row.ok .env-ic { color:var(--success); }
+  .env-row.missing .env-ic { color:var(--danger); }
+  .env-row.missing { border-color:var(--err-line); background:var(--err-bg); }
+  .env-main { flex:1; min-width:0; }
+  .env-name { font-size:13px; color:var(--text-primary); }
+  .env-name .t-cap { margin-left:6px; }
+  .env-path {
+    font-family:var(--mono); font-size:11.5px; color:var(--text-secondary);
+    max-width:100%; overflow-wrap:anywhere; word-break:break-all;
+  }
+  .env-row .chip { flex:none; }
