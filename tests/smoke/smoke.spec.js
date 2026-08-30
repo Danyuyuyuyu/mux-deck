@@ -69,6 +69,24 @@ test.describe('mux-ui smoke', () => {
     await expect(page.locator('#presetModal')).toBeVisible();
     await expect(page.locator('#pmList')).toBeVisible();
     await expect(page.locator('body')).toHaveClass(/modal-open/);          // 页面滚动锁生效
+    // Preset Manager 结构：X 图标关闭 / 编辑器头部 / SC·TC 轨道卡 / segmented 默认轨 / 固定 Footer
+    await expect(page.locator('#pmClose')).toHaveAttribute('aria-label', '关闭封装预设');
+    await expect(page.locator('#pmEdHead')).toContainText('正在编辑');
+    await expect(page.locator('.pm-track-card .sub-badge.sc')).toBeVisible();
+    await expect(page.locator('.pm-track-card .sub-badge.tc')).toBeVisible();
+    await expect(page.locator('#pm_f_sc_default_seg .seg-btn', { hasText: '自动' })).toBeVisible();
+    await expect(page.locator('#pmNewBtn')).toBeVisible();                 // 新建按钮固定侧栏底部
+    await expect(page.locator('#pmCancelBtn')).toBeVisible();              // Footer 恒有取消
+    await expect(page.locator('#pmFootActions .btn.primary')).toHaveCount(1);   // 一次最多一个 Primary
+    // 叠层：管理器内开文件浏览器 → 浏览器必须在上层（modal.js 栈深 z-index）
+    await page.evaluate(() => openBrowser(() => {}, 'any', '', 'pmstack'));
+    await expect(page.locator('#browserModal')).toBeVisible();
+    const zi = await page.evaluate(() => ({
+      browser: document.getElementById('browserModal').style.zIndex,
+      preset: getComputedStyle(document.getElementById('presetModal')).zIndex,
+    }));
+    expect(parseInt(zi.browser, 10)).toBeGreaterThan(parseInt(zi.preset, 10));
+    await page.evaluate(() => closeModal('browserModal'));
     await page.click('#pmClose');
     await expect(page.locator('#presetModal')).toBeHidden();
     await expect(page.locator('body')).not.toHaveClass(/modal-open/);
@@ -88,6 +106,7 @@ test.describe('mux-ui smoke', () => {
       openModal('globalModal');   // open/close/isModalOpen 统一入口
     });
     await expect(page.locator('#globalModal')).toBeVisible();
+    await page.click('#cfg_scan');   // 焦点进入弹窗内部：closeModal 必须先移出焦点再标 aria-hidden，否则 Chrome 报 Blocked aria-hidden（afterEach 捕获）
     await page.keyboard.press('Escape');
     await expect(page.locator('#globalModal')).toBeHidden();
     const focusId = await page.evaluate(() => document.activeElement && document.activeElement.id);

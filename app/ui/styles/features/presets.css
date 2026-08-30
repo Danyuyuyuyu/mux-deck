@@ -1,7 +1,8 @@
 /* ==================== preset manager（封装预设管理窗口）+ 预设状态条 ====================
  * 预设域专属样式：管理窗口布局（pm-*）、列表双状态（selected=正在编辑 / current=当前任务）、
- * 编辑器分组、底部操作区；以及主页面预设状态条（preset-status-*）。
- * 通用 modal 骨架（.modal/.modal-box/body.modal-open）仍在 overlays.css。 */
+ * 编辑器分区 + SC/TC 轨道卡、固定 Footer 四态；以及主页面预设状态条（preset-status-*）。
+ * 通用 modal 骨架（.modal/.modal-box/body.modal-open）仍在 overlays.css。
+ * SC/TC badge 与 .seg/.switch/.check 复用 subtitle-tracks.css / forms.css 的既有定义。 */
 
 /* ---- 主页面预设状态条（pages/single.html 主流程顶部） ---- */
 .preset-status {
@@ -16,39 +17,102 @@
 .preset-status.has-preset .preset-status-text.preset-dirty { color: var(--warning); }
 .preset-status-actions { margin-left: auto; display: flex; gap: 6px; }
 
-/* ---- 管理窗口布局（消除页面 + Modal 双滚动：body 锁定，仅 .pm-body 内部滚动） ---- */
-.pm-box { width: min(860px, 95vw); display: flex; flex-direction: column; max-height: 86vh; }
-.pm-sub { padding: 10px 16px 0; font-size: 12px; color: var(--text-secondary); }
-.pm-body { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: 230px 1fr; }
-.pm-list { border-right: 1px solid var(--border); padding: 10px; display: flex; flex-direction: column; gap: 4px; }
+/* ---- 管理窗口骨架：Header / Body（左 sidebar + 右 editor）/ Footer 三段，仅内部滚动 ---- */
+.pm-box { width: min(950px, 92vw); max-height: min(820px, 88vh); display: flex; flex-direction: column; }
+.pm-head { flex: none; display: flex; align-items: flex-start; gap: 10px; padding: 14px 16px 12px; border-bottom: 1px solid var(--border); }
+.pm-head-txt { flex: 1; min-width: 0; }
+.pm-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.pm-sub { font-size: 12px; margin-top: 2px; }
+.pm-close { width: 32px; height: 32px; flex: none; }
+.pm-close .ic { font-size: 16px; }
+.pm-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 232px 1fr; }
+
+/* ---- 左侧 Sidebar：列表 + 固定在底部的新建按钮 ---- */
+.pm-side { display: flex; flex-direction: column; min-height: 0; background: var(--surface-2); border-right: 1px solid var(--border); }
+.pm-side-title { flex: none; padding: 12px 14px 6px; font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: .08em; }
+.pm-list { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 2px; }
 .pm-item {
-  display: flex; width: 100%; align-items: center; gap: 8px; padding: 8px 10px;
+  display: flex; width: 100%; align-items: center; gap: 8px; min-height: 44px; padding: 8px 10px;
   background: transparent; border: none; border-radius: var(--radius-sm);
   color: var(--text-primary); font-size: 13px; cursor: pointer; text-align: left;
   transition: background-color .12s;
 }
 .pm-item .ic { font-size: 14px; color: var(--text-muted); flex: none; }
+.pm-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pm-item:hover { background: var(--surface-3); }
-/* selected = 正在编辑（accent bar）；current = 当前任务来源（✓ 徽章），两个状态不混淆 */
+/* selected = 正在编辑（浅 primary 背景 + 左侧 accent bar）；current = 当前任务来源（绿 ✓ 徽章），两个状态不混淆 */
 .pm-item.selected { background: var(--run-bg); color: var(--primary); box-shadow: inset 2px 0 0 var(--primary); }
 .pm-item.selected .ic { color: var(--primary); }
-.pm-item .pm-cur { margin-left: auto; font-size: 10.5px; color: var(--success); flex: none; }
-.pm-new { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); }
-.pm-new .ic { color: var(--success); }
-.pm-editor { padding: 14px 16px 4px; }
-.pm-editor .pm-group { font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: .08em; margin: 14px 0 8px; }
-.pm-editor .pm-group:first-child { margin-top: 0; }
-.pm-editor .field > label, .pm-editor .field > .set-label { width: 130px; }
-.pm-editor .field input[type=text] { flex: none; width: 100%; max-width: 360px; }
-.pm-modes { display: flex; gap: 16px; flex-wrap: wrap; }
-.pm-path-note { font-size: 11px; color: var(--text-muted); margin: -6px 0 10px 140px; }
-.pm-empty { padding: 32px 0; text-align: center; }
-.pm-actions { display: flex; align-items: center; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
-.pm-note { min-height: 18px; margin: 6px 16px 10px; }
+.pm-item .pm-cur {
+  flex: none; display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10.5px; color: var(--success); padding: 1px 6px; border-radius: 999px;
+  background: var(--ok-bg); border: 1px solid var(--ok-line);
+}
+.pm-item .pm-cur .ic { font-size: 10px; color: var(--success); }
+.pm-new-btn { flex: none; margin: 8px; }
+.pm-new-btn .ic { color: var(--success); }
 
+/* ---- 右侧编辑器：头部指示 + 分区连续表单（仅此处纵向滚动） ---- */
+.pm-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.pm-ed-head { flex: none; display: flex; align-items: center; gap: 6px; padding: 12px 18px 0; }
+.pm-ed-cap { font-size: 12px; color: var(--text-muted); }
+.pm-ed-name { font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-ed-dirty { flex: none; font-size: 11px; color: var(--warning); }
+.pm-editor { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 18px 16px; }
+.pm-sec { margin-top: 20px; }
+.pm-sec:first-child { margin-top: 6px; }
+.pm-sec-title {
+  font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: .08em;
+  padding-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+.pm-hint { display: block; margin: -4px 0 0; }
+.pm-empty { padding: 32px 0; text-align: center; }
+.pm-editor .pm-field { margin-bottom: 10px; }
+.pm-editor .pm-field > label, .pm-editor .pm-field > .set-label { width: 100px; }
+.pm-editor .pm-field input[type=text] { flex: 1; max-width: 420px; }
+.pm-modes { display: flex; gap: 16px; flex-wrap: wrap; }
+
+/* ---- 字幕轨道：SC / TC 双卡（badge 配色沿用主页面 sub-badge） ---- */
+.pm-track-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 12px; }
+.pm-track-card { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; }
+.pm-track-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.pm-track-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.pm-track-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.pm-track-row:last-child { margin-bottom: 0; }
+.pm-track-row > label, .pm-track-row > .set-label { flex: none; width: 60px; font-size: 12px; color: var(--text-secondary); }
+.pm-track-row input[type=text] { flex: 1; min-width: 0; height: 32px; }
+.pm-track-row .seg { height: 32px; }
+.pm-track-row .seg-btn { height: 26px; padding: 0 12px; }
+.pm-track-row input[type=checkbox].switch { margin-left: auto; }
+.pm-track-row:has(input[type=checkbox].switch) { justify-content: space-between; }
+
+/* ---- 输出 / 命名：桌面双列 ---- */
+.pm-out-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; margin-top: 12px; }
+.pm-out-grid .pm-field input[type=text] { max-width: none; }
+.pm-out-grid .btn.icon-btn { flex: none; width: 32px; height: 32px; }
+
+/* ---- 其他：横向复选 ---- */
+.pm-other { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; margin-top: 12px; }
+
+/* ---- 固定 Footer：左侧删除（Ghost danger）/ 中部提示 / 右侧四态按钮组 ---- */
+.pm-footer { flex: none; display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--border); }
+.pm-foot-left { flex: none; }
+.pm-foot-left .btn.ghost.danger { color: var(--danger); }
+.pm-foot-left .btn.ghost.danger:hover { color: var(--danger); background: var(--err-bg); border-color: transparent; }
+.pm-note { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-foot-actions { flex: none; display: flex; align-items: center; gap: 8px; }
+.pm-cur-hint { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--success); }
+.pm-cur-hint .ic { font-size: 13px; }
+
+/* ---- 响应式：<860px 单列堆叠（sidebar 变顶部横列表，轨道/输出单列） ---- */
 @media (max-width: 860px) {
   .pm-body { grid-template-columns: 1fr; }
-  .pm-list { border-right: none; border-bottom: 1px solid var(--border); max-height: 190px; overflow: auto; }
-  .pm-editor .field > label, .pm-editor .field > .set-label { width: 100%; }
-  .pm-path-note { margin-left: 0; }
+  .pm-side { border-right: none; border-bottom: 1px solid var(--border); }
+  .pm-list { max-height: 176px; flex: none; }
+  .pm-side-title { display: none; }
+  .pm-new-btn { margin: 0 8px 8px; }
+  .pm-track-grid, .pm-out-grid { grid-template-columns: 1fr; }
+  .pm-editor .pm-field > label, .pm-editor .pm-field > .set-label { width: 100%; }
+  .pm-footer { flex-wrap: wrap; }
+  .pm-note { order: 3; flex-basis: 100%; white-space: normal; }
 }

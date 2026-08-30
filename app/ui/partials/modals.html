@@ -140,18 +140,31 @@
   </div>
 </div>
 
-<!-- 封装预设管理（新建/编辑/重命名/删除；只管理预设，不改变当前任务——应用预设走高级选项下拉） -->
+<!-- 封装预设管理（新建/编辑/重命名/删除；只管理预设，点击列表项仅查看不应用——应用走底部按钮/高级选项下拉） -->
 <div class="modal" id="presetModal" role="dialog" aria-modal="true" aria-label="封装预设">
   <div class="modal-box pm-box">
-    <div class="mb-head">
-      <span class="t">封装预设</span>
-      <button class="btn small ghost" id="pmClose">关闭</button>
+    <div class="pm-head">
+      <div class="pm-head-txt">
+        <div class="pm-title">封装预设</div>
+        <div class="pm-sub t-sec">创建、管理并选择当前任务使用的封装参数组合</div>
+      </div>
+      <button type="button" class="btn ghost icon-btn pm-close" id="pmClose" aria-label="关闭封装预设"><span data-ic="x" aria-hidden="true"></span></button>
     </div>
-    <div class="pm-sub t-sec">创建和管理常用的封装参数组合。修改预设不会自动影响当前任务。</div>
     <div class="pm-body">
-      <div class="pm-list" id="pmList"></div>
-      <div class="pm-editor" id="pmEditor"></div>
+      <div class="pm-side">
+        <div class="pm-side-title">预设</div>
+        <div class="pm-list" id="pmList"></div>
+        <button type="button" class="btn pm-new-btn" id="pmNewBtn"><span data-ic="plus" aria-hidden="true"></span>新建预设</button>
+      </div>
+      <div class="pm-main">
+        <div class="pm-ed-head" id="pmEdHead"></div>
+        <div class="pm-editor" id="pmEditor"></div>
+      </div>
     </div>
-    <div class="pm-note t-cap" id="pmNote" aria-live="polite"></div>
+    <div class="pm-footer">
+      <span class="pm-foot-left" id="pmFootLeft"></span>
+      <span class="pm-foot-hint t-cap" id="pmNote" aria-live="polite"></span>
+      <span class="pm-foot-actions" id="pmFootActions"></span>
+    </div>
   </div>
 </div>

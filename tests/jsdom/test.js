@@ -333,6 +333,68 @@ function mockFetch(url, opts) {
   ok = await waitUntil(() => $('sc_sub').value === 'D:\\Video\\EP01.sc.ass');
   check('预设已选：换视频后轨道名不被自动识别改写', ok && $('sc_name').value === '简中', $('sc_name').value);
 
+  /* ---- 场景14b：管理器 Footer 四态 / 列表双状态分离 / segmented / 保存语义 ---- */
+  await savePresetViaManager('预设B');   // 造第二条预设（以当前任务配置为基底）
+  window.openPresetManager();
+  check('管理器：头部显示 正在编辑：预设B', $('pmEdHead').textContent.indexOf('正在编辑') >= 0 && $('pmEdHead').textContent.indexOf('预设B') >= 0, $('pmEdHead').textContent);
+  check('单独打开不设内联 z-index（样式表层级行为不变）', $('presetModal').style.zIndex === '', $('presetModal').style.zIndex);
+  /* 叠层：管理器内开文件浏览器 → 浏览器必须在预设管理器上层（modal.js 栈深 z-index） */
+  window.openBrowser(function () {}, 'any', '', 'pmstack');
+  check('叠层：文件浏览器显示在预设管理器上层', parseInt($('browserModal').style.zIndex || '100', 10) > parseInt($('presetModal').style.zIndex || '100', 10), 'browser=' + $('browserModal').style.zIndex);
+  window.closeModal('browserModal');
+  /* 焦点管理：closeModal 必须先把焦点移出弹窗再标 aria-hidden（恢复触发元素/退 body） */
+  $('pmName').focus();
+  window.closePresetManager();   // 触发元素是打开时的 activeElement（body）：焦点落 body，不滞留弹窗
+  check('closeModal：焦点移出弹窗不滞留（aria-hidden 前提）', !$('presetModal').contains(window.document.activeElement), window.document.activeElement && window.document.activeElement.id);
+  $('btnSc').focus();
+  window.openBrowser(function () {}, 'any', '', 'focus');   // 触发元素=btnSc
+  window.document.querySelector('.mb-item').focus();        // 模拟点击后焦点在弹窗内
+  window.closeModal('browserModal');
+  check('closeModal：焦点恢复到触发元素', window.document.activeElement === $('btnSc'), window.document.activeElement && window.document.activeElement.id);
+  check('管理器：已有预设名称回填输入框', $('pmName').value === '预设B', $('pmName').value);
+  check('管理器：Header 为 X 图标按钮（aria-label）', $('pmClose').getAttribute('aria-label') === '关闭封装预设');
+  check('Footer 状态A：查看非当前任务预设 → 只有应用按钮（无保存类）', !!$('pmApplyBtn') && !$('pmSaveBtn') && !$('pmSaveApplyBtn'));
+  check('Footer 左侧删除按钮存在', !!$('pmDeleteBtn') && $('pmDeleteBtn').textContent.indexOf('删除预设') >= 0);
+  $('pm_f_sc_name').value = 'B改';
+  $('pm_f_sc_name').dispatchEvent(new window.Event('input', { bubbles: true }));
+  check('Footer 状态B：未保存修改 → 保存修改/保存并应用（无应用按钮）', !!$('pmSaveBtn') && !!$('pmSaveApplyBtn') && !$('pmApplyBtn'));
+  check('编辑头部出现未保存指示', $('pmEdHead').textContent.indexOf('未保存') >= 0, $('pmEdHead').textContent);
+  const pmSegBtn = window.document.querySelector('#pm_f_sc_default_seg .seg-btn[data-v="1"]');
+  pmSegBtn.click();
+  check('默认轨 segmented 点选写入隐藏域并高亮', $('pm_f_sc_default').value === '1' && pmSegBtn.classList.contains('active'), $('pm_f_sc_default').value);
+  window.document.querySelector('.pm-item[data-name="测试预设"]').click();   // 未保存切换保护（confirm mock=true → 放行）
+  check('未保存切换保护放行后切换到测试预设', $('pmEdHead').textContent.indexOf('测试预设') >= 0, $('pmEdHead').textContent);
+  check('Footer 状态C：查看当前任务预设未修改 → 无应用/保存按钮 + 正在使用提示', !$('pmApplyBtn') && !$('pmSaveBtn') && $('pmFootActions').textContent.indexOf('当前任务正在使用') >= 0, $('pmFootActions').textContent);
+  check('列表：选中高亮与当前任务徽章同落测试预设', window.document.querySelector('.pm-item[data-name="测试预设"]').classList.contains('selected') && !!window.document.querySelector('.pm-item[data-name="测试预设"] .pm-cur'));
+  window.document.querySelector('.pm-item[data-name="预设B"]').click();
+  check('列表双状态可分离：选中在预设B、徽章在测试预设', window.document.querySelector('.pm-item[data-name="预设B"]').classList.contains('selected') && !!window.document.querySelector('.pm-item[data-name="测试预设"] .pm-cur') && !window.document.querySelector('.pm-item[data-name="预设B"] .pm-cur'));
+  $('pmApplyBtn').click();   // 状态A 的应用按钮：当前任务切到 预设B
+  check('应用按钮：当前任务切到预设B', $('presetStatusText').textContent.indexOf('预设B') >= 0, $('presetStatusText').textContent);
+  check('应用后 Footer 切到状态C（正在使用）', !$('pmApplyBtn') && $('pmFootActions').textContent.indexOf('当前任务正在使用') >= 0);
+  /* 保存语义：保存修改不自动改当前任务；保存并应用刷新当前任务 */
+  $('pm_f_sc_name').value = '存后新名';
+  $('pm_f_sc_name').dispatchEvent(new window.Event('input', { bubbles: true }));
+  $('pmSaveBtn').click();
+  await sleep(60);
+  check('保存修改不自动改当前任务参数', $('sc_name').value === '简中', $('sc_name').value);
+  check('保存后回到干净态（状态C）', !$('pmSaveBtn') && $('pmFootActions').textContent.indexOf('当前任务正在使用') >= 0);
+  $('pm_f_sc_name').value = '存应新名';
+  $('pm_f_sc_name').dispatchEvent(new window.Event('input', { bubbles: true }));
+  $('pmSaveApplyBtn').click();
+  await sleep(60);
+  check('保存并应用刷新当前任务参数', $('sc_name').value === '存应新名', $('sc_name').value);
+  /* 空名预设 UI fallback（仅显示层，不回写持久化名称） */
+  $('pmCancelBtn').click();
+  presetStore[''] = { sc_name: 'SC' };
+  await window.loadPresets();
+  window.openPresetManager();
+  check('空名预设列表显示 未命名预设 1', window.document.querySelector('.pm-item[data-name=""]') && window.document.querySelector('.pm-item[data-name=""]').textContent.indexOf('未命名预设 1') >= 0);
+  $('pmCancelBtn').click();
+  delete presetStore[''];
+  await window.loadPresets();
+  window.applyPresetToCurrentTask('测试预设');   // 恢复场景14 结束态（来源/记忆/参数）
+  check('恢复：预设来源与记忆回到测试预设', window.localStorage.getItem('muxui_preset') === '测试预设' && $('sc_name').value === '简中');
+
   /* ---- 场景15：批量章节自动匹配 + 预设套用批量字段 ---- */
   chaptersRet = { chapters: 'D:\\Video\\EP01.chapters.txt' };
   window.eval('batchItems.length = 0');

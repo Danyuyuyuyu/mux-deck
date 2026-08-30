@@ -134,8 +134,15 @@ function updatePresetHint() {
 const PM_BLANK = { sc_name: 'SC', tc_name: 'TC', sc_default: '', tc_default: '', sc_forced: false, tc_forced: false,
   fonts_mode: 'subset', out_name_tmpl: '', title: '', fonts_dir: '', out_dir: '', chapters: '', backup: true, force: false };
 const pmState = { editing: null };   // {orig: 已有预设名|null, isNew, mode: 'blank'|'task', base: 建基数据}
-let pmEditorDirty = false;           // 编辑器有未保存修改（切换列表项时提示保护）
+let pmEditorDirty = false;           // 编辑器有未保存修改（切换列表项时提示保护；Footer 按钮组随之切换）
 function pmClone(o) { return JSON.parse(JSON.stringify(o || {})); }
+/* 空名预设的 UI fallback 编号（仅显示，不回写持久化名称；对象键唯一故空名至多一条） */
+function pmNameMap() {
+  const m = {}; let n = 0;
+  Object.keys(PRESETS).forEach(k => { m[k] = (k && k.trim()) ? k : ('未命名预设 ' + (++n)); });
+  return m;
+}
+function pmDisplayName(name) { return pmNameMap()[name] || '未命名预设'; }
 function openPresetManager() {
   openModal('presetModal', { display: 'block' });
   $('pmNote').textContent = '';
@@ -160,72 +167,102 @@ function pmSelect(name) {
   $('pmNote').textContent = '';
   pmRenderList(); pmRenderEditor();
 }
+/* dirty 翻转时刷新编辑器头部指示与 Footer 按钮组（同值不重渲染） */
+function pmMarkDirty() {
+  if (pmEditorDirty) return;
+  pmEditorDirty = true;
+  pmRenderEdHead();
+  pmRenderFooter();
+}
 function pmRenderList() {
   const box = $('pmList');
-  let h = Object.keys(PRESETS).map(function (n) {
-    // 两个状态不混淆：selected = 正在编辑（accent）；current = 当前任务来源（✓ 徽章）
+  const names = pmNameMap();
+  box.innerHTML = Object.keys(PRESETS).map(function (n) {
+    // 两个状态不混淆：selected = 正在编辑（accent bar）；current = 当前任务来源（✓ 徽章）
     const selected = pmState.editing && !pmState.editing.isNew && pmState.editing.orig === n;
     const current = presetSession.currentId === n;
-    return '<button type="button" class="pm-item' + (selected ? ' selected' : '') + '" data-name="' + esc(n) + '">' + ic('fileText') + '<span>' + esc(n) + '</span>' + (current ? '<span class="pm-cur">✓ 当前任务</span>' : '') + '</button>';
+    return '<button type="button" class="pm-item' + (selected ? ' selected' : '') + '" data-name="' + esc(n) + '">' + ic('fileText') +
+      '<span class="pm-item-name">' + esc(names[n]) + '</span>' +
+      (current ? '<span class="pm-cur">' + ic('check') + '<span>当前任务</span></span>' : '') + '</button>';
   }).join('');
-  h += '<button type="button" class="pm-item pm-new" id="pmNewBtn">' + ic('plus') + '<span>新建预设</span></button>';
-  box.innerHTML = h;
   box.querySelectorAll('.pm-item[data-name]').forEach(b => { b.onclick = () => pmSelect(b.dataset.name); });
-  $('pmNewBtn').onclick = function () {
-    if (!pmGuardUnsaved()) return;
-    pmState.editing = { orig: null, isNew: true, mode: 'blank', base: pmClone(PM_BLANK) };
-    $('pmNote').textContent = '';
-    pmRenderList(); pmRenderEditor();
-  };
+}
+/* 编辑器头部：正在编辑：名称 + 未保存小圆点指示 */
+function pmRenderEdHead() {
+  const el = $('pmEdHead');
+  if (!el) return;
+  const st = pmState.editing;
+  if (!st) { el.innerHTML = ''; return; }
+  let nm;
+  if (st.isNew) { const v = $('pmName') ? $('pmName').value.trim() : ''; nm = v || '新预设'; }
+  else nm = pmDisplayName(st.orig);
+  el.innerHTML = '<span class="pm-ed-cap">正在编辑：</span><span class="pm-ed-name">' + esc(nm) + '</span>' +
+    (pmEditorDirty ? '<span class="pm-ed-dirty" title="有未保存的修改">● 未保存</span>' : '');
 }
 function pmField(id, label, inner) {
-  return '<div class="field"><label for="' + id + '">' + label + '</label>' + inner + '</div>';
+  return '<div class="field pm-field"><label for="' + id + '">' + label + '</label>' + inner + '</div>';
+}
+/* SC / TC 轨道配置卡：badge 配色沿用主页面 sub-badge；默认轨为主页面同款三态 segmented（写隐藏域） */
+function pmTrackCard(kind, badge, langLabel, d) {
+  const fid = 'pm_f_' + kind;
+  const dv = String(d[kind + '_default'] || '');
+  const segBtn = v => '<button type="button" class="seg-btn' + (dv === v ? ' active' : '') + '" data-v="' + v + '">' + (v === '' ? '自动' : (v === '1' ? '是' : '否')) + '</button>';
+  return '<div class="pm-track-card">' +
+    '<div class="pm-track-head"><span class="sub-badge ' + kind + '">' + badge + '</span><span class="pm-track-title">' + langLabel + '</span></div>' +
+    '<div class="pm-track-row"><label for="' + fid + '_name">轨道名</label><input id="' + fid + '_name" type="text" value="' + esc(d[kind + '_name'] || badge) + '" autocomplete="off"></div>' +
+    '<div class="pm-track-row"><span class="set-label">默认轨</span>' +
+      '<div class="seg" id="' + fid + '_default_seg" role="radiogroup" aria-label="' + langLabel + '默认轨">' + segBtn('') + segBtn('1') + segBtn('0') + '</div>' +
+      '<input id="' + fid + '_default" type="hidden" value="' + esc(dv) + '"></div>' +
+    '<div class="pm-track-row"><label for="' + fid + '_forced">强制字幕</label><input id="' + fid + '_forced" type="checkbox" class="switch"' + (d[kind + '_forced'] ? ' checked' : '') + ' aria-label="' + langLabel + '强制字幕"></div>' +
+    '</div>';
 }
 function pmRenderEditor() {
   const box = $('pmEditor');
-  if (!pmState.editing) { box.innerHTML = '<div class="pm-empty t-sec">从左侧选择一个预设，或点「新建预设」</div>'; return; }
+  if (!pmState.editing) {
+    box.innerHTML = '<div class="pm-empty t-sec">从左侧选择一个预设，或点「新建预设」</div>';
+    pmRenderEdHead(); pmRenderFooter();
+    return;
+  }
   const st = pmState.editing;
   const d = st.isNew ? pmClone(st.base) : pmClone(PRESETS[st.orig] || {});
   let h = '';
+  /* ---- 基本信息 ---- */
+  h += '<div class="pm-sec"><div class="pm-sec-title">基本信息</div>';
   if (st.isNew) {
-    h += pmField('pmName', '新建方式',
+    h += pmField('pmNewMode', '新建方式',
       '<span class="pm-modes">' +
       '<label class="check"><input type="radio" name="pmNewMode" value="blank"' + (st.mode === 'blank' ? ' checked' : '') + '> 空白预设</label>' +
       '<label class="check"><input type="radio" name="pmNewMode" value="task"' + (st.mode === 'task' ? ' checked' : '') + '> 使用当前任务配置</label>' +
       '</span>');
   }
-  h += '<div class="pm-group">基本信息</div>';
   h += pmField('pmName', '预设名称', '<input id="pmName" type="text" placeholder="如：字幕组标准" autocomplete="off">');
-  h += '<div class="pm-group">字幕轨道</div>';
-  h += pmField('pm_f_sc_name', 'SC 轨道名', '<input id="pm_f_sc_name" type="text" value="' + esc(d.sc_name || 'SC') + '" autocomplete="off">');
-  h += pmField('pm_f_sc_default', 'SC 默认轨', '<select id="pm_f_sc_default"><option value="">自动</option><option value="1">是</option><option value="0">否</option></select>');
-  h += '<div class="field"><label for="pm_f_sc_forced">SC 强制</label><input id="pm_f_sc_forced" type="checkbox" class="switch"' + (d.sc_forced ? ' checked' : '') + '></div>';
-  h += pmField('pm_f_tc_name', 'TC 轨道名', '<input id="pm_f_tc_name" type="text" value="' + esc(d.tc_name || 'TC') + '" autocomplete="off">');
-  h += pmField('pm_f_tc_default', 'TC 默认轨', '<select id="pm_f_tc_default"><option value="">自动</option><option value="1">是</option><option value="0">否</option></select>');
-  h += '<div class="field"><label for="pm_f_tc_forced">TC 强制</label><input id="pm_f_tc_forced" type="checkbox" class="switch"' + (d.tc_forced ? ' checked' : '') + '></div>';
-  h += '<div class="pm-group">字体</div>';
+  h += '</div>';
+  /* ---- 字幕轨道（SC / TC 双卡） ---- */
+  h += '<div class="pm-sec"><div class="pm-sec-title">字幕轨道</div><div class="pm-track-grid">' +
+    pmTrackCard('sc', 'SC', '简体中文', d) + pmTrackCard('tc', 'TC', '繁體中文', d) + '</div></div>';
+  /* ---- 字体 ---- */
+  h += '<div class="pm-sec"><div class="pm-sec-title">字体</div>';
   h += pmField('pm_f_fonts_mode', '字体处理', '<select id="pm_f_fonts_mode"><option value="subset">子集化</option><option value="collect">仅收集</option></select>');
-  h += pmField('pm_f_fonts_dir', '字体目录', '<input id="pm_f_fonts_dir" type="text" value="' + esc(d.fonts_dir || '') + '" autocomplete="off">');
-  h += '<div class="t-cap" style="margin:-6px 0 10px 190px;">路径类字段：应用预设时会覆盖当前任务的对应输入</div>';
-  h += '<div class="pm-group">输出 / 命名</div>';
-  h += pmField('pm_f_out_name_tmpl', '命名模板', '<input id="pm_f_out_name_tmpl" type="text" value="' + esc(d.out_name_tmpl || '') + '" placeholder="留空 = 沿用源文件名" autocomplete="off">');
-  h += pmField('pm_f_title', 'MKV 标题', '<input id="pm_f_title" type="text" value="' + esc(d.title || '') + '" autocomplete="off">');
-  h += pmField('pm_f_out_dir', '输出目录', '<input id="pm_f_out_dir" type="text" value="' + esc(d.out_dir || '') + '" autocomplete="off">');
-  h += '<div class="t-cap" style="margin:-6px 0 10px 190px;">应用预设会覆盖当前任务的输出位置（留空 = 不改变）</div>';
-  h += pmField('pm_f_chapters', '章节文件', '<input id="pm_f_chapters" type="text" value="' + esc(d.chapters || '') + '" autocomplete="off">');
-  h += '<div class="pm-group">其他</div>';
-  h += '<div class="field"><label for="pm_f_backup">备份原件</label><input id="pm_f_backup" type="checkbox"' + (d.backup !== false ? ' checked' : '') + '></div>';
-  h += '<div class="field"><label for="pm_f_force">强制封装</label><input id="pm_f_force" type="checkbox"' + (d.force ? ' checked' : '') + '></div>';
-  h += '<div class="pm-actions">' +
-    (st.isNew ? '' : '<button type="button" class="btn ghost danger" id="pmDeleteBtn">' + ic('trash') + '<span>删除</span></button>'
-      + '<button type="button" class="btn" id="pmApplyBtn">' + ic('check') + '<span>应用到当前任务</span></button>') +
-    '<span style="flex:1"></span>' +
-    '<button type="button" class="btn" id="pmSaveBtn">' + (st.isNew ? ic('plus') + '<span>创建预设</span>' : ic('check') + '<span>保存修改</span>') + '</button>' +
-    '<button type="button" class="btn primary" id="pmSaveApplyBtn">' + (st.isNew ? ic('play') + '<span>创建并应用</span>' : ic('play') + '<span>保存并应用</span>') + '</button>' +
-    '</div>';
+  h += '<div class="field pm-field"><label for="pm_f_fonts_dir">字体目录</label>' +
+    '<input id="pm_f_fonts_dir" type="text" value="' + esc(d.fonts_dir || '') + '" autocomplete="off">' +
+    '<button type="button" class="btn icon-btn" id="pm_f_fonts_dir_btn" aria-label="浏览字体目录">' + ic('folderOpen') + '</button></div>';
+  h += '<div class="t-cap pm-hint">留空 = 自动查找视频旁的 Fonts\\ 或 Font\\；应用预设时会覆盖当前任务的对应输入</div>';
+  h += '</div>';
+  /* ---- 输出 / 命名（桌面双列） ---- */
+  h += '<div class="pm-sec"><div class="pm-sec-title">输出 / 命名</div><div class="pm-out-grid">';
+  h += '<div class="field pm-field"><label for="pm_f_out_name_tmpl">命名模板</label><input id="pm_f_out_name_tmpl" type="text" value="' + esc(d.out_name_tmpl || '') + '" placeholder="留空 = 沿用源文件名" autocomplete="off"></div>';
+  h += '<div class="field pm-field"><label for="pm_f_out_dir">输出目录</label><input id="pm_f_out_dir" type="text" value="' + esc(d.out_dir || '') + '" placeholder="留空 = 替换源视频" autocomplete="off">' +
+    '<button type="button" class="btn icon-btn" id="pm_f_out_dir_btn" aria-label="浏览输出目录">' + ic('folderOpen') + '</button></div>';
+  h += '<div class="field pm-field"><label for="pm_f_title">MKV 标题</label><input id="pm_f_title" type="text" value="' + esc(d.title || '') + '" placeholder="留空则不写入标题" autocomplete="off"></div>';
+  h += '<div class="field pm-field"><label for="pm_f_chapters">章节文件</label><input id="pm_f_chapters" type="text" value="' + esc(d.chapters || '') + '" placeholder="可选：导入章节文件" autocomplete="off">' +
+    '<button type="button" class="btn icon-btn" id="pm_f_chapters_btn" aria-label="浏览章节文件">' + ic('folderOpen') + '</button></div>';
+  h += '</div><div class="t-cap pm-hint">应用预设会覆盖当前任务的输出位置（留空 = 不改变）</div></div>';
+  /* ---- 其他（横向复选） ---- */
+  h += '<div class="pm-sec"><div class="pm-sec-title">其他</div><div class="pm-other">' +
+    '<label class="check"><input id="pm_f_backup" type="checkbox"' + (d.backup !== false ? ' checked' : '') + '> 备份原件</label>' +
+    '<label class="check"><input id="pm_f_force" type="checkbox"' + (d.force ? ' checked' : '') + '> 强制封装</label></div></div>';
   box.innerHTML = h;
-  $('pm_f_sc_default').value = String(d.sc_default || '');
-  $('pm_f_tc_default').value = String(d.tc_default || '');
+  $('pmName').value = st.isNew ? '' : st.orig;
   $('pm_f_fonts_mode').value = d.fonts_mode === 'collect' ? 'collect' : 'subset';
   if (st.isNew) {
     box.querySelectorAll('input[name=pmNewMode]').forEach(r => {
@@ -238,11 +275,65 @@ function pmRenderEditor() {
       });
     });
   }
+  /* 默认轨三态 segmented（动态生成，单独绑定；主页面 single.js 的 .seg 绑定只覆盖静态 DOM） */
+  box.querySelectorAll('.pm-track-card .seg').forEach(seg => {
+    seg.addEventListener('click', function (e) {
+      const b = e.target.closest('.seg-btn');
+      if (!b) return;
+      const hidden = seg.parentElement.querySelector('input[type=hidden]');
+      if (!hidden || hidden.value === b.dataset.v) return;
+      hidden.value = b.dataset.v;
+      seg.querySelectorAll('.seg-btn').forEach(x => x.classList.toggle('active', x === b));
+      pmMarkDirty();
+    });
+  });
+  /* 路径字段浏览按钮：复用 browser.js（openBrowser），选择后回填并标脏 */
+  const bindBrowse = (btnId, inputId, filter, slot) => {
+    const b = $(btnId);
+    if (b) b.onclick = () => openBrowser(v => { $(inputId).value = v; pmMarkDirty(); }, filter, $(inputId).value, slot);
+  };
+  bindBrowse('pm_f_fonts_dir_btn', 'pm_f_fonts_dir', 'dir', 'fonts');
+  bindBrowse('pm_f_out_dir_btn', 'pm_f_out_dir', 'dir', 'out');
+  bindBrowse('pm_f_chapters_btn', 'pm_f_chapters', 'any', 'chapters');
   pmEditorDirty = false;   // 刚渲染的编辑器视为干净
-  $('pmSaveBtn').onclick = () => pmSave(false);
-  $('pmSaveApplyBtn').onclick = () => pmSave(true);
+  pmRenderEdHead();
+  pmRenderFooter();
+}
+/* Footer 四态（一次最多一个 Primary）：
+ * 新建 → [取消] [创建预设] [创建并应用*]；
+ * 已有未保存 → [取消] [保存修改] [保存并应用*]（保存并应用已覆盖"应用"语义，不再显示应用按钮）；
+ * 正在查看当前任务预设且未修改 → [取消] + "当前任务正在使用"轻提示（应用无意义，不显示）；
+ * 查看其他预设未修改 → [取消] [应用到当前任务*]。左侧恒为删除（Ghost danger，仅已有预设）。 */
+function pmRenderFooter() {
+  const st = pmState.editing;
+  const left = $('pmFootLeft'), acts = $('pmFootActions');
+  if (!left || !acts) return;
+  if (!st) { left.innerHTML = ''; acts.innerHTML = ''; return; }
+  left.innerHTML = st.isNew ? '' :
+    '<button type="button" class="btn ghost danger" id="pmDeleteBtn">' + ic('trash') + '<span>删除预设</span></button>';
+  let h = '<button type="button" class="btn" id="pmCancelBtn">取消</button>';
+  if (st.isNew) {
+    h += '<button type="button" class="btn" id="pmSaveBtn">' + ic('plus') + '<span>创建预设</span></button>' +
+      '<button type="button" class="btn primary" id="pmSaveApplyBtn">' + ic('play') + '<span>创建并应用</span></button>';
+  } else if (pmEditorDirty) {
+    h += '<button type="button" class="btn" id="pmSaveBtn">' + ic('check') + '<span>保存修改</span></button>' +
+      '<button type="button" class="btn primary" id="pmSaveApplyBtn">' + ic('play') + '<span>保存并应用</span></button>';
+  } else if (presetSession.currentId === st.orig) {
+    h += '<span class="pm-cur-hint">' + ic('checkCircle') + '<span>当前任务正在使用</span></span>';
+  } else {
+    h += '<button type="button" class="btn primary" id="pmApplyBtn">' + ic('check') + '<span>应用到当前任务</span></button>';
+  }
+  acts.innerHTML = h;
+  $('pmCancelBtn').onclick = closePresetManager;
+  if ($('pmSaveBtn')) $('pmSaveBtn').onclick = () => pmSave(false);
+  if ($('pmSaveApplyBtn')) $('pmSaveApplyBtn').onclick = () => pmSave(true);
   const apply = $('pmApplyBtn');
-  if (apply) apply.onclick = () => { if (applyPresetToCurrentTask(st.orig)) pmNoteOk('✓ 已应用到当前任务（' + st.orig + '）'); };
+  if (apply) apply.onclick = () => {
+    if (applyPresetToCurrentTask(st.orig)) {
+      pmNoteOk('✓ 已应用到当前任务（' + st.orig + '）');
+      pmRenderList(); pmRenderFooter();   // 当前任务徽章移动 + Footer 切到"正在使用"态
+    }
+  };
   const del = $('pmDeleteBtn');
   if (del) del.onclick = pmDelete;
 }
@@ -321,7 +412,17 @@ $('preset_sel').onchange = function () {
 ['sc_name', 'tc_name', 'fonts_dir', 'out_dir', 'out_name_tmpl', 'title'].forEach(id => $(id).addEventListener('input', updatePresetHint));
 ['sc_forced', 'tc_forced', 'backup', 'force', 'fonts_mode'].forEach(id => $(id).addEventListener('change', updatePresetHint));
 $('pmClose').onclick = closePresetManager;
-/* 编辑器任何输入都标记未保存（切换列表项时触发保护） */
-$('pmEditor').addEventListener('input', function () { pmEditorDirty = true; }, true);
-$('pmEditor').addEventListener('change', function () { pmEditorDirty = true; }, true);
+/* 新建预设按钮（静态侧栏底部，不随编辑器滚动/重渲染） */
+$('pmNewBtn').onclick = function () {
+  if (!pmGuardUnsaved()) return;
+  pmState.editing = { orig: null, isNew: true, mode: 'blank', base: pmClone(PM_BLANK) };
+  $('pmNote').textContent = '';
+  pmRenderList(); pmRenderEditor();
+};
+/* 编辑器任何输入都标记未保存（切换列表项触发保护 + 头部/.Footer 状态切换；名称输入同步头部标题） */
+$('pmEditor').addEventListener('input', function (e) {
+  pmMarkDirty();
+  if (e.target && e.target.id === 'pmName') pmRenderEdHead();
+}, true);
+$('pmEditor').addEventListener('change', pmMarkDirty, true);
 }
