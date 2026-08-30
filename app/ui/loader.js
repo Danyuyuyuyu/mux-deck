@@ -13,7 +13,21 @@
     { url: './partials/console.html', target: 'consoleRoot' },
     { url: './partials/modals.html', target: 'modalRoot' }
   ];
-  var SCRIPTS = ['app.js', 'identify.js', 'task.js', 'batch.js', 'extract.js', 'preview.js', 'propedit.js', 'env.js', 'init.js'];
+  var SCRIPTS = [
+    // core：图标 / 公共工具 / 导航（供其余全部脚本与 inline onclick 使用）
+    'scripts/core/icons.js', 'scripts/core/utils.js', 'scripts/core/navigation.js',
+    // components：文件浏览器 / 设置域（含主题·全局设置·备份·首次引导）
+    'scripts/components/browser.js', 'scripts/components/settings.js',
+    // 公共业务（既有文件，职责不变）
+    'task.js', 'identify.js', 'env.js',
+    // 控制台（日志/历史/结果摘要）与 features
+    'scripts/components/console.js',
+    'scripts/features/single.js', 'scripts/features/preflight.js', 'scripts/features/presets.js', 'scripts/features/chapters.js',
+    // 既有业务页脚本（batch 依赖 console/single 的运行时全局，须在其后）
+    'batch.js', 'extract.js', 'preview.js', 'propedit.js',
+    // 应用级 glue + 启动初始化
+    'app.js', 'init.js'
+  ];
 
   function fetchText(url) {
     return fetch(url).then(function (r) {

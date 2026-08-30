@@ -148,6 +148,10 @@ def main():
         body = op.open("http://127.0.0.1:8765/", timeout=10).read().decode("utf-8", errors="replace")
         ui_ok = "pageRoot" in body and "consoleRoot" in body and "modalRoot" in body and "loader.js" in body
         need = ["style.css", "loader.js", "app.js", "batch.js", "extract.js", "preview.js", "env.js", "init.js",
+                "scripts/core/icons.js", "scripts/core/utils.js", "scripts/core/navigation.js",
+                "scripts/components/browser.js", "scripts/components/settings.js", "scripts/components/console.js",
+                "scripts/features/single.js", "scripts/features/preflight.js", "scripts/features/presets.js",
+                "scripts/features/chapters.js",
                 "pages/single.html", "pages/batch.html", "pages/subtitle-tools.html",
                 "partials/console.html", "partials/modals.html",
                 "styles/tokens.css", "styles/base.css", "styles/layout.css",

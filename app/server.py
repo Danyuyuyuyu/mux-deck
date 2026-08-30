@@ -37,6 +37,17 @@ STATIC_FILES = {
     "env.js": "application/javascript; charset=utf-8",
     "init.js": "application/javascript; charset=utf-8",
     "loader.js": "application/javascript; charset=utf-8",
+    # app.js 拆分模块（加载顺序见 loader.js SCRIPTS；均为 classic script 全局）
+    "scripts/core/icons.js": "application/javascript; charset=utf-8",
+    "scripts/core/utils.js": "application/javascript; charset=utf-8",
+    "scripts/core/navigation.js": "application/javascript; charset=utf-8",
+    "scripts/components/browser.js": "application/javascript; charset=utf-8",
+    "scripts/components/settings.js": "application/javascript; charset=utf-8",
+    "scripts/components/console.js": "application/javascript; charset=utf-8",
+    "scripts/features/single.js": "application/javascript; charset=utf-8",
+    "scripts/features/preflight.js": "application/javascript; charset=utf-8",
+    "scripts/features/presets.js": "application/javascript; charset=utf-8",
+    "scripts/features/chapters.js": "application/javascript; charset=utf-8",
     # App Shell 片段（loader.js 启动时 fetch 挂载；仅白名单路径，无目录遍历面）
     "pages/single.html": "text/html; charset=utf-8",
     "pages/batch.html": "text/html; charset=utf-8",
