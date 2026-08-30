@@ -1,0 +1,32 @@
+<section class="console" aria-label="任务日志">
+      <div class="console-panel collapsed" id="consolePanel">
+        <div id="taskSummary" style="display:none"></div>
+        <button type="button" class="console-collapsed" id="consoleCollapsed" aria-expanded="false">
+          <span class="cc-ic" data-ic="terminal" aria-hidden="true"></span>
+          <span class="cc-title">任务日志</span>
+          <span class="cc-status info" id="consoleStatus">尚未开始</span>
+          <span class="c-chev" data-ic="chevronDown" aria-hidden="true"></span>
+        </button>
+        <div class="console-full" id="consoleFull">
+          <div class="console-head">
+            <div class="console-tabs" role="tablist" aria-label="日志视图">
+              <button type="button" class="console-tab ltab active" data-tab="mux" onclick="showLogTab('mux')">封装</button>
+              <button type="button" class="console-tab ltab" data-tab="batch" onclick="showLogTab('batch')">批量</button>
+              <button type="button" class="console-tab ltab" data-tab="xt" onclick="showLogTab('xt')">提取</button>
+              <button type="button" class="console-tab ltab" data-tab="hist" onclick="showLogTab('hist')">历史</button>
+            </div>
+            <div class="console-tools">
+              <label class="check sm"><input id="soundToggle" type="checkbox" checked> 提示音</label>
+              <button class="btn ghost small" id="btnLogFold"><span data-ic="chevronDown" aria-hidden="true"></span>收起</button>
+              <button class="btn ghost small" id="btnLogClear"><span data-ic="trash" aria-hidden="true"></span>清空</button>
+            </div>
+          </div>
+          <pre id="log" class="console-log">（等待开始…）</pre>
+          <div id="histBox" style="display:none"></div>
+          <div id="histLogWrap" style="display:none">
+            <div class="log-title" style="margin:12px 16px 8px;">任务日志</div>
+            <pre id="histLog" class="console-log" style="height:180px;"></pre>
+          </div>
+        </div>
+      </div>
+    </section>

@@ -11,7 +11,7 @@ from app import core
 from app.features import ROUTES, find
 
 HOST = "127.0.0.1"
-UI_DIR = os.path.join(BASE, "app", "ui")          # 拆分后的前端资源（index.html + style.css + 各 js）
+UI_DIR = os.path.join(BASE, "app", "ui")          # 拆分后的前端资源（App Shell + pages/partials 片段 + 各 js）
 STATIC_FILES = {
     "style.css": "text/css; charset=utf-8",
     "app.js": "application/javascript; charset=utf-8",
@@ -23,6 +23,13 @@ STATIC_FILES = {
     "preview.js": "application/javascript; charset=utf-8",
     "env.js": "application/javascript; charset=utf-8",
     "init.js": "application/javascript; charset=utf-8",
+    "loader.js": "application/javascript; charset=utf-8",
+    # App Shell 片段（loader.js 启动时 fetch 挂载；仅白名单路径，无目录遍历面）
+    "pages/single.html": "text/html; charset=utf-8",
+    "pages/batch.html": "text/html; charset=utf-8",
+    "pages/subtitle-tools.html": "text/html; charset=utf-8",
+    "partials/console.html": "text/html; charset=utf-8",
+    "partials/modals.html": "text/html; charset=utf-8",
 }
 
 class H(BaseHTTPRequestHandler):

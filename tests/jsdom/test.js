@@ -7,7 +7,9 @@ const { JSDOM, VirtualConsole } = require('jsdom');
 
 const UI = path.join(__dirname, '..', '..', 'app', 'ui');
 let html = fs.readFileSync(path.join(UI, 'index.html'), 'utf8');
-// 外部 script 内联组装（加载顺序与 index.html 一致）
+// 外部 script 内联组装（拆分后 index.html 只剩 loader.js；jsdom 不加载外部脚本资源）。
+// pages/partials 片段与业务脚本改由下方 mockFetch 从磁盘按 URL 供给，
+// 让 jsdom 走与线上一致的 loader 异步加载路径（并行挂载 → 按序注入脚本 → 初始化）。
 html = html.replace(/<script src="([^"]+)"><\/script>/g, (m, src) =>
   '<script>\n' + fs.readFileSync(path.join(UI, src), 'utf8') + '\n</script>');
 
@@ -73,6 +75,16 @@ function mockFetch(url, opts) {
       data = jobCalls <= 2 ? { status: 'running', progress: 68, log: 'Muxing' } : { status: 'done', progress: 100, log: '', result: 'D:\\Video\\out.mkv' };
     }
   }
+  else if (!u.startsWith('/api/')) {
+    // App Shell 片段与业务脚本：从磁盘按路径供给（loader.js 的 fetch 走这里）
+    const rel = u.replace(/^\.?\//, '');
+    try {
+      const content = fs.readFileSync(path.join(UI, rel), 'utf8');
+      return Promise.resolve({ ok: true, status: 200, text: async () => content });
+    } catch (e) {
+      return Promise.resolve({ ok: false, status: 404, text: async () => '' });
+    }
+  }
   else return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
   return Promise.resolve({ ok: true, status: 200, json: async () => data });
 }
@@ -96,7 +108,7 @@ function mockFetch(url, opts) {
   });
   const { window } = dom;
   const $ = id => window.document.getElementById(id);
-  await sleep(150); // 等 init.js 的 Promise.all + version 探测完成
+  await sleep(300); // 等 loader 并行挂载片段 + 按序注入脚本 + init.js 的 Promise.all/version 探测完成
   if (!$('stickyNote')) {
     console.log('DEBUG bodyLen', window.document.body.innerHTML.length, 'scripts', window.document.querySelectorAll('script').length);
     console.log('DEBUG html head:', html.slice(0, 200));

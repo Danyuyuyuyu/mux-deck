@@ -1,0 +1,141 @@
+<div class="modal" id="browserModal" role="dialog" aria-modal="true" aria-label="文件浏览器">
+  <div class="modal-box">
+    <div class="mb-head">
+      <span class="t" id="mbPath" aria-live="polite"></span>
+      <button class="btn small" id="mbUp"><span data-ic="arrow-up" aria-hidden="true"></span>上级</button>
+      <button class="btn small ghost" id="mbClose">关闭</button>
+    </div>
+    <div class="mb-bar">
+      <input id="mbPathInput" type="text" autocomplete="off">
+      <button class="btn small" id="mbGo">前往</button>
+    </div>
+    <div class="mb-body" id="mbBody"></div>
+    <div class="mb-foot">
+      <button class="btn small" id="mbUseDir" style="display:none"><span data-ic="check" aria-hidden="true"></span>使用此目录</button>
+      <span class="hint" id="mbHint"></span>
+    </div>
+  </div>
+</div>
+<div id="dropOverlay" role="presentation"><div class="txt"><span data-ic="film" aria-hidden="true"></span>松开以识别文件</div></div>
+
+<!-- 初始启动：设置工作目录（首次使用或当前工作目录无效时显示） -->
+<div id="setupModal" style="position:fixed;inset:0;background:rgba(7,10,15,0.75);z-index:90;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--surface-1,#20202a);border:1px solid var(--border,#333);border-radius:12px;padding:24px 26px;max-width:520px;width:92%;box-shadow:0 10px 40px rgba(0,0,0,.5);">
+    <h3 style="margin:0 0 6px;">设置工作目录</h3>
+    <p class="t-sec" style="margin:0 0 14px;">首次使用请先设置工作目录：它是<strong>拖放识别</strong>搜索文件的根目录，也是<strong>文件浏览器</strong>的默认起点。之后可在「高级选项 → 工作目录」随时更改。</p>
+    <div class="field" style="margin:0 0 10px;">
+      <label for="setup_scan">工作目录（扫描根）</label>
+      <input id="setup_scan" type="text" placeholder="如 D:\Video" autocomplete="off" style="flex:1;">
+      <button class="btn" id="btnSetupBrowse">浏览</button>
+    </div>
+    <div id="setupErr" class="t-sec" style="color:var(--warn-line);min-height:18px;margin-bottom:8px;"></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="btn primary" id="btnSetupSave" style="padding:6px 22px;">保存并开始</button>
+      <a id="setupSkip" href="javascript:void(0)" class="t-cap" style="cursor:pointer;">暂不设置，稍后在「高级选项」里设置</a>
+    </div>
+  </div>
+</div>
+
+<!-- 环境检测与安装（初始启动引导：检测 mkvtoolnix/ffmpeg/子集工具/fonttools，缺失时网页内一键安装） -->
+<div id="envModal" style="position:fixed;inset:0;background:rgba(7,10,15,0.75);z-index:95;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--surface-1,#20202a);border:1px solid var(--border,#333);border-radius:12px;padding:24px 26px;max-width:660px;width:94%;box-shadow:0 10px 40px rgba(0,0,0,.5);">
+    <h3 style="margin:0 0 6px;">环境检测与安装</h3>
+    <p class="t-sec" style="margin:0 0 14px;">封装依赖 <strong>mkvmerge</strong>（MKVToolNix）、<strong>ffmpeg</strong>（预览）、<strong>子集化工具</strong>（AssFontSubset 主用 / assfonts 回退）与 <strong>fonttools</strong>（AFS 后端）。缺失组件可在这里一键下载安装到 <span class="mono">bin\</span>。</p>
+    <div id="envList" aria-live="polite"></div>
+    <div id="envNote" class="t-sec" style="min-height:18px;margin-bottom:10px;"></div>
+    <div id="envInstallBox" style="display:none;">
+      <div class="field" style="margin-bottom:10px;">
+        <label for="envProxy" style="width:auto;">代理（可选）</label>
+        <input id="envProxy" type="text" placeholder="如 http://127.0.0.1:7890 —— 下载 / pip 直连不通时填写" autocomplete="off" style="flex:1;">
+      </div>
+      <pre id="envLog" style="max-height:220px;overflow:auto;background:var(--input);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font:12px/1.6 var(--mono);color:var(--text-secondary);white-space:pre-wrap;word-break:break-all;margin-bottom:12px;"></pre>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <button class="btn primary" id="btnEnvInstall" style="padding:6px 22px;"><span data-ic="download" aria-hidden="true"></span>一键安装缺失组件</button>
+      <button class="btn" id="btnEnvRefresh"><span data-ic="refreshCw" aria-hidden="true"></span>重新检测</button>
+      <span style="flex:1"></span>
+      <a id="envClose" href="javascript:void(0)" class="t-cap" style="cursor:pointer;">关闭</a>
+    </div>
+  </div>
+</div>
+<!-- 全局设置（应用级配置：工作目录 / 子集化工具 / 备份清理；与单次封装无关） -->
+<div id="globalModal" style="position:fixed;inset:0;background:rgba(7,10,15,0.75);z-index:95;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--surface-1,#20202a);border:1px solid var(--border,#333);border-radius:12px;padding:24px 26px;max-width:660px;width:94%;max-height:84vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.5);">
+    <h3 style="margin:0 0 6px;">全局设置</h3>
+    <p class="t-sec" style="margin:0 0 14px;">应用级配置：一次设置、长期使用，不随单次封装改变。配置保存在服务端 config.json。</p>
+    <div class="gs-title">常规</div>
+    <div class="field" style="margin-bottom:14px;">
+      <label for="cfg_scan">工作目录（扫描根）</label>
+      <input id="cfg_scan" type="text" placeholder="拖放识别搜索的根目录，默认 D:\Video" autocomplete="off">
+      <button class="btn" id="btnCfgScan">浏览</button>
+      <button class="btn" id="btnCfgSave">保存</button>
+      <span class="t-cap">切换主力盘后保存，索引自动重建；同时作为文件浏览器的默认起点</span>
+    </div>
+    <div class="gs-title">字体与字幕</div>
+    <div class="field" style="margin-bottom:14px;">
+      <label for="cfg_tool">子集化工具（双轨）</label>
+      <select id="cfg_tool">
+        <option value="afs">AssFontSubset（主用：自动修正字幕字体名；要求字体目录无重复）</option>
+        <option value="assfonts">assfonts（回退：容忍重复字体目录）</option>
+      </select>
+      <span class="t-cap">字体目录有同族重复字体时 AFS 会拒跑，切成 assfonts 即可</span>
+    </div>
+    <div class="gs-title">备份与清理</div>
+    <div class="field" style="margin-bottom:14px;">
+      <button class="btn" id="btnBackups" type="button">查看替换备份（__mux_tmp_manual）</button>
+      <span class="t-cap">替换模式的原件备份会随使用累积，可在此查看占用并清理磁盘</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="flex:1"></span>
+      <a id="globalClose" href="javascript:void(0)" class="t-cap" style="cursor:pointer;">关闭</a>
+    </div>
+  </div>
+</div>
+<!-- 备份清理（替换模式产生的 __mux_tmp_manual 目录） -->
+<div id="backupsModal" style="position:fixed;inset:0;background:rgba(7,10,15,0.75);z-index:95;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--surface-1,#20202a);border:1px solid var(--border,#333);border-radius:12px;padding:24px 26px;max-width:720px;width:94%;max-height:84vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.5);">
+    <h3 style="margin:0 0 6px;">备份清理</h3>
+    <p class="t-sec" style="margin:0 0 14px;">以下是无输出目录（替换模式）封装时产生的原件备份目录。删除后无法找回原件，请确认后再清理。</p>
+    <div id="backupsList" aria-live="polite"></div>
+    <div id="backupsNote" class="t-sec" style="min-height:18px;margin:10px 0;"></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="btn primary" id="btnBackupsClean" style="padding:6px 22px;"><span data-ic="trash" aria-hidden="true"></span>删除勾选目录</button>
+      <a id="backupsClose" href="javascript:void(0)" class="t-cap" style="cursor:pointer;">关闭</a>
+    </div>
+  </div>
+</div>
+<!-- 章节编辑器（OGM txt 明文编辑；可从源视频提取或加载文件） -->
+<div id="chEditModal" style="position:fixed;inset:0;background:rgba(7,10,15,0.75);z-index:95;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--surface-1,#20202a);border:1px solid var(--border,#333);border-radius:12px;padding:24px 26px;max-width:760px;width:94%;max-height:86vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.5);">
+    <h3 style="margin:0 0 6px;">章节编辑</h3>
+    <p class="t-sec" style="margin:0 0 12px;">OGM 明文格式，直接编辑；保存后生成章节文件填入「章节文件」框，随封装写入。</p>
+    <div class="field" style="margin-bottom:10px;flex-wrap:wrap;">
+      <button class="btn" id="btnChFromVideo" type="button"><span data-ic="download" aria-hidden="true"></span>从源视频提取</button>
+      <button class="btn" id="btnChLoadFile" type="button"><span data-ic="folderOpen" aria-hidden="true"></span>加载章节文件</button>
+      <span class="t-cap">格式：CHAPTER01=H:MM:SS.ms 换行 CHAPTER01NAME=标题</span>
+    </div>
+    <textarea id="chEditText" class="mono" spellcheck="false" style="width:100%;height:320px;background:var(--input);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font:12.5px/1.7 var(--mono);color:var(--text-primary);resize:vertical;box-sizing:border-box;"></textarea>
+    <div id="chEditNote" class="t-sec" style="min-height:18px;margin:10px 0;"></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="btn primary" id="btnChSave" style="padding:6px 22px;"><span data-ic="check" aria-hidden="true"></span>保存并填入</button>
+      <a id="chEditClose" href="javascript:void(0)" class="t-cap" style="cursor:pointer;">关闭</a>
+    </div>
+  </div>
+</div>
+<!-- 封装前检查确认（存在 warning / 危险操作时弹出；无风险时不打断） -->
+<div id="pfModal" style="position:fixed;inset:0;background:rgba(7,10,15,0.75);z-index:110;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--surface-1,#20202a);border:1px solid var(--border,#333);border-radius:12px;padding:24px 26px;max-width:580px;width:94%;max-height:84vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.5);">
+    <h3 style="margin:0 0 6px;">封装前检查</h3>
+    <p class="t-sec" id="pfHead" style="margin:0 0 10px;">发现需要确认的项目</p>
+    <div id="pfWarnList"></div>
+    <div id="pfDanger" style="display:none"></div>
+    <button type="button" class="btn small ghost" id="pfToggleAll" style="margin-top:10px;display:none;">查看完整检查结果</button>
+    <div id="pfInfoSec" style="display:none;margin-top:8px;"><div id="pfInfoList"></div></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:16px;">
+      <button class="btn" id="pfCancel">返回修改</button>
+      <button class="btn primary" id="pfProceed">仍然开始封装</button>
+      <span style="flex:1"></span>
+      <a id="pfClose" href="javascript:void(0)" class="t-cap" style="cursor:pointer;">关闭</a>
+    </div>
+  </div>
+</div>

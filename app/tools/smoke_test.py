@@ -143,11 +143,13 @@ def main():
     except Exception as ex:
         check("stop(不存在任务)", False, str(ex))
 
-    # 11) 前端页面可达（拆分后 index.html 为骨架）：关键元素 + 各静态资源可达
+    # 11) 前端页面可达（index.html 为 App Shell，业务界面在 pages/partials 片段）：壳关键元素 + 各静态资源可达
     try:
         body = op.open("http://127.0.0.1:8765/", timeout=10).read().decode("utf-8", errors="replace")
-        ui_ok = "cfg_tool" in body and "envList" in body and "btnEnvInstall" in body
-        need = ["style.css", "app.js", "batch.js", "extract.js", "preview.js", "env.js", "init.js"]
+        ui_ok = "pageRoot" in body and "consoleRoot" in body and "modalRoot" in body and "loader.js" in body
+        need = ["style.css", "loader.js", "app.js", "batch.js", "extract.js", "preview.js", "env.js", "init.js",
+                "pages/single.html", "pages/batch.html", "pages/subtitle-tools.html",
+                "partials/console.html", "partials/modals.html"]
         sizes = {}
         for f in need:
             r = op.open("http://127.0.0.1:8765/" + f, timeout=10)

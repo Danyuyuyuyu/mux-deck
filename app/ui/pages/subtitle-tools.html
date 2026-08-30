@@ -1,0 +1,114 @@
+    <!-- ==================== 字幕提取 ==================== -->
+    <section class="mode" id="mode-extract">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="t-section">字幕提取</h2>
+            <p class="t-sec">从视频中提取字幕轨道：PGS 图形字幕导出为 .sup，文本字幕导出为 .ass / .srt</p>
+          </div>
+        </div>
+        <div class="panel-sec" style="padding-top:16px;">
+          <div class="field">
+            <label for="x_video">视频</label>
+            <input id="x_video" type="text" placeholder="默认同主流程视频" autocomplete="off">
+            <button class="btn" id="btnXVideo">浏览</button>
+            <button class="btn" id="btnXSubs"><span data-ic="list" aria-hidden="true"></span>查看字幕轨</button>
+          </div>
+          <div id="xList"></div>
+          <div class="field">
+            <label for="x_out">输出目录</label>
+            <input id="x_out" type="text" placeholder="留空 = 提取到视频同目录" autocomplete="off">
+            <button class="btn" id="btnXOut">浏览</button>
+          </div>
+          <div class="field">
+            <button class="btn lg primary" id="btnXExtract" style="height:36px;"><span data-ic="download" aria-hidden="true"></span>提取所选字幕</button>
+          </div>
+          <div class="progress" id="xBarWrap" style="display:none"><div id="xBar" role="progressbar" aria-label="提取进度"></div></div>
+          <div id="xRes"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 字幕预览 ==================== -->
+    <section class="mode" id="mode-preview">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="t-section">字幕预览</h2>
+            <p class="t-sec">渲染视频指定时间点的一帧，或纯黑底字幕，检查字体 / 字号 / 竖排效果</p>
+          </div>
+        </div>
+        <div class="panel-sec" style="padding-top:16px;">
+          <div class="field">
+            <label for="pv_video">视频</label>
+            <input id="pv_video" type="text" placeholder="默认同主流程视频" autocomplete="off">
+            <button class="btn" id="btnPvVideo">浏览</button>
+            <button class="btn" id="btnPvTracks"><span data-ic="list" aria-hidden="true"></span>读取内封轨道</button>
+          </div>
+          <div class="field">
+            <label for="pv_subsel">字幕</label>
+            <select id="pv_subsel" style="flex:.3; min-width:130px;">
+              <option value="custom">自定义路径（外部）</option>
+            </select>
+            <input id="pv_sub" type="text" placeholder="外部字幕文件路径（.ass / .ssa / .srt）" style="flex:1;" autocomplete="off">
+            <button class="btn" id="btnPvSub">浏览</button>
+          </div>
+          <div class="field">
+            <label for="pv_sub_b">对比字幕 B</label>
+            <input id="pv_sub_b" type="text" placeholder="可选：填写后渲染帧 A/B 并排对比" style="flex:1;" autocomplete="off">
+            <button class="btn" id="btnPvSubB">浏览</button>
+          </div>
+          <div class="field">
+            <label for="pv_time">时间点</label>
+            <input id="pv_time" type="text" value="30" inputmode="numeric" style="flex:.18; min-width:70px;" autocomplete="off">
+            <span class="t-cap">秒</span>
+          </div>
+          <div class="field">
+            <label for="pv_fonts">字体目录</label>
+            <input id="pv_fonts" type="text" placeholder="默认同主流程字体目录" autocomplete="off">
+            <button class="btn" id="btnPvFonts">浏览</button>
+          </div>
+          <div class="field" style="margin-top:16px;">
+            <button class="btn lg primary" id="btnPreview" style="height:36px;"><span data-ic="image" aria-hidden="true"></span>渲染预览帧</button>
+            <button class="btn" id="btnPreviewSub"><span data-ic="captions" aria-hidden="true"></span>纯字幕黑底</button>
+            <button class="btn" id="btnPreviewGrid"><span data-ic="grid" aria-hidden="true"></span>连拍 8 帧</button>
+          </div>
+          <div id="previewBox"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 快速修补（mkvpropedit） ==================== -->
+    <section class="mode" id="mode-propedit">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="t-section">快速修补</h2>
+            <p class="t-sec">mkvpropedit 原地修改轨道旗标/名称/语言、MKV 标题与章节——秒级完成，不重封装（章节需 XML 格式）</p>
+          </div>
+        </div>
+        <div class="panel-sec" style="padding-top:16px;">
+          <div class="field">
+            <label for="pe_video">视频</label>
+            <input id="pe_video" type="text" placeholder="MKV 文件路径（直接修改，建议先备份）" autocomplete="off">
+            <button class="btn" id="btnPeVideo">浏览</button>
+            <button class="btn" id="btnPeProbe"><span data-ic="list" aria-hidden="true"></span>读取轨道</button>
+          </div>
+          <div class="field">
+            <label for="pe_title">MKV 标题</label>
+            <input id="pe_title" type="text" placeholder="留空 = 不修改标题" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="pe_chapters">章节（XML）</label>
+            <input id="pe_chapters" type="text" placeholder="留空 = 不修改章节；填 XML 章节文件替换" autocomplete="off">
+            <button class="btn" id="btnPeChapters">浏览</button>
+          </div>
+          <div id="peList"></div>
+          <div class="field" style="margin-top:16px;">
+            <button class="btn lg primary" id="btnPeApply" style="height:36px;"><span data-ic="check" aria-hidden="true"></span>应用修改</button>
+            <span class="t-cap">直接修改源文件（秒级）；只有改动过的轨道会被提交</span>
+          </div>
+          <div id="peRes"></div>
+        </div>
+      </div>
+    </section>

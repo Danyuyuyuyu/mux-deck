@@ -136,8 +136,30 @@
   .mode-tab.active { background:var(--surface-3); color:var(--text-primary); box-shadow:inset 0 0 0 1px var(--border-hover); }
   .mode-tab.active .ic { color:var(--primary); }
 
+  /* 字幕工具下拉（一级导航第三项；item 选中态沿用 mode-tab 的样式语言） */
+  .nav-drop { position:relative; display:inline-flex; }
+  .drop-chev { display:inline-flex; transition:transform .15s; }
+  .nav-drop.open .drop-chev { transform:rotate(180deg); }
+  .drop-menu {
+    display:none; position:absolute; left:0; top:calc(100% + 6px); z-index:80; min-width:150px;
+    background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md);
+    box-shadow:var(--shadow-1); padding:5px;
+  }
+  .nav-drop.open .drop-menu { display:block; }
+  .drop-item {
+    display:flex; width:100%; align-items:center; gap:8px; padding:7px 10px;
+    background:transparent; border:none; border-radius:var(--radius-sm);
+    color:var(--text-primary); font-size:12.5px; font-family:var(--sans); cursor:pointer; text-align:left;
+    transition:background-color .12s;
+  }
+  .drop-item .ic { font-size:15px; color:var(--text-muted); }
+  .drop-item:hover { background:var(--surface-3); }
+  .drop-item.active { background:var(--surface-3); }
+  .drop-item.active .ic { color:var(--primary); }
+
   /* ================= main / panels ================= */
   .main-inner { padding:24px 0 0; }
+  .page-loading { padding:48px 0; text-align:center; }
   .mode { display:none; }
   .mode.active { display:block; }
 
@@ -559,6 +581,8 @@
     #status { max-width:100%; }
     .nav-inner { width:100%; }
     .mode-tab { flex:1 1 calc(50% - 3px); justify-content:center; padding:0 8px; }
+    .nav-drop { flex:1 1 calc(50% - 3px); }
+    .nav-drop .mode-tab { width:100%; justify-content:center; }
     .panel { padding:16px; }
     .sticky-inner { flex-direction:column; align-items:stretch; gap:10px; }
     .sticky-inner .btn { width:100%; }

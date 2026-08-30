@@ -1,0 +1,82 @@
+    <!-- ==================== 批量封装 ==================== -->
+    <section class="mode" id="mode-batch">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="t-section">批量封装</h2>
+            <p class="t-sec">多个视频排队串行封装，逐个报告成功 / 失败</p>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn" id="btnBatchFiles"><span data-ic="folderOpen" aria-hidden="true"></span>添加文件</button>
+            <button class="btn" id="btnBatchAdd"><span data-ic="plus" aria-hidden="true"></span>加空行</button>
+            <button class="btn" id="btnMatchAll"><span data-ic="sparkles" aria-hidden="true"></span>按集数自动匹配</button>
+            <button class="btn" id="btnBatchClear"><span data-ic="refreshCcw" aria-hidden="true"></span>重置</button>
+          </div>
+        </div>
+        <div class="t-cap" style="margin:8px 0 14px;">拖入多个 MKV 自动入列；同目录同名或按集数匹配 .sc/.tc/.chs/.cht/.JPSC/.JPTC</div>
+        <div id="batchList" class="batch-list"></div>
+        <div class="field">
+          <label for="b_fonts">字体目录</label>
+          <input id="b_fonts" type="text" placeholder="留空自动" autocomplete="off">
+          <button class="btn" id="btnBFonts">浏览</button>
+          <select id="b_fonts_mode" style="height:34px;" title="字体处理">
+            <option value="subset">子集化</option>
+            <option value="collect">仅收集</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="b_out">输出目录</label>
+          <input id="b_out" type="text" placeholder="留空 = 替换各自源文件" autocomplete="off">
+          <button class="btn" id="btnBOut">浏览</button>
+        </div>
+        <div class="field">
+          <label for="b_title">MKV 标题</label>
+          <input id="b_title" type="text" placeholder="可选：成品标题元数据" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="b_out_name_tmpl">命名模板</label>
+          <input id="b_out_name_tmpl" type="text" placeholder="留空 = 沿用源文件名；支持 {src} {ep} {res} {title}" autocomplete="off">
+        </div>
+        <div class="field">
+          <label class="check"><input id="b_force" type="checkbox" aria-label="强制封装"> 强制封装</label>
+          <label class="check"><input id="b_backup" type="checkbox" checked aria-label="备份原件"> 备份原件</label>
+          <label class="check"><input id="b_skip" type="checkbox" aria-label="跳过已存在输出"> 跳过已存在输出（输出目录模式）</label>
+        </div>
+        <div class="field" style="flex-wrap:wrap;">
+          <label for="b_sc_default" style="font-size:12px;color:var(--text-secondary)">字幕旗标</label>
+          <select id="b_sc_default" style="height:34px;" title="简体轨 default 旗标">
+            <option value="">SC默认:自动</option><option value="1">SC默认:是</option><option value="0">SC默认:否</option>
+          </select>
+          <select id="b_tc_default" style="height:34px;" title="繁体轨 default 旗标">
+            <option value="">TC默认:自动</option><option value="1">TC默认:是</option><option value="0">TC默认:否</option>
+          </select>
+          <label class="check"><input id="b_sc_forced" type="checkbox" aria-label="简体强制轨"> SC强制</label>
+          <label class="check"><input id="b_tc_forced" type="checkbox" aria-label="繁体强制轨"> TC强制</label>
+        </div>
+        <div id="batchProgress" style="margin-top:8px;">
+          <div id="batchState" class="t-sec"></div>
+        </div>
+        <div id="batchResults"></div>
+      </div>
+
+      <div class="sticky-bar" id="stickyBatch">
+        <div class="sticky-inner">
+          <div class="sticky-note info" id="batchStickyNote"><span data-ic="info" aria-hidden="true"></span><span class="sticky-txt">批量列表为空</span></div>
+          <div class="sp-cur" id="bStickyCur" style="display:none">
+            <div class="sp-cur-label">正在封装</div>
+            <div class="sp-cur-name"><span class="sp-file-ic" data-ic="film" aria-hidden="true"></span><span id="bStickyCurName"></span></div>
+          </div>
+          <div class="sp-block" id="bStickyProgress">
+            <div class="sp-head"><span class="sp-label">总体进度</span><span class="sp-pct" id="bStickyPct">--</span></div>
+            <div class="sp-track" id="batchStickyBarWrap"><div class="sp-fill" id="batchStickyBar"></div></div>
+          </div>
+          <div class="sp-count" id="bStickyCount"><span class="sp-count-num" id="bStickyCountNum">0 / 0</span><span class="sp-count-unit">个文件</span></div>
+          <div class="sp-times" id="bStickyTimes">
+            <span class="sp-time"><span class="sp-tlabel">已用时</span><span class="sp-tval" id="bStickyElapsed">--:--:--</span></span>
+            <span class="sp-vsep" aria-hidden="true"></span>
+            <span class="sp-time"><span class="sp-tlabel">预计剩余</span><span class="sp-tval" id="bStickyEta">--:--:--</span></span>
+          </div>
+          <button class="btn lg primary" id="btnBatchStart" disabled><span data-ic="play" aria-hidden="true"></span>开始批量封装</button>
+        </div>
+      </div>
+    </section>
