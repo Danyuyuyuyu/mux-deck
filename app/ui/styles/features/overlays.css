@@ -44,37 +44,5 @@
   .gs-title { font-size:11px; font-weight:600; color:var(--text-muted); letter-spacing:.08em; margin:6px 0 10px; }
   .gs-title:not(:first-of-type) { border-top:1px solid var(--border); padding-top:14px; }
 
-/* ================= preset manager（封装预设管理窗口） ================= */
-.pm-box { width:min(860px, 95vw); }
-.pm-sub { padding:10px 16px 0; font-size:12px; color:var(--text-secondary); }
-.pm-body { display:grid; grid-template-columns:230px 1fr; }
-.pm-list { border-right:1px solid var(--border); padding:10px; display:flex; flex-direction:column; gap:4px; max-height:62vh; overflow:auto; }
-.pm-item {
-  display:flex; width:100%; align-items:center; gap:8px; padding:8px 10px;
-  background:transparent; border:none; border-radius:var(--radius-sm);
-  color:var(--text-primary); font-size:13px; cursor:pointer; text-align:left;
-  transition:background-color .12s;
-}
-.pm-item .ic { font-size:14px; color:var(--text-muted); flex:none; }
-.pm-item:hover { background:var(--surface-3); }
-.pm-item.active { background:var(--run-bg); color:var(--primary); }
-.pm-item.active .ic { color:var(--primary); }
-.pm-item .pm-cur { margin-left:auto; font-size:10.5px; color:var(--text-muted); }
-.pm-new { margin-top:auto; padding-top:10px; border-top:1px solid var(--border); }
-.pm-new .ic { color:var(--success); }
-.pm-editor { padding:14px 16px 4px; overflow:auto; max-height:62vh; }
-.pm-editor .pm-group { font-size:11px; font-weight:600; color:var(--text-muted); letter-spacing:.08em; margin:14px 0 8px; }
-.pm-editor .pm-group:first-child { margin-top:0; }
-.pm-editor .field > label, .pm-editor .field > .set-label { width:130px; }
-.pm-editor .field input[type=text] { flex:none; width:100%; max-width:360px; }
-.pm-modes { display:flex; gap:16px; flex-wrap:wrap; }
-.pm-path-note { font-size:11px; color:var(--text-muted); margin:-6px 0 10px 140px; }
-.pm-empty { padding:32px 0; text-align:center; }
-.pm-actions { display:flex; align-items:center; gap:10px; margin-top:16px; }
-.pm-note { min-height:18px; margin:6px 16px 10px; }
-@media (max-width:860px) {
-  .pm-body { grid-template-columns:1fr; }
-  .pm-list { border-right:none; border-bottom:1px solid var(--border); max-height:190px; }
-  .pm-editor .field > label, .pm-editor .field > .set-label { width:100%; }
-  .pm-path-note { margin-left:0; }
-}
+  /* body 滚动锁：任一 modal 打开期间锁定页面滚动，消除页面 + Modal 双滚动（modal.js 开关） */
+  body.modal-open { overflow: hidden; }

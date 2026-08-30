@@ -68,8 +68,18 @@ test.describe('mux-ui smoke', () => {
     await expect(page.locator('#settingsPop')).not.toHaveClass(/open/);   // 设置弹层先关闭
     await expect(page.locator('#presetModal')).toBeVisible();
     await expect(page.locator('#pmList')).toBeVisible();
+    await expect(page.locator('body')).toHaveClass(/modal-open/);          // 页面滚动锁生效
     await page.click('#pmClose');
     await expect(page.locator('#presetModal')).toBeHidden();
+    await expect(page.locator('body')).not.toHaveClass(/modal-open/);
+  });
+
+  test('主页面预设状态条：初始自定义配置，按钮态正确', async ({ page }) => {
+    await expect(page.locator('#presetStatusBar')).toBeVisible();
+    await expect(page.locator('#presetStatusText')).toHaveText('自定义配置');
+    await expect(page.locator('#btnPresetPick')).toBeVisible();
+    await expect(page.locator('#btnPresetChange')).toBeHidden();
+    await expect(page.locator('#btnPresetDetach')).toBeHidden();
   });
 
   test('Modal 公共组件：Esc 关闭 + 焦点恢复（验证任务2 机制）', async ({ page }) => {

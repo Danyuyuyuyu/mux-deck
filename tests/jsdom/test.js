@@ -310,9 +310,18 @@ function mockFetch(url, opts) {
   $('preset_sel').value = '测试预设';
   $('preset_sel').dispatchEvent(new window.Event('change', { bubbles: true }));
   check('套用预设：轨道名/字体模式生效', $('sc_name').value === '简中' && $('fonts_mode').value === 'collect', $('sc_name').value + '/' + $('fonts_mode').value);
-  check('dirty 提示=已应用：测试预设', $('presetHint').textContent === '已应用：测试预设', $('presetHint').textContent);
+  check('dirty 提示=测试预设 · 已应用', $('presetHint').textContent === '测试预设 · 已应用', $('presetHint').textContent);
+  check('状态条=◆ 测试预设 · 已应用', $('presetStatusText').textContent === '◆ 测试预设 · 已应用', $('presetStatusText').textContent);
+  check('状态条按钮态：更改/解除可见，选择隐藏', $('btnPresetChange').style.display !== 'none' && $('btnPresetDetach').style.display !== 'none' && $('btnPresetPick').style.display === 'none');
   $('sc_name').value = '简中2'; $('sc_name').dispatchEvent(new window.Event('input', { bubbles: true }));
   check('改字段后 dirty 提示=已修改', $('presetHint').textContent === '测试预设 · 已修改', $('presetHint').textContent);
+  check('状态条=◆ 测试预设 · 已修改', $('presetStatusText').textContent === '◆ 测试预设 · 已修改', $('presetStatusText').textContent);
+  /* 解除预设：转为自定义配置，当前任务参数保留；重新应用走唯一入口 */
+  $('btnPresetDetach').click();
+  check('解除预设：状态=自定义配置且参数保留', $('presetStatusText').textContent === '自定义配置' && $('sc_name').value === '简中2' && $('preset_sel').value === '', $('presetStatusText').textContent + '/' + $('sc_name').value);
+  check('解除后按钮态：选择可见，更改/解除隐藏', $('btnPresetPick').style.display !== 'none' && $('btnPresetChange').style.display === 'none' && $('btnPresetDetach').style.display === 'none');
+  window.applyPresetToCurrentTask('测试预设');
+  check('重新应用：状态恢复且轨道名回到预设值', $('presetStatusText').textContent === '◆ 测试预设 · 已应用' && $('sc_name').value === '简中', $('presetStatusText').textContent + '/' + $('sc_name').value);
   $('sc_name').value = '简中'; $('sc_name').dispatchEvent(new window.Event('input', { bubbles: true }));
   $('chapters').value = 'C:\\c.txt'; $('out_name_tmpl').value = '[G] {ep}'; $('title').value = 'T1';
   window.pickVideoPath('D:\\Video\\EP01.mkv');   // 重触发（复用已有）

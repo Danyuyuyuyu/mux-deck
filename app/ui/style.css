@@ -18,4 +18,5 @@
 @import "./styles/features/task-status.css";
 @import "./styles/features/batch.css";
 @import "./styles/features/overlays.css";
+@import "./styles/features/presets.css";
 @import "./styles/features/environment.css";

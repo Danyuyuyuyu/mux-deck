@@ -26,6 +26,7 @@ STATIC_FILES = {
     "styles/features/task-status.css": "text/css; charset=utf-8",
     "styles/features/batch.css": "text/css; charset=utf-8",
     "styles/features/overlays.css": "text/css; charset=utf-8",
+    "styles/features/presets.css": "text/css; charset=utf-8",
     "styles/features/environment.css": "text/css; charset=utf-8",
     "app.js": "application/javascript; charset=utf-8",
     "identify.js": "application/javascript; charset=utf-8",

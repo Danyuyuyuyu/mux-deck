@@ -53,16 +53,46 @@ async function loadPresets() {
   } catch (e) { /* 断线由横幅提示 */ }
 }
 
-/* ---- 跨模块轻量接口（其他域如需读取/应用预设，走这三个入口，不直接碰 PRESETS） ---- */
+/* ---- 跨模块轻量接口（其他域如需读取/应用预设，走这些入口，不直接碰 PRESETS） ---- */
 function getPresetList() { return PRESETS; }
 function refreshPresetOptions() { refreshPresetSel(); updatePresetHint(); }
+
+/* ==================== 当前任务的预设来源（presets 域私有会话状态） ====================
+ * currentId：当前任务最后一次明确应用的预设名；null = 自定义配置。
+ * snapshot：应用时刻的预设数据深拷贝（lastAppliedPresetSnapshot）——任务修改只标脏，
+ * 不回写预设；current task 与 preset 之间永远通过 copy 传递，无共享可变引用。
+ * 只有「解除预设」或删除来源预设才清空 currentId；普通修改不清空，只置 dirty。 */
+const presetSession = { currentId: null, snapshot: null };
+
+function isCurrentTaskPresetDirty() {
+  if (!presetSession.currentId) return false;
+  // 与应用时刻的快照比较（仅共有键；旧预设历史字段 cfg_tool 不误报）
+  return !presetSnapshotEqual(presetData(), presetSession.snapshot || {});
+}
+function getCurrentPresetInfo() {
+  const id = presetSession.currentId && PRESETS[presetSession.currentId] ? presetSession.currentId : null;
+  return { id: id, dirty: id ? isCurrentTaskPresetDirty() : false };
+}
+/* 唯一应用入口：把已确定的预设配置 copy 进当前任务并登记来源/快照。
+ * 列表点击、高级选项下拉之外的任何"应用"都必须经过这里。 */
 function applyPresetToCurrentTask(name) {
-  if (!PRESETS[name]) return false;
+  if (!name || !PRESETS[name]) return false;
   $('preset_sel').value = name;
   applyPreset(PRESETS[name]);
+  presetSession.currentId = name;
+  presetSession.snapshot = pmClone(PRESETS[name]);
   updatePresetHint();
   rememberPreset();
   return true;
+}
+/* 解除预设：只摘掉来源标记，当前任务参数原样保留（变为自定义配置） */
+function detachCurrentPreset() {
+  presetSession.currentId = null;
+  presetSession.snapshot = null;
+  $('preset_sel').value = '';
+  updatePresetHint();
+  rememberPreset();
+  setStatus('已解除预设：当前任务参数保留（自定义配置）', 'ok');
 }
 
 /* ==================== 预设记忆（本机浏览器级工作态） ====================
@@ -79,9 +109,7 @@ function restoreRememberedPreset() {
     try { localStorage.removeItem('muxui_preset'); } catch (e) {}
     return;
   }
-  $('preset_sel').value = name;
-  applyPreset(PRESETS[name]);
-  updatePresetHint();
+  applyPresetToCurrentTask(name);   // 走唯一应用入口：登记来源 + 快照
 }
 
 /* 当前任务与所选预设的差异提示（轻量 dirty：仅状态展示，不拦截、不回写预设）。
@@ -92,11 +120,10 @@ function presetSnapshotEqual(a, b) {
   return norm(a) === norm(b);
 }
 function updatePresetHint() {
+  const info = getCurrentPresetInfo();
   const el = $('presetHint');
-  if (!el) return;
-  const cur = $('preset_sel').value;
-  if (!cur || !PRESETS[cur]) { el.textContent = ''; return; }
-  el.textContent = presetSnapshotEqual(presetData(), PRESETS[cur]) ? ('已应用：' + cur) : (cur + ' · 已修改');
+  if (el) el.textContent = info.id ? (info.id + (info.dirty ? ' · 已修改' : ' · 已应用')) : '';
+  if (typeof renderPresetStatus === 'function') renderPresetStatus();   // single 页顶部状态区（single.js）
 }
 /* 预设覆盖的字段变更后刷新 dirty 提示（seg 三态在自身点击处理里同步） */
 
@@ -107,29 +134,49 @@ function updatePresetHint() {
 const PM_BLANK = { sc_name: 'SC', tc_name: 'TC', sc_default: '', tc_default: '', sc_forced: false, tc_forced: false,
   fonts_mode: 'subset', out_name_tmpl: '', title: '', fonts_dir: '', out_dir: '', chapters: '', backup: true, force: false };
 const pmState = { editing: null };   // {orig: 已有预设名|null, isNew, mode: 'blank'|'task', base: 建基数据}
+let pmEditorDirty = false;           // 编辑器有未保存修改（切换列表项时提示保护）
 function pmClone(o) { return JSON.parse(JSON.stringify(o || {})); }
 function openPresetManager() {
   openModal('presetModal', { display: 'block' });
   $('pmNote').textContent = '';
   if (!pmState.editing) {
-    const names = Object.keys(PRESETS);
-    pmState.editing = names.length ? { orig: names[0], isNew: false } : { orig: null, isNew: true, mode: 'blank', base: pmClone(PM_BLANK) };
+    // 默认选中：当前任务来源预设 > 第一条；没有预设则进入新建
+    const preferred = presetSession.currentId && PRESETS[presetSession.currentId] ? presetSession.currentId : Object.keys(PRESETS)[0];
+    pmState.editing = preferred ? { orig: preferred, isNew: false } : { orig: null, isNew: true, mode: 'blank', base: pmClone(PM_BLANK) };
   }
+  pmEditorDirty = false;
   pmRenderList(); pmRenderEditor();
 }
 function closePresetManager() { closeModal('presetModal'); }
-function pmSelect(name) { pmState.editing = { orig: name, isNew: false }; $('pmNote').textContent = ''; pmRenderList(); pmRenderEditor(); }
+/* 切换保护：编辑器有未保存修改时，切换/新建前确认丢弃 */
+function pmGuardUnsaved() {
+  if (pmState.editing && pmEditorDirty && !confirm('当前预设的修改尚未保存，切换后将丢弃这些修改。继续？')) return false;
+  pmEditorDirty = false;
+  return true;
+}
+function pmSelect(name) {
+  if (!pmGuardUnsaved()) return;
+  pmState.editing = { orig: name, isNew: false };
+  $('pmNote').textContent = '';
+  pmRenderList(); pmRenderEditor();
+}
 function pmRenderList() {
   const box = $('pmList');
-  const cur = $('preset_sel').value;
   let h = Object.keys(PRESETS).map(function (n) {
-    const active = pmState.editing && !pmState.editing.isNew && pmState.editing.orig === n;
-    return '<button type="button" class="pm-item' + (active ? ' active' : '') + '" data-name="' + esc(n) + '">' + ic('fileText') + '<span>' + esc(n) + '</span>' + (n === cur ? '<span class="pm-cur">当前</span>' : '') + '</button>';
+    // 两个状态不混淆：selected = 正在编辑（accent）；current = 当前任务来源（✓ 徽章）
+    const selected = pmState.editing && !pmState.editing.isNew && pmState.editing.orig === n;
+    const current = presetSession.currentId === n;
+    return '<button type="button" class="pm-item' + (selected ? ' selected' : '') + '" data-name="' + esc(n) + '">' + ic('fileText') + '<span>' + esc(n) + '</span>' + (current ? '<span class="pm-cur">✓ 当前任务</span>' : '') + '</button>';
   }).join('');
   h += '<button type="button" class="pm-item pm-new" id="pmNewBtn">' + ic('plus') + '<span>新建预设</span></button>';
   box.innerHTML = h;
   box.querySelectorAll('.pm-item[data-name]').forEach(b => { b.onclick = () => pmSelect(b.dataset.name); });
-  $('pmNewBtn').onclick = function () { pmState.editing = { orig: null, isNew: true, mode: 'blank', base: pmClone(PM_BLANK) }; $('pmNote').textContent = ''; pmRenderList(); pmRenderEditor(); };
+  $('pmNewBtn').onclick = function () {
+    if (!pmGuardUnsaved()) return;
+    pmState.editing = { orig: null, isNew: true, mode: 'blank', base: pmClone(PM_BLANK) };
+    $('pmNote').textContent = '';
+    pmRenderList(); pmRenderEditor();
+  };
 }
 function pmField(id, label, inner) {
   return '<div class="field"><label for="' + id + '">' + label + '</label>' + inner + '</div>';
@@ -170,9 +217,11 @@ function pmRenderEditor() {
   h += '<div class="field"><label for="pm_f_backup">备份原件</label><input id="pm_f_backup" type="checkbox"' + (d.backup !== false ? ' checked' : '') + '></div>';
   h += '<div class="field"><label for="pm_f_force">强制封装</label><input id="pm_f_force" type="checkbox"' + (d.force ? ' checked' : '') + '></div>';
   h += '<div class="pm-actions">' +
-    (st.isNew ? '' : '<button type="button" class="btn ghost danger" id="pmDeleteBtn">' + ic('trash') + '<span>删除</span></button>') +
+    (st.isNew ? '' : '<button type="button" class="btn ghost danger" id="pmDeleteBtn">' + ic('trash') + '<span>删除</span></button>'
+      + '<button type="button" class="btn" id="pmApplyBtn">' + ic('check') + '<span>应用到当前任务</span></button>') +
     '<span style="flex:1"></span>' +
-    '<button type="button" class="btn primary" id="pmSaveBtn">' + (st.isNew ? ic('plus') + '<span>创建预设</span>' : ic('check') + '<span>保存修改</span>') + '</button>' +
+    '<button type="button" class="btn" id="pmSaveBtn">' + (st.isNew ? ic('plus') + '<span>创建预设</span>' : ic('check') + '<span>保存修改</span>') + '</button>' +
+    '<button type="button" class="btn primary" id="pmSaveApplyBtn">' + (st.isNew ? ic('play') + '<span>创建并应用</span>' : ic('play') + '<span>保存并应用</span>') + '</button>' +
     '</div>';
   box.innerHTML = h;
   $('pm_f_sc_default').value = String(d.sc_default || '');
@@ -189,11 +238,15 @@ function pmRenderEditor() {
       });
     });
   }
-  $('pmSaveBtn').onclick = pmSave;
+  pmEditorDirty = false;   // 刚渲染的编辑器视为干净
+  $('pmSaveBtn').onclick = () => pmSave(false);
+  $('pmSaveApplyBtn').onclick = () => pmSave(true);
+  const apply = $('pmApplyBtn');
+  if (apply) apply.onclick = () => { if (applyPresetToCurrentTask(st.orig)) pmNoteOk('✓ 已应用到当前任务（' + st.orig + '）'); };
   const del = $('pmDeleteBtn');
   if (del) del.onclick = pmDelete;
 }
-async function pmSave() {
+async function pmSave(thenApply) {
   const st = pmState.editing;
   if (!st) return;
   const name = $('pmName').value.trim();
@@ -217,12 +270,22 @@ async function pmSave() {
       const rd = await api('/api/presets/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: st.orig }) });
       if (!rd.error) PRESETS = rd.presets || PRESETS;
     }
-    const applied = $('preset_sel').value;
-    if (applied === st.orig && st.orig !== name) $('preset_sel').value = PRESETS[name] ? name : '';   // 当前任务引用跟随重命名
-    refreshPresetSel(); updatePresetHint(); rememberPreset();
+    // 会话引用跟随重命名（高级选项选择器 + 当前任务来源）
+    if (st.orig !== name) {
+      if (presetSession.currentId === st.orig) presetSession.currentId = PRESETS[name] ? name : null;
+      if ($('preset_sel').value === st.orig) $('preset_sel').value = PRESETS[name] ? name : '';
+    }
+    pmEditorDirty = false;
     pmState.editing = { orig: name, isNew: false };
-    pmRenderList(); pmRenderEditor();
-    pmNoteOk('✓ 已保存（' + name + '）');
+    if (thenApply) {
+      applyPresetToCurrentTask(name);   // 保存 → 用保存后的结果应用 → 刷新 + 快照（显式两步，不隐式覆盖）
+      pmRenderList(); pmRenderEditor();
+      pmNoteOk('✓ 已保存并应用到当前任务（' + name + '）');
+    } else {
+      refreshPresetSel(); updatePresetHint(); rememberPreset();
+      pmRenderList(); pmRenderEditor();
+      pmNoteOk('✓ 已保存（' + name + '）');
+    }
   } catch (ex) { pmNoteErr('保存失败：' + ex); }
 }
 async function pmDelete() {
@@ -235,7 +298,12 @@ async function pmDelete() {
     if (r.error) { pmNoteErr(r.error); return; }
     PRESETS = r.presets || {};
     if ($('preset_sel').value === name) $('preset_sel').value = '';   // 只清引用；当前任务参数保持不变
+    if (presetSession.currentId === name) {   // 删除的是当前任务来源预设：任务转为自定义配置（参数不动）
+      presetSession.currentId = null;
+      presetSession.snapshot = null;
+    }
     refreshPresetSel(); updatePresetHint(); rememberPreset();
+    pmEditorDirty = false;
     pmState.editing = Object.keys(PRESETS).length ? { orig: Object.keys(PRESETS)[0], isNew: false } : null;
     pmRenderList(); pmRenderEditor();
     pmNoteOk('✓ 已删除（' + name + '）');
@@ -246,8 +314,14 @@ function pmNoteErr(t) { const el = $('pmNote'); el.textContent = t; el.style.col
 
 /* ==================== 初始化（由 init.js bootstrap 统一调用，仅执行一次） ==================== */
 function initPresets() {
-$('preset_sel').onchange = function () { if (PRESETS[this.value]) applyPreset(PRESETS[this.value]); updatePresetHint(); rememberPreset(); };
+$('preset_sel').onchange = function () {
+  if (this.value && PRESETS[this.value]) applyPresetToCurrentTask(this.value);   // 唯一应用入口
+  else detachCurrentPreset();   // 选回「选择预设…」= 解除预设（参数保留）
+};
 ['sc_name', 'tc_name', 'fonts_dir', 'out_dir', 'out_name_tmpl', 'title'].forEach(id => $(id).addEventListener('input', updatePresetHint));
 ['sc_forced', 'tc_forced', 'backup', 'force', 'fonts_mode'].forEach(id => $(id).addEventListener('change', updatePresetHint));
 $('pmClose').onclick = closePresetManager;
+/* 编辑器任何输入都标记未保存（切换列表项时触发保护） */
+$('pmEditor').addEventListener('input', function () { pmEditorDirty = true; }, true);
+$('pmEditor').addEventListener('change', function () { pmEditorDirty = true; }, true);
 }

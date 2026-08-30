@@ -158,7 +158,7 @@ def main():
                 "styles/tokens.css", "styles/base.css", "styles/layout.css",
                 "styles/components/navigation.css", "styles/components/forms.css", "styles/components/buttons.css",
                 "styles/features/file-card.css", "styles/features/subtitle-tracks.css", "styles/features/task-status.css",
-                "styles/features/batch.css", "styles/features/overlays.css", "styles/features/environment.css"]
+                "styles/features/batch.css", "styles/features/overlays.css", "styles/features/presets.css", "styles/features/environment.css"]
         sizes = {}
         for f in need:
             r = op.open("http://127.0.0.1:8765/" + f, timeout=10)

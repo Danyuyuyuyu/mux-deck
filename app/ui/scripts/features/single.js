@@ -418,10 +418,9 @@ function pickNameToken(path, kind) {
   if ((kind === 'sc' && isSc) || (kind === 'tc' && isTc)) return m[1].toUpperCase();
   return '';
 }
-/* 预设已选择时轨道名以预设为准：自动识别/匹配/拖放/手输均不改写轨道名（清空预设选择即恢复自动识别） */
+/* 预设已选择时轨道名以预设为准：自动识别/匹配/拖放/手输均不改写轨道名（解除预设即恢复自动识别） */
 function presetTrackNameLocked() {
-  const sel = $('preset_sel');
-  return !!(sel && sel.value && PRESETS[sel.value]);
+  return !!(presetSession.currentId && PRESETS[presetSession.currentId]);
 }
 function autoTrackName(subField, nameField, kind) {
   if (presetTrackNameLocked()) return;
@@ -709,6 +708,23 @@ async function runSubtitleCheck() {
   }
 }
 
+/* ==================== 预设状态条（主流程顶部；状态数据来自 presets.js 的 getCurrentPresetInfo） ====================
+ * 只负责呈现：◆ X · 已应用 / ◆ X · 已修改 / 自定义配置，以及 更改/选择预设/解除预设 按钮态。
+ * 预设 CRUD 与应用逻辑在 presets.js；本函数不做任何预设数据判断以外的业务。 */
+function renderPresetStatus() {
+  const box = $('presetStatusBar');
+  if (!box) return;
+  const info = getCurrentPresetInfo();
+  const txt = $('presetStatusText');
+  const has = !!info.id;
+  txt.textContent = has ? ('◆ ' + info.id + (info.dirty ? ' · 已修改' : ' · 已应用')) : '自定义配置';
+  txt.className = 'preset-status-text' + (has && info.dirty ? ' preset-dirty' : '');
+  box.classList.toggle('has-preset', has);
+  $('btnPresetChange').style.display = has ? '' : 'none';
+  $('btnPresetDetach').style.display = has ? '' : 'none';
+  $('btnPresetPick').style.display = has ? 'none' : '';
+}
+
 /* ==================== 初始化（由 init.js bootstrap 统一调用，仅执行一次） ==================== */
 function initSingle() {
 $('btnSingleReset').onclick = () => {
@@ -808,6 +824,10 @@ $('btnPrepSubs').onclick = () => runEncodingCheck();
 $('btnSubCheck').onclick = () => runContentCheck();
 $('btnCheckFonts').onclick = () => runFontCheck();
 $('btnSubtitleCheck').onclick = () => runSubtitleCheck();   // 统一入口：编码→内容→字体
+$('btnPresetChange').onclick = () => openPresetManager();   // 更改：管理器默认选中当前任务预设
+$('btnPresetPick').onclick = () => openPresetManager();     // 选择预设：自定义配置态入口
+$('btnPresetDetach').onclick = () => detachCurrentPreset(); // 解除预设：参数保留，转为自定义配置
+renderPresetStatus();   // 初始呈现（无预设 = 自定义配置）
 $('btnStart').onclick = async () => {
   if (singleState.job) {
     setStatus('正在停止…', 'run');

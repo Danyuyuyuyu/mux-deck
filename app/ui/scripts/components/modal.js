@@ -21,6 +21,7 @@ function openModal(id, options) {
   });
   el.style.display = options.display || 'flex';
   el.setAttribute('aria-hidden', 'false');
+  if (MODAL_STACK.length === 1) document.body.classList.add('modal-open');   // 页面滚动锁：消除页面+Modal 双滚动
 }
 
 function closeModal(id) {
@@ -31,11 +32,13 @@ function closeModal(id) {
     const m = MODAL_STACK.splice(idx, 1)[0];
     el.style.display = 'none';
     el.setAttribute('aria-hidden', 'true');
+    if (!MODAL_STACK.length) document.body.classList.remove('modal-open');
     const t = m.options.returnFocus || m.trigger;
     if (t && t.isConnected) t.focus();
   } else {
     el.style.display = 'none';   // 容错：未入栈的直接隐藏
     el.setAttribute('aria-hidden', 'true');
+    if (!MODAL_STACK.length) document.body.classList.remove('modal-open');
   }
 }
 
