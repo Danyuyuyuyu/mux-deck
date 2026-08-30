@@ -16,6 +16,8 @@
   var SCRIPTS = [
     // core：图标 / 公共工具 / 导航（供其余全部脚本与 inline onclick 使用）
     'scripts/core/icons.js', 'scripts/core/utils.js', 'scripts/core/navigation.js',
+    // 公共 UI 组件层（modal 机制）
+    'scripts/components/modal.js',
     // components：文件浏览器 / 设置域（含主题·全局设置·备份·首次引导）
     'scripts/components/browser.js', 'scripts/components/settings.js',
     // 公共业务（既有文件，职责不变）

@@ -2,6 +2,53 @@
  * 「封装预设」入口只调 openPresetManager()（实现在 features/presets.js）；环境检测入口调 env.js 的 openEnv()。 */
 
 /* ==================== 设置面板（主题 / 强调色） ==================== */
+
+/* ==================== 全局设置（应用级配置：工作目录 / 子集化工具 / 备份清理） ==================== */
+/* 字段 id（cfg_scan / cfg_tool / btnBackups）与存储机制（/api/config）不变，仅从任务表单移入设置弹窗 */
+function updateGlobalSummary() {
+  const el = $('globalSummary');
+  if (!el) return;
+  const dir = $('cfg_scan').value.trim() || '未设置';
+  const tool = $('cfg_tool').value === 'assfonts' ? 'assfonts' : 'AssFontSubset';
+  el.textContent = '工作目录 ' + dir + ' · 子集化工具 ' + tool;
+}
+function openGlobal() {
+  $('cfg_scan').value = CFG.scanRoot || $('cfg_scan').value;
+  updateGlobalSummary();
+  openModal('globalModal');
+}
+
+/* ==================== 备份清理（替换模式的 __mux_tmp_manual） ==================== */
+function fmtSize(n) {
+  if (n >= 1073741824) return (n / 1073741824).toFixed(2) + ' GB';
+  if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+  return (n / 1024).toFixed(1) + ' KB';
+}
+function backupsLoad() {
+  const list = $('backupsList');
+  return api('/api/backups').then(r => {
+    const items = r.items || [];
+    if (!items.length) {
+      list.innerHTML = '<div class="t-sec" style="padding:8px 0;">没有记录到备份目录（替换模式封装后才会产生）</div>';
+      return;
+    }
+    list.innerHTML = items.map((it, i) =>
+      '<label class="check" style="display:flex;align-items:center;gap:8px;padding:6px 0;">'
+      + '<input type="checkbox" class="bk-check" data-path="' + esc(it.path) + '" style="width:auto;height:auto">'
+      + '<span style="flex:1;word-break:break-all;" class="mono t-cap">' + esc(it.path) + '</span>'
+      + '<span class="chip sm info">' + fmtSize(it.size) + '</span></label>').join('');
+    $('backupsNote').textContent = '共 ' + items.length + ' 个目录，合计 ' + fmtSize(items.reduce((s, x) => s + x.size, 0));
+  }).catch(ex => { $('backupsNote').textContent = '加载失败：' + ex; });
+}
+
+/* ==================== 初始启动：设置工作目录 ==================== */
+function showSetup() {
+  $('setup_scan').value = CFG.scanRoot || '';
+  $('setupErr').textContent = '';
+  openModal('setupModal', { closeOnBackdrop: false, closeOnEscape: false });   // 首次引导：不允许误触关闭
+}
+
+function initSettings() {
 (function () {
   var prefs = {};
   try { prefs = JSON.parse(localStorage.getItem('muxui_prefs') || '{}'); } catch (e) {}
@@ -47,47 +94,9 @@
   });
   sync();
 })();
-
-/* ==================== 全局设置（应用级配置：工作目录 / 子集化工具 / 备份清理） ==================== */
-/* 字段 id（cfg_scan / cfg_tool / btnBackups）与存储机制（/api/config）不变，仅从任务表单移入设置弹窗 */
-function updateGlobalSummary() {
-  const el = $('globalSummary');
-  if (!el) return;
-  const dir = $('cfg_scan').value.trim() || '未设置';
-  const tool = $('cfg_tool').value === 'assfonts' ? 'assfonts' : 'AssFontSubset';
-  el.textContent = '工作目录 ' + dir + ' · 子集化工具 ' + tool;
-}
-function openGlobal() {
-  $('cfg_scan').value = CFG.scanRoot || $('cfg_scan').value;
-  updateGlobalSummary();
-  $('globalModal').style.display = 'flex';
-}
-$('globalClose').onclick = () => { $('globalModal').style.display = 'none'; };
-
-/* ==================== 备份清理（替换模式的 __mux_tmp_manual） ==================== */
-function fmtSize(n) {
-  if (n >= 1073741824) return (n / 1073741824).toFixed(2) + ' GB';
-  if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
-  return (n / 1024).toFixed(1) + ' KB';
-}
-function backupsLoad() {
-  const list = $('backupsList');
-  return api('/api/backups').then(r => {
-    const items = r.items || [];
-    if (!items.length) {
-      list.innerHTML = '<div class="t-sec" style="padding:8px 0;">没有记录到备份目录（替换模式封装后才会产生）</div>';
-      return;
-    }
-    list.innerHTML = items.map((it, i) =>
-      '<label class="check" style="display:flex;align-items:center;gap:8px;padding:6px 0;">'
-      + '<input type="checkbox" class="bk-check" data-path="' + esc(it.path) + '" style="width:auto;height:auto">'
-      + '<span style="flex:1;word-break:break-all;" class="mono t-cap">' + esc(it.path) + '</span>'
-      + '<span class="chip sm info">' + fmtSize(it.size) + '</span></label>').join('');
-    $('backupsNote').textContent = '共 ' + items.length + ' 个目录，合计 ' + fmtSize(items.reduce((s, x) => s + x.size, 0));
-  }).catch(ex => { $('backupsNote').textContent = '加载失败：' + ex; });
-}
-$('btnBackups').onclick = () => { $('backupsModal').style.display = 'flex'; $('backupsNote').textContent = ''; backupsLoad(); };
-$('backupsClose').onclick = () => { $('backupsModal').style.display = 'none'; };
+$('globalClose').onclick = () => closeModal('globalModal');
+$('btnBackups').onclick = () => { openModal('backupsModal'); $('backupsNote').textContent = ''; backupsLoad(); };
+$('backupsClose').onclick = () => closeModal('backupsModal');
 $('btnBackupsClean').onclick = async () => {
   const paths = [...document.querySelectorAll('#backupsList .bk-check')].filter(c => c.checked).map(c => c.dataset.path);
   if (!paths.length) { $('backupsNote').textContent = '请先勾选要删除的目录'; return; }
@@ -100,13 +109,7 @@ $('btnBackupsClean').onclick = async () => {
     backupsLoad();
   } catch (ex) { $('backupsNote').textContent = '清理失败：' + ex; }
   finally { $('btnBackupsClean').disabled = false; }
-
-/* ==================== 初始启动：设置工作目录 ==================== */
-function showSetup() {
-  $('setup_scan').value = CFG.scanRoot || '';
-  $('setupErr').textContent = '';
-  $('setupModal').style.display = 'flex';
-}
+};
 $('btnSetupBrowse').onclick = () => openBrowser(v => { $('setup_scan').value = v; $('setupErr').textContent = ''; }, 'dir', $('setup_scan').value, 'cfg');
 $('btnSetupSave').onclick = async () => {
   const p = $('setup_scan').value.trim();
@@ -116,7 +119,7 @@ $('btnSetupSave').onclick = async () => {
     const r = await api('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scan_root: p }) });
     if (r.error) { $('setupErr').textContent = '保存失败：' + r.error; return; }
     CFG.scanRoot = r.scan_root || p;
-    $('setupModal').style.display = 'none';
+    closeModal('setupModal');
     $('cfg_scan').value = CFG.scanRoot;
     updateGlobalSummary();
     setStatus('工作目录已设置：' + CFG.scanRoot + '（索引构建中）', 'ok');
@@ -127,7 +130,26 @@ $('btnSetupSave').onclick = async () => {
   }
 };
 $('setupSkip').onclick = () => {
-  $('setupModal').style.display = 'none';
+  closeModal('setupModal');
   setStatus('未设置工作目录：拖放识别暂不可用，可在「高级选项 → 工作目录」随时设置', 'err');
 };
+/* 全局设置弹窗（cfg_scan / cfg_tool）的保存绑定（原 init.js，职责属设置域） */
+$('btnCfgScan').onclick = () => openBrowser(v => { $('cfg_scan').value = v; }, 'dir', $('cfg_scan').value, 'cfg');
+$('btnCfgSave').onclick = async () => {
+  const p = $('cfg_scan').value.trim();
+  try {
+    const r = await api('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scan_root: p }) });
+    if (r.error) { setStatus('工作目录保存失败：' + r.error, 'err'); return; }
+    CFG.scanRoot = r.scan_root || p;
+    updateGlobalSummary();
+    setStatus('工作目录已保存：' + CFG.scanRoot + '（索引将自动重建）', 'ok');
+  } catch (ex) { setStatus('工作目录保存失败：' + ex, 'err'); }
 };
+$('cfg_tool').onchange = async () => {
+  try {
+    const r = await api('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subset_tool: $('cfg_tool').value }) });
+    if (r.error) { setStatus('子集工具保存失败：' + r.error, 'err'); return; }
+    setStatus('子集化工具已切换：' + (r.subset_tool || $('cfg_tool').value), 'ok');
+  } catch (ex) { setStatus('子集工具保存失败：' + ex, 'err'); }
+};
+}

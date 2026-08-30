@@ -320,6 +320,9 @@ function mockFetch(url, opts) {
   $('btnStart').click();
   await waitUntil(() => savedBody, 3000);
   check('提交体携带章节/命名模板/标题', savedBody && savedBody.chapters === 'C:\\c.txt' && savedBody.out_name === '[G] {ep}' && savedBody.title === 'T1', savedBody && JSON.stringify({ c: savedBody.chapters, n: savedBody.out_name, t: savedBody.title }));
+  window.pickVideoPath('D:\\Video\\EP06.mkv');   // 预设已选：换视频触发自动识别
+  ok = await waitUntil(() => $('sc_sub').value === 'D:\\Video\\EP01.sc.ass');
+  check('预设已选：换视频后轨道名不被自动识别改写', ok && $('sc_name').value === '简中', $('sc_name').value);
 
   /* ---- 场景15：批量章节自动匹配 + 预设套用批量字段 ---- */
   chaptersRet = { chapters: 'D:\\Video\\EP01.chapters.txt' };
@@ -341,6 +344,24 @@ function mockFetch(url, opts) {
   $('preset_sel').dispatchEvent(new window.Event('change', { bubbles: true }));
   check('预设同时套用批量公共字段', $('b_fonts_mode').value === 'collect' && $('b_out_name_tmpl').value !== '旧值' && $('b_sc_default').value === '1', $('b_fonts_mode').value + '/' + $('b_out_name_tmpl').value + '/' + $('b_sc_default').value);
 
+  /* ---- 场景15b：预设记忆（刷新恢复）与重置基线 ---- */
+  check('选择预设即写入记忆', window.localStorage.getItem('muxui_preset') === '测试预设', String(window.localStorage.getItem('muxui_preset')));
+  $('preset_sel').value = ''; $('sc_name').value = 'SC2'; $('sc_name').dispatchEvent(new window.Event('input', { bubbles: true }));
+  window.restoreRememberedPreset();   // 模拟刷新后的恢复路径
+  check('预设记忆恢复：选择器恢复并自动套用', $('preset_sel').value === '测试预设' && $('sc_name').value === '简中' && $('fonts_mode').value === 'collect', $('preset_sel').value + '/' + $('sc_name').value + '/' + $('fonts_mode').value);
+  window.localStorage.setItem('muxui_preset', '已被删除的预设');
+  $('preset_sel').value = '';
+  window.restoreRememberedPreset();
+  check('预设记忆：名称失效回落并清记忆', $('preset_sel').value === '' && window.localStorage.getItem('muxui_preset') === null, $('preset_sel').value + '/' + String(window.localStorage.getItem('muxui_preset')));
+  // 重置基线：已选预设时重置 = 清回默认后重新套用，选择器保留
+  ok = await waitUntil(() => !window.eval('job'), 6000);   // 等场景14的封装任务终态（job 清空）再重置
+  $('preset_sel').value = '测试预设';
+  $('sc_name').value = '改过';
+  $('btnSingleReset').click();   // confirm 已 mock 为 true
+  await sleep(30);
+  check('重置=回到预设基线且选择保留', $('sc_name').value === '简中' && $('preset_sel').value === '测试预设', $('sc_name').value + '/' + $('preset_sel').value);
+  window.pickVideoPath('D:\\Video\\EP01.mkv');   // 重置清了视频：补回，供场景19 章节提取使用
+
   /* ---- 场景16：mkvmerge 命令查看/复制 ---- */
   check('批量结果行带命令按钮', !!window.document.querySelector('[data-cmd]'), 'no data-cmd btn');
   const cmdBtn = window.document.querySelector('[data-cmd]');
@@ -356,6 +377,14 @@ function mockFetch(url, opts) {
   $('btnSubCheck').click();
   ok = await waitUntil(() => $('subCheckBox') && $('subCheckBox').innerHTML.indexOf('第12行') >= 0);
   check('字幕体检渲染预警汇总与明细', ok && $('subCheckBox').innerHTML.indexOf('CPS 超速 2') >= 0 && $('subCheckBox').innerHTML.indexOf('时间重叠 1') >= 0, $('subCheckBox') && $('subCheckBox').innerHTML.slice(0, 150));
+
+  /* ---- 场景17b：统一字幕检查（编码→内容→字体 串行编排） ---- */
+  check('统一入口按钮存在', !!$('btnSubtitleCheck') && $('btnSubtitleCheck').textContent.includes('字幕检查'));
+  $('btnSubtitleCheck').click();
+  ok = await waitUntil(() => ($('status').textContent || '').indexOf('字幕检查完成') >= 0, 4000);
+  check('统一检查完成：汇总含 SC 分段与编码/内容/字体', ok && ($('status').textContent || '').indexOf('SC') >= 0 && ($('status').textContent || '').indexOf('编码') >= 0 && ($('status').textContent || '').indexOf('内容') >= 0 && ($('status').textContent || '').indexOf('字体') >= 0, $('status').textContent);
+  check('统一检查结束：按钮恢复可用与原标签', !$('btnSubtitleCheck').disabled && $('btnSubtitleCheck').textContent.includes('字幕检查'), $('btnSubtitleCheck').textContent);
+  check('检查后 sticky 未受干扰', stickyTxt().length > 0);
 
   /* ---- 场景18：快速修补（读取轨道 → 改动标记 → 应用） ---- */
   window.switchMode('propedit');

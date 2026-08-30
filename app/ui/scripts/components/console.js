@@ -49,39 +49,9 @@ function histOpen(i) {
 }
 function openDir(enc) { fetch('/api/open?path=' + enc); }
 /* 一次性事件委托：所有 data-open-dir 按钮统一走 openDir，路径含单引号不再断裂 */
-document.addEventListener('click', function (e) {
-  const el = e.target.closest('[data-open-dir]');
-  if (el) openDir(el.dataset.openDir || '');
-});
 /* mkvmerge 命令查看/复制（结果区的 data-cmd 按钮，命令 base64 存于属性） */
 function b64e(s) { return btoa(unescape(encodeURIComponent(s))); }
 function b64d(s) { try { return decodeURIComponent(escape(atob(s))); } catch (e) { return ''; } }
-document.addEventListener('click', function (e) {
-  const btn = e.target.closest('[data-cmd]');
-  if (!btn) return;
-  const cmd = b64d(btn.dataset.cmd || '');
-  const old = document.getElementById('cmdPop');
-  if (old) old.remove();
-  if (btn.dataset.cmdOpen === '1') { btn.dataset.cmdOpen = ''; return; }   // 再点一次收起
-  btn.dataset.cmdOpen = '1';
-  const ov = document.createElement('div');
-  ov.id = 'cmdPop';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:120;display:flex;align-items:center;justify-content:center;';
-  const box = document.createElement('div');
-  box.style.cssText = 'background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:18px 20px;max-width:860px;width:92%;box-shadow:0 10px 40px rgba(0,0,0,.5);';
-  box.innerHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;"><b>mkvmerge 封装命令</b><span class="t-cap">可直接复制到流水线/CI 复现本次封装</span><span style="flex:1"></span>'
-    + '<button class="btn small" id="cmdCopy">' + ic('download') + '<span>复制</span></button>'
-    + '<button class="btn small ghost" id="cmdClose">关闭</button></div>'
-    + '<pre class="log-pre" style="max-height:50vh;white-space:pre-wrap;word-break:break-all;margin:0">' + esc(cmd) + '</pre>';
-  ov.appendChild(box);
-  document.body.appendChild(ov);
-  ov.addEventListener('click', ev => { if (ev.target === ov) ov.remove(); });
-  $('cmdClose').onclick = () => { ov.remove(); btn.dataset.cmdOpen = ''; };
-  $('cmdCopy').onclick = async () => {
-    try { await navigator.clipboard.writeText(cmd); $('cmdCopy').innerHTML = ic('check') + '<span>已复制</span>'; }
-    catch (ex) { setStatus('复制失败：' + ex, 'err'); }
-  };
-});
 /* ==================== 统一日志 / 任务控制台（状态驱动：idle 收起为单行，运行自动展开） ==================== */
 const logStore = { mux: '', batch: '', xt: '' };
 let logTab = 'mux';
@@ -98,9 +68,11 @@ function updateConsoleStatus() {
   const el = $('consoleStatus');
   if (!el) return;
   let txt = '尚未开始', cls = 'info';
-  if (job) { txt = '正在封装…'; cls = 'run'; }
-  else if (bJob) { txt = '正在批量封装…'; cls = 'run'; }
-  else if (lastResult) { txt = lastResult.text; cls = lastResult.cls; }
+  const single = getSingleTaskStatus();
+  const batch = getBatchTaskStatus();
+  if (single.running) { txt = '正在封装…'; cls = 'run'; }
+  else if (batch.running) { txt = '正在批量封装…'; cls = 'run'; }
+  else if (single.result) { txt = single.result.text; cls = single.result.cls; }
   el.textContent = txt;
   el.className = 'cc-status ' + cls;
 }
@@ -128,13 +100,6 @@ function renderLog() {
   el.textContent = logStore[logTab] || '';
   if (logUi.stick) el.scrollTop = el.scrollHeight;   // 用户向上翻看时不再强制拉底
 }
-$('log').addEventListener('scroll', function () {
-  var el = $('log');
-  logUi.stick = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
-});
-$('btnLogClear').onclick = function () { logStore[logTab] = ''; renderLog(); };
-$('consoleCollapsed').onclick = function () { setConsoleCollapsed(false); };
-$('btnLogFold').onclick = function () { setConsoleCollapsed(true); };
 
 /* ==================== 任务结果摘要（成功/失败后优先展示结果而非原始日志） ==================== */
 function hideTaskSummary() {
@@ -179,7 +144,48 @@ function beep() {
     o.start(); o.stop(ctx.currentTime + .18);
   } catch (e) {}
 }
+
+/* ==================== 初始化（由 init.js bootstrap 统一调用，仅执行一次） ==================== */
+function initConsole() {
+document.addEventListener('click', function (e) {
+  const el = e.target.closest('[data-open-dir]');
+  if (el) openDir(el.dataset.openDir || '');
+});
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('[data-cmd]');
+  if (!btn) return;
+  const cmd = b64d(btn.dataset.cmd || '');
+  const old = document.getElementById('cmdPop');
+  if (old) old.remove();
+  if (btn.dataset.cmdOpen === '1') { btn.dataset.cmdOpen = ''; return; }   // 再点一次收起
+  btn.dataset.cmdOpen = '1';
+  const ov = document.createElement('div');
+  ov.id = 'cmdPop';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:120;display:flex;align-items:center;justify-content:center;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:18px 20px;max-width:860px;width:92%;box-shadow:0 10px 40px rgba(0,0,0,.5);';
+  box.innerHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;"><b>mkvmerge 封装命令</b><span class="t-cap">可直接复制到流水线/CI 复现本次封装</span><span style="flex:1"></span>'
+    + '<button class="btn small" id="cmdCopy">' + ic('download') + '<span>复制</span></button>'
+    + '<button class="btn small ghost" id="cmdClose">关闭</button></div>'
+    + '<pre class="log-pre" style="max-height:50vh;white-space:pre-wrap;word-break:break-all;margin:0">' + esc(cmd) + '</pre>';
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+  ov.addEventListener('click', ev => { if (ev.target === ov) ov.remove(); });
+  $('cmdClose').onclick = () => { ov.remove(); btn.dataset.cmdOpen = ''; };
+  $('cmdCopy').onclick = async () => {
+    try { await navigator.clipboard.writeText(cmd); $('cmdCopy').innerHTML = ic('check') + '<span>已复制</span>'; }
+    catch (ex) { setStatus('复制失败：' + ex, 'err'); }
+  };
+});
+$('log').addEventListener('scroll', function () {
+  var el = $('log');
+  logUi.stick = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
+});
+$('btnLogClear').onclick = function () { logStore[logTab] = ''; renderLog(); };
+$('consoleCollapsed').onclick = function () { setConsoleCollapsed(false); };
+$('btnLogFold').onclick = function () { setConsoleCollapsed(true); };
 (function () {
   try { $('soundToggle').checked = localStorage.getItem('muxui_sound') !== '0'; } catch (e) {}
   $('soundToggle').onchange = function () { try { localStorage.setItem('muxui_sound', this.checked ? '1' : '0'); } catch (e) {} };
 })();
+}

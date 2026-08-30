@@ -1,0 +1,115 @@
+// 字幕封装助手 UI 冒烟测试（第一版：bootstrap / 导航 / 设置 / 预设管理 / 高级选项 / 控制台 / Modal / 前端错误捕获）
+// 不跑真实封装、不增删用户预设数据。
+const { test, expect } = require('@playwright/test');
+
+test.describe('mux-ui smoke', () => {
+  let pageErrors;
+  let consoleErrors;
+
+  test.beforeEach(async ({ page }) => {
+    pageErrors = [];
+    consoleErrors = [];
+    page.on('pageerror', e => pageErrors.push(String(e && e.message || e)));
+    page.on('console', m => { if (m.type() === 'error') consoleErrors.push(m.text()); });
+    await page.goto('/');
+    await page.waitForFunction('window.MUXUI_READY === true', null, { timeout: 15000 });   // 等 loader 挂载 + bootstrap 完成
+  });
+
+  test.afterEach(async () => {
+    // 冒烟测试最重要的价值：任何 ReferenceError / TypeError / null DOM 访问都直接失败
+    expect(pageErrors, '页面 JS 异常: ' + pageErrors.join(' | ')).toEqual([]);
+    expect(consoleErrors, 'console.error: ' + consoleErrors.join(' | ')).toEqual([]);
+  });
+
+  test('页面加载：App Shell 挂载 fragments，默认 single 激活，关键 DOM 齐备', async ({ page }) => {
+    await expect(page.locator('#mode-single')).toBeVisible();
+    await expect(page.locator('#mode-batch')).toBeAttached();
+    await expect(page.locator('#consolePanel')).toBeAttached();
+    await expect(page.locator('#presetModal')).toBeAttached();
+    await expect(page.locator('#offlineBar')).toBeAttached();
+    await expect(page.locator('.mode-nav .mode-tab')).toHaveCount(3);   // 单个 / 批量 / 字幕工具▾
+    await expect(page.locator('#mode-tab.active, .mode-tab.active')).toHaveCount(1);
+    await expect(page.locator('.mode-tab.active')).toHaveAttribute('data-mode', 'single');
+    await expect(page.locator('body')).toHaveClass(/single-active/);
+    // fragments 确实加载（业务元素存在，而非空壳）
+    await expect(page.locator('#videoCard')).toBeAttached();
+    await expect(page.locator('#stickySingle')).toBeAttached();
+    await expect(page.locator('#browserModal')).toBeAttached();
+  });
+
+  test('导航：批量封装切换 active', async ({ page }) => {
+    await page.click('.mode-tab[data-mode="batch"]');
+    await expect(page.locator('#mode-batch')).toBeVisible();
+    await expect(page.locator('#mode-single')).toBeHidden();
+    await expect(page.locator('.mode-tab.active')).toHaveAttribute('data-mode', 'batch');
+    await expect(page.locator('body')).toHaveClass(/batch-active/);
+  });
+
+  test('导航：字幕工具下拉 → 字幕预览，一级入口与下拉项同时激活', async ({ page }) => {
+    await page.click('#toolsTab');
+    await expect(page.locator('#toolsDrop')).toHaveClass(/open/);
+    await page.click('.drop-item[data-mode="preview"]');
+    await expect(page.locator('#mode-preview')).toBeVisible();
+    await expect(page.locator('.mode-tab.active')).toHaveAttribute('data-mode', 'tools');   // 一级入口高亮
+    await expect(page.locator('.drop-item.active')).toHaveAttribute('data-mode', 'preview'); // 下拉项高亮
+  });
+
+  test('设置弹层：三入口齐备（封装预设 / 全局设置 / 环境检测）', async ({ page }) => {
+    await page.click('#btnSettings');
+    await expect(page.locator('#settingsPop')).toHaveClass(/open/);
+    await expect(page.locator('#popPresetBtn')).toBeVisible();
+    await expect(page.locator('#popGlobalBtn')).toBeVisible();
+    await expect(page.locator('#popEnvBtn')).toBeVisible();
+  });
+
+  test('封装预设管理窗口：从设置打开、关闭（不改动预设数据）', async ({ page }) => {
+    await page.click('#btnSettings');
+    await page.click('#popPresetBtn');
+    await expect(page.locator('#settingsPop')).not.toHaveClass(/open/);   // 设置弹层先关闭
+    await expect(page.locator('#presetModal')).toBeVisible();
+    await expect(page.locator('#pmList')).toBeVisible();
+    await page.click('#pmClose');
+    await expect(page.locator('#presetModal')).toBeHidden();
+  });
+
+  test('Modal 公共组件：Esc 关闭 + 焦点恢复（验证任务2 机制）', async ({ page }) => {
+    await page.evaluate(() => {
+      document.getElementById('btnSettings').focus();
+      openModal('globalModal');   // open/close/isModalOpen 统一入口
+    });
+    await expect(page.locator('#globalModal')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#globalModal')).toBeHidden();
+    const focusId = await page.evaluate(() => document.activeElement && document.activeElement.id);
+    expect(focusId).toBe('btnSettings');   // 焦点恢复到触发元素
+  });
+
+  test('高级选项：展开后预设选择器与关键任务字段齐备', async ({ page }) => {
+    await page.click('#advToggle');
+    await expect(page.locator('#advBody')).toHaveClass(/show/);
+    await expect(page.locator('#preset_sel')).toBeAttached();
+    await expect(page.locator('#backup')).toBeAttached();
+    await expect(page.locator('#fonts_mode')).toBeAttached();
+    await expect(page.locator('#force')).toBeAttached();
+    await expect(page.locator('#btnSubtitleCheck')).toBeAttached();   // 统一字幕检查入口
+  });
+
+  test('控制台：默认收起 → 展开有日志 tabs → 再收起', async ({ page }) => {
+    await expect(page.locator('#consolePanel')).toHaveClass(/collapsed/);
+    await page.click('#consoleCollapsed');
+    await expect(page.locator('#consolePanel')).not.toHaveClass(/collapsed/);
+    await expect(page.locator('.ltab')).toHaveCount(4);   // 封装/批量/提取/历史
+    await page.click('#btnLogFold');
+    await expect(page.locator('#consolePanel')).toHaveClass(/collapsed/);
+  });
+
+  test('页面切换不丢输入状态、不重新挂载 fragments', async ({ page }) => {
+    await page.evaluate(() => { document.getElementById('out_name_tmpl').value = '[G] {ep}'; });
+    const before = await page.evaluate(() => document.querySelectorAll('#mode-single .panel').length);
+    await page.click('.mode-tab[data-mode="batch"]');
+    await page.click('.mode-tab[data-mode="single"]');
+    await expect(page.locator('#out_name_tmpl')).toHaveValue('[G] {ep}');   // 切换不丢状态
+    const after = await page.evaluate(() => document.querySelectorAll('#mode-single .panel').length);
+    expect(after).toBe(before);   // DOM 未重建
+  });
+});

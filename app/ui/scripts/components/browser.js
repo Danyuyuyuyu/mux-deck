@@ -7,18 +7,9 @@ const CFG = { scanRoot: 'D:\\Video' };
 function openBrowser(setter, filter, startPath, slot, dirSetter) {
   BR.setter = setter; BR.filter = filter; BR.slot = slot || filter || 'generic'; BR.dirSetter = dirSetter || null;
   BR.path = startPath || localStorage.getItem('muxui_ld_' + BR.slot) || localStorage.getItem('muxui_lastdir') || CFG.scanRoot;
-  $('browserModal').style.display = 'block';
+  openModal('browserModal', { display: 'block', closeOnBackdrop: false, closeOnEscape: false });   // 保持既有行为：不支持 Esc/backdrop 关闭
   showBrowser();
 }
-$('mbClose').onclick = () => $('browserModal').style.display = 'none';
-$('mbUp').onclick = () => { BR.path = BR.path.replace(/\\+$/, '').replace(/[^\\/]+$/, '') || ''; showBrowser(); }; // 到盘根后再向上进入盘符列表
-$('mbGo').onclick = () => { BR.path = $('mbPathInput').value.trim() || BR.path; showBrowser(); };
-$('mbPathInput').onkeydown = e => { if (e.key === 'Enter') $('mbGo').click(); };
-$('mbUseDir').onclick = () => {
-  const fn = BR.dirSetter || BR.setter;
-  fn(BR.path.replace(/\\+$/, ''));
-  $('browserModal').style.display = 'none';
-};
 async function showBrowser() {
   let d;
   try {
@@ -56,7 +47,20 @@ async function showBrowser() {
     if (ext && !ext.includes(name.slice(name.lastIndexOf('.')).toLowerCase())) return;
     const b = document.createElement('button'); b.className = 'mb-item';
     b.innerHTML = itemCls(name, false) + (sz >= 0 ? '<span class="sz">' + (sz / 1048576).toFixed(1) + ' MB</span>' : '');
-    b.onclick = () => { BR.setter((d.path ? d.path.replace(/\\+$/, '') + '\\' : '') + name); $('browserModal').style.display = 'none'; };
+    b.onclick = () => { BR.setter((d.path ? d.path.replace(/\\+$/, '') + '\\' : '') + name); closeModal('browserModal'); };
     body.appendChild(b);
   });
+}
+
+/* ==================== 初始化（由 init.js bootstrap 统一调用，仅执行一次） ==================== */
+function initBrowser() {
+$('mbClose').onclick = () => closeModal('browserModal');
+$('mbUp').onclick = () => { BR.path = BR.path.replace(/\\+$/, '').replace(/[^\\/]+$/, '') || ''; showBrowser(); }; // 到盘根后再向上进入盘符列表
+$('mbGo').onclick = () => { BR.path = $('mbPathInput').value.trim() || BR.path; showBrowser(); };
+$('mbPathInput').onkeydown = e => { if (e.key === 'Enter') $('mbGo').click(); };
+$('mbUseDir').onclick = () => {
+  const fn = BR.dirSetter || BR.setter;
+  fn(BR.path.replace(/\\+$/, ''));
+  closeModal('browserModal');
+};
 }

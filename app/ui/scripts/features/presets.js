@@ -32,11 +32,8 @@ function applyPreset(d) {
   $('force').checked = !!d.force;
   if (d.cfg_tool) { $('cfg_tool').value = d.cfg_tool; fireChange($('cfg_tool')); }
   if (d.fonts_mode) $('fonts_mode').value = d.fonts_mode;
-  // 同步套用到批量公共字段（有对应项才写）
-  const bm = { fonts_mode: 'b_fonts_mode', out_name_tmpl: 'b_out_name_tmpl', title: 'b_title',
-               sc_default: 'b_sc_default', tc_default: 'b_tc_default', sc_forced: 'b_sc_forced', tc_forced: 'b_tc_forced' };
-  Object.keys(bm).forEach(k => { if (d[k] !== undefined && d[k] !== '' && $(bm[k])) { if (bm[k].endsWith('_forced')) $(bm[k]).checked = !!d[k]; else $(bm[k]).value = d[k]; } });
-  if (d.fonts_dir && $('b_fonts')) $('b_fonts').value = d.fonts_dir;
+  // 同步套用到批量公共字段（映射逻辑在 batch.js，batch 域自持）
+  applyPresetToBatchCommon(d);
   syncSubStatus(); refreshSticky();
   updatePresetHint();
   setStatus('已套用预设（含批量公共选项）', 'ok');
@@ -55,7 +52,37 @@ async function loadPresets() {
     refreshPresetSel();
   } catch (e) { /* 断线由横幅提示 */ }
 }
-$('preset_sel').onchange = function () { if (PRESETS[this.value]) applyPreset(PRESETS[this.value]); updatePresetHint(); };
+
+/* ---- 跨模块轻量接口（其他域如需读取/应用预设，走这三个入口，不直接碰 PRESETS） ---- */
+function getPresetList() { return PRESETS; }
+function refreshPresetOptions() { refreshPresetSel(); updatePresetHint(); }
+function applyPresetToCurrentTask(name) {
+  if (!PRESETS[name]) return false;
+  $('preset_sel').value = name;
+  applyPreset(PRESETS[name]);
+  updatePresetHint();
+  rememberPreset();
+  return true;
+}
+
+/* ==================== 预设记忆（本机浏览器级工作态） ====================
+ * 记住上次选中的预设名，刷新后恢复选择器并自动套用（= 恢复上次工作状态）。
+ * 只存名字、不存参数——参数永远以服务端 PRESETS 为准；名称失效（被删/改名）时回落到
+ * 「选择预设…」并清掉记忆，与删除当前引用预设的既有语义一致。 */
+function rememberPreset() {
+  try { localStorage.setItem('muxui_preset', $('preset_sel').value || ''); } catch (e) {}
+}
+function restoreRememberedPreset() {
+  let name = '';
+  try { name = localStorage.getItem('muxui_preset') || ''; } catch (e) {}
+  if (!name || !PRESETS[name]) {
+    try { localStorage.removeItem('muxui_preset'); } catch (e) {}
+    return;
+  }
+  $('preset_sel').value = name;
+  applyPreset(PRESETS[name]);
+  updatePresetHint();
+}
 
 /* 当前任务与所选预设的差异提示（轻量 dirty：仅状态展示，不拦截、不回写预设）。
  * 只比较两边共有的键：旧预设携带 cfg_tool 等历史字段时不误报。 */
@@ -72,8 +99,6 @@ function updatePresetHint() {
   el.textContent = presetSnapshotEqual(presetData(), PRESETS[cur]) ? ('已应用：' + cur) : (cur + ' · 已修改');
 }
 /* 预设覆盖的字段变更后刷新 dirty 提示（seg 三态在自身点击处理里同步） */
-['sc_name', 'tc_name', 'fonts_dir', 'out_dir', 'out_name_tmpl', 'title'].forEach(id => $(id).addEventListener('input', updatePresetHint));
-['sc_forced', 'tc_forced', 'backup', 'force', 'fonts_mode'].forEach(id => $(id).addEventListener('change', updatePresetHint));
 
 /* ==================== 封装预设管理窗口（右上角 → 封装 → 封装预设） ====================
  * 职责分离：主页面 preset_sel 负责"应用"，本窗口负责"管理"（新建/查看/编辑/重命名/删除）。
@@ -84,7 +109,7 @@ const PM_BLANK = { sc_name: 'SC', tc_name: 'TC', sc_default: '', tc_default: '',
 const pmState = { editing: null };   // {orig: 已有预设名|null, isNew, mode: 'blank'|'task', base: 建基数据}
 function pmClone(o) { return JSON.parse(JSON.stringify(o || {})); }
 function openPresetManager() {
-  $('presetModal').style.display = 'block';
+  openModal('presetModal', { display: 'block' });
   $('pmNote').textContent = '';
   if (!pmState.editing) {
     const names = Object.keys(PRESETS);
@@ -92,8 +117,7 @@ function openPresetManager() {
   }
   pmRenderList(); pmRenderEditor();
 }
-function closePresetManager() { $('presetModal').style.display = 'none'; }
-$('pmClose').onclick = closePresetManager;
+function closePresetManager() { closeModal('presetModal'); }
 function pmSelect(name) { pmState.editing = { orig: name, isNew: false }; $('pmNote').textContent = ''; pmRenderList(); pmRenderEditor(); }
 function pmRenderList() {
   const box = $('pmList');
@@ -195,7 +219,7 @@ async function pmSave() {
     }
     const applied = $('preset_sel').value;
     if (applied === st.orig && st.orig !== name) $('preset_sel').value = PRESETS[name] ? name : '';   // 当前任务引用跟随重命名
-    refreshPresetSel(); updatePresetHint();
+    refreshPresetSel(); updatePresetHint(); rememberPreset();
     pmState.editing = { orig: name, isNew: false };
     pmRenderList(); pmRenderEditor();
     pmNoteOk('✓ 已保存（' + name + '）');
@@ -211,7 +235,7 @@ async function pmDelete() {
     if (r.error) { pmNoteErr(r.error); return; }
     PRESETS = r.presets || {};
     if ($('preset_sel').value === name) $('preset_sel').value = '';   // 只清引用；当前任务参数保持不变
-    refreshPresetSel(); updatePresetHint();
+    refreshPresetSel(); updatePresetHint(); rememberPreset();
     pmState.editing = Object.keys(PRESETS).length ? { orig: Object.keys(PRESETS)[0], isNew: false } : null;
     pmRenderList(); pmRenderEditor();
     pmNoteOk('✓ 已删除（' + name + '）');
@@ -219,3 +243,11 @@ async function pmDelete() {
 }
 function pmNoteOk(t) { const el = $('pmNote'); el.textContent = t; el.style.color = 'var(--success)'; }
 function pmNoteErr(t) { const el = $('pmNote'); el.textContent = t; el.style.color = 'var(--danger)'; }
+
+/* ==================== 初始化（由 init.js bootstrap 统一调用，仅执行一次） ==================== */
+function initPresets() {
+$('preset_sel').onchange = function () { if (PRESETS[this.value]) applyPreset(PRESETS[this.value]); updatePresetHint(); rememberPreset(); };
+['sc_name', 'tc_name', 'fonts_dir', 'out_dir', 'out_name_tmpl', 'title'].forEach(id => $(id).addEventListener('input', updatePresetHint));
+['sc_forced', 'tc_forced', 'backup', 'force', 'fonts_mode'].forEach(id => $(id).addEventListener('change', updatePresetHint));
+$('pmClose').onclick = closePresetManager;
+}

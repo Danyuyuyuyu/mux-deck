@@ -37,16 +37,19 @@ async function envLoad() {
   } catch (ex) { /* 断线时由 offlineBar 提示 */ }
 }
 function openEnv() {
-  $('envModal').style.display = 'flex';
+  openModal('envModal');
   $('envInstallBox').style.display = 'none';
   $('envLog').textContent = '';
   envLoad();
 }
 function closeEnv() {
-  $('envModal').style.display = 'none';
+  closeModal('envModal');
   // 环境引导关闭后，若工作目录还没设置过，接着引导设置工作目录
   api('/api/config').then(c => { if (c && (!c.configured || !c.valid)) showSetup(); }).catch(() => {});
 }
+
+/* ==================== 初始化（由 init.js bootstrap 统一调用，仅执行一次） ==================== */
+function initEnv() {
 $('btnEnvInstall').onclick = async () => {
   if (ENV.installing) return;
   ENV.installing = true;
@@ -92,3 +95,4 @@ $('btnEnvInstall').onclick = async () => {
 };
 $('btnEnvRefresh').onclick = envLoad;
 $('envClose').onclick = closeEnv;
+}

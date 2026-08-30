@@ -80,7 +80,6 @@ function batchDelSub(i, kind) {
   refreshBatchSticky();
   saveBatchQueue();
 }
-$('btnBatchAdd').onclick = () => { batchItems.push({video:'', sc:'', tc:''}); renderBatch(); };
 
 /* 添加文件：浏览器选视频 → 统一识别（字幕 + 字体目录，逻辑见 identify.js） */
 /* 添加整个文件夹：列出目录内全部视频 → 逐个统一识别 */
@@ -113,6 +112,73 @@ async function addVideosFromDir(dir) {
   }
 }
 const _lastBv = $('b_v_' + Math.max(0, batchItems.length - 1));
+
+
+function addBatchVideo(video, subPool, matched) {
+  const dir = video.slice(0, video.lastIndexOf('\\') + 1);
+  const stem = video.slice(video.lastIndexOf('\\') + 1).replace(/\.[^.]+$/, '');
+  let sc = '', tc = '';
+  const stems = [stem, stem.replace(/\s*[-_ ]\d+\s*$/, '')];
+  const scSfx = ['.sc.ass', '.chs.ass', '.jpsc.ass', '.SC.ass', '.CHS.ass', '.JPSC.ass'];
+  const tcSfx = ['.tc.ass', '.cht.ass', '.jptc.ass', '.TC.ass', '.CHT.ass', '.JPTC.ass'];
+  for (const st of stems) {
+    for (const sfx of scSfx) { if (!sc && subPool.some(p => p.toLowerCase() === (dir + st + sfx).toLowerCase())) sc = dir + st + sfx; }
+    for (const sfx of tcSfx) { if (!tc && subPool.some(p => p.toLowerCase() === (dir + st + sfx).toLowerCase())) tc = dir + st + sfx; }
+  }
+  if (!sc && matched && matched.sc) sc = matched.sc;
+  if (!tc && matched && matched.tc) tc = matched.tc;
+  batchItems.push({video, sc, tc, chapters: (matched && matched.chapters) || ''});
+}
+let bJob = null;
+/* 失败单集重跑：用列表中对应项（含已匹配字幕）重组为单项队列并直接开始 */
+function rerunFailed(i) {
+  if (bJob) { setStatus('批量任务进行中，不能重跑', 'err'); return; }
+  const it = batchItems[i];
+  if (!it || !it.video) { alert('找不到对应列表项（列表可能已被修改）'); return; }
+  batchItems.splice(0, batchItems.length);
+  batchItems.push({ video: it.video, sc: it.sc || '', tc: it.tc || '', chapters: it.chapters || '' });
+  renderBatch();
+  setStatus('已重组为单项队列并开始重跑：' + it.video.split(/[\\/]/).pop(), 'ok');
+  $('btnBatchStart').click();
+}
+/* 预设套用 → 批量公共字段联动（由 presets.js applyPreset 调用；映射集中在此，batch 域自持） */
+function applyPresetToBatchCommon(d) {
+  const bm = { fonts_mode: 'b_fonts_mode', out_name_tmpl: 'b_out_name_tmpl', title: 'b_title',
+               sc_default: 'b_sc_default', tc_default: 'b_tc_default', sc_forced: 'b_sc_forced', tc_forced: 'b_tc_forced' };
+  Object.keys(bm).forEach(k => { if (d[k] !== undefined && d[k] !== '' && $(bm[k])) { if (bm[k].endsWith('_forced')) $(bm[k]).checked = !!d[k]; else $(bm[k]).value = d[k]; } });
+  if (d.fonts_dir && $('b_fonts')) $('b_fonts').value = d.fonts_dir;
+}
+/* 页面加载恢复上次批量队列（断点续跑） */
+/* ===== 底部批量状态条：总体进度 / 当前文件 / 耗时与剩余（纯展示，不改任务逻辑） ===== */
+let bStickyStartTs = 0;   // 本轮批量开始时刻
+function bStickyOverall(s) {   // 总体进度 = (已完成文件数 + 当前文件内部进度) / 总数，区别于单文件进度
+  if (!s.total) return null;
+  const cur = (s.progress != null ? s.progress : 0) / 100;
+  return Math.min(100, Math.round((s.current - 1 + cur) / s.total * 100));
+}
+function bStickyUpdate(s) {
+  const ov = bStickyOverall(s);
+  $('bStickyPct').textContent = ov != null ? ov + '%' : '--';
+  if (ov != null) $('batchStickyBar').style.width = ov + '%';
+  if (s.total) $('bStickyCountNum').textContent = Math.min(Math.max(s.current || 1, 1), s.total) + ' / ' + s.total;
+  if (s.current_video) {
+    $('bStickyCurName').textContent = truncMid(s.current_video.split(/[\\/]/).pop(), 34);   // 写入即截中段；34 字符在让出状态区宽度后必然放下，CSS ellipsis 不再接管（尾部扩展名可见）
+    $('bStickyCur').style.display = '';
+  }
+  const elapsed = Date.now() - bStickyStartTs;
+  $('bStickyElapsed').textContent = fmtDur(elapsed);
+  if (ov != null && ov > 0) $('bStickyEta').textContent = fmtDur(elapsed / ov * (100 - ov));
+  else $('bStickyEta').textContent = '计算中…';
+}
+function bStickyFreeze() {   // 终态：耗时定格、剩余清空、当前文件与高光退场
+  $('bStickyProgress').classList.remove('run');
+  $('bStickyCur').style.display = 'none';
+  $('bStickyEta').textContent = '--:--:--';
+}
+
+/* ==================== 初始化（由 init.js bootstrap 统一调用，仅执行一次） ==================== */
+function initBatch() {
+$('btnBatchAdd').onclick = () => { batchItems.push({video:'', sc:'', tc:''}); renderBatch(); };
 $('btnBatchFiles').onclick = () => openBrowser(async v => {
   if (!v) return;
   if (!BATCH_VIDEO_RE.test(v)) { setStatus('请选择视频文件（MKV/MP4/M2TS 等）', 'err'); return; }
@@ -128,7 +194,6 @@ $('btnBatchFiles').onclick = () => openBrowser(async v => {
     setStatus('添加失败：' + ex, 'err');
   }
 }, 'video', _lastBv ? _lastBv.value : '', 'batch', addVideosFromDir);
-
 $('btnBatchClear').onclick = () => {
   if (bJob) { setStatus('批量任务进行中，不能重置', 'err'); return; }
   const dirty = batchItems.length || $('batchResults').innerHTML || $('b_fonts').value.trim() || $('b_out').value.trim() ||
@@ -158,7 +223,6 @@ $('btnBatchClear').onclick = () => {
   refreshBatchSticky();
   setStatus('已重置批量封装设置（输出文件保留在磁盘）', 'ok');
 };
-
 $('btnMatchAll').onclick = async () => {
   if (!batchItems.length) { alert('批量列表为空'); return; }
   setStatus('正在按集数匹配字幕…', 'run');
@@ -189,21 +253,6 @@ $('btnMatchAll').onclick = async () => {
     refreshBatchSticky();
   }
 };
-function addBatchVideo(video, subPool, matched) {
-  const dir = video.slice(0, video.lastIndexOf('\\') + 1);
-  const stem = video.slice(video.lastIndexOf('\\') + 1).replace(/\.[^.]+$/, '');
-  let sc = '', tc = '';
-  const stems = [stem, stem.replace(/\s*[-_ ]\d+\s*$/, '')];
-  const scSfx = ['.sc.ass', '.chs.ass', '.jpsc.ass', '.SC.ass', '.CHS.ass', '.JPSC.ass'];
-  const tcSfx = ['.tc.ass', '.cht.ass', '.jptc.ass', '.TC.ass', '.CHT.ass', '.JPTC.ass'];
-  for (const st of stems) {
-    for (const sfx of scSfx) { if (!sc && subPool.some(p => p.toLowerCase() === (dir + st + sfx).toLowerCase())) sc = dir + st + sfx; }
-    for (const sfx of tcSfx) { if (!tc && subPool.some(p => p.toLowerCase() === (dir + st + sfx).toLowerCase())) tc = dir + st + sfx; }
-  }
-  if (!sc && matched && matched.sc) sc = matched.sc;
-  if (!tc && matched && matched.tc) tc = matched.tc;
-  batchItems.push({video, sc, tc, chapters: (matched && matched.chapters) || ''});
-}
 $('btnBatchStart').onclick = async () => {
   if (bJob) {
     setStatus('正在停止…', 'run');
@@ -301,19 +350,6 @@ $('btnBatchStart').onclick = async () => {
     onLost: () => bfin(null, { cls: 'err', icon: 'xCircle', text: '连接丢失，请刷新' }, '连接丢失，请刷新', '连接丢失，请刷新', 'err')
   });
 };
-let bJob = null;
-/* 失败单集重跑：用列表中对应项（含已匹配字幕）重组为单项队列并直接开始 */
-function rerunFailed(i) {
-  if (bJob) { setStatus('批量任务进行中，不能重跑', 'err'); return; }
-  const it = batchItems[i];
-  if (!it || !it.video) { alert('找不到对应列表项（列表可能已被修改）'); return; }
-  batchItems.splice(0, batchItems.length);
-  batchItems.push({ video: it.video, sc: it.sc || '', tc: it.tc || '', chapters: it.chapters || '' });
-  renderBatch();
-  setStatus('已重组为单项队列并开始重跑：' + it.video.split(/[\\/]/).pop(), 'ok');
-  $('btnBatchStart').click();
-}
-/* 页面加载恢复上次批量队列（断点续跑） */
 (function restoreBatchQueue() {
   try {
     const q = JSON.parse(localStorage.getItem('muxui_batch_queue') || 'null');
@@ -336,31 +372,6 @@ function rerunFailed(i) {
     setStatus('已恢复上次的批量列表（' + batchItems.length + ' 项）与选项，可续跑', 'ok');
   } catch (e) {}
 })();
-/* ===== 底部批量状态条：总体进度 / 当前文件 / 耗时与剩余（纯展示，不改任务逻辑） ===== */
-let bStickyStartTs = 0;   // 本轮批量开始时刻
-function bStickyOverall(s) {   // 总体进度 = (已完成文件数 + 当前文件内部进度) / 总数，区别于单文件进度
-  if (!s.total) return null;
-  const cur = (s.progress != null ? s.progress : 0) / 100;
-  return Math.min(100, Math.round((s.current - 1 + cur) / s.total * 100));
-}
-function bStickyUpdate(s) {
-  const ov = bStickyOverall(s);
-  $('bStickyPct').textContent = ov != null ? ov + '%' : '--';
-  if (ov != null) $('batchStickyBar').style.width = ov + '%';
-  if (s.total) $('bStickyCountNum').textContent = Math.min(Math.max(s.current || 1, 1), s.total) + ' / ' + s.total;
-  if (s.current_video) {
-    $('bStickyCurName').textContent = truncMid(s.current_video.split(/[\\/]/).pop(), 34);   // 写入即截中段；34 字符在让出状态区宽度后必然放下，CSS ellipsis 不再接管（尾部扩展名可见）
-    $('bStickyCur').style.display = '';
-  }
-  const elapsed = Date.now() - bStickyStartTs;
-  $('bStickyElapsed').textContent = fmtDur(elapsed);
-  if (ov != null && ov > 0) $('bStickyEta').textContent = fmtDur(elapsed / ov * (100 - ov));
-  else $('bStickyEta').textContent = '计算中…';
-}
-function bStickyFreeze() {   // 终态：耗时定格、剩余清空、当前文件与高光退场
-  $('bStickyProgress').classList.remove('run');
-  $('bStickyCur').style.display = 'none';
-  $('bStickyEta').textContent = '--:--:--';
-}
 $('btnBFonts').onclick = () => openBrowser(v => $('b_fonts').value = v, 'dir', $('b_fonts').value, 'fonts');
 $('btnBOut').onclick = () => openBrowser(v => $('b_out').value = v, 'dir', $('b_out').value, 'out');
+}

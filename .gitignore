@@ -25,3 +25,8 @@ Desktop.ini
 
 # ===== 测试依赖 =====
 tests/jsdom/node_modules/
+
+# ===== Playwright 冒烟测试（tests/smoke） =====
+tests/smoke/node_modules/
+tests/smoke/test-results/
+tests/smoke/playwright-report/

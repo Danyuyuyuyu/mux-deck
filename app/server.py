@@ -41,6 +41,7 @@ STATIC_FILES = {
     "scripts/core/icons.js": "application/javascript; charset=utf-8",
     "scripts/core/utils.js": "application/javascript; charset=utf-8",
     "scripts/core/navigation.js": "application/javascript; charset=utf-8",
+    "scripts/components/modal.js": "application/javascript; charset=utf-8",
     "scripts/components/browser.js": "application/javascript; charset=utf-8",
     "scripts/components/settings.js": "application/javascript; charset=utf-8",
     "scripts/components/console.js": "application/javascript; charset=utf-8",

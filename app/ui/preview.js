@@ -1,4 +1,27 @@
 /* ==================== 字幕预览 ==================== */
+
+/* 连拍：job 模式——逐帧渲染进度（复用任务轮询骨架），可中途停止 */
+let pvJob = null;
+function pvGridReset() {
+  pvJob = null;
+  setRunButton($('btnPreviewGrid'), false, '停止渲染', '连拍 8 帧');
+}
+
+
+const pvBaseName = p => (p || '').split(/[\\/]/).pop();
+function pvClearTracks() {
+  [...$('pv_subsel').options].forEach(o => { if (String(o.value).indexOf('track:') === 0) o.remove(); });
+  pvSyncSubInput();
+}
+/* 外部字幕输入框/浏览按钮仅在下拉=自定义路径时显示（选内封轨后隐藏） */
+function pvSyncSubInput() {
+  const ext = $('pv_subsel').value === 'custom';
+  $('pv_sub').style.display = ext ? '' : 'none';
+  $('btnPvSub').style.display = ext ? '' : 'none';
+}
+
+/* ==================== 初始化（由 init.js bootstrap 统一调用，仅执行一次） ==================== */
+function initPreview() {
 $('btnPreview').onclick = async () => {
   const video = $('pv_video').value.trim() || $('video').value.trim();
   const sel = $('pv_subsel').value;
@@ -36,13 +59,6 @@ $('btnPreview').onclick = async () => {
     $('btnPreview').disabled = false;
   }
 };
-
-/* 连拍：job 模式——逐帧渲染进度（复用任务轮询骨架），可中途停止 */
-let pvJob = null;
-function pvGridReset() {
-  pvJob = null;
-  setRunButton($('btnPreviewGrid'), false, '停止渲染', '连拍 8 帧');
-}
 $('btnPreviewGrid').onclick = async () => {
   if (pvJob) {
     setStatus('正在停止渲染…', 'run');
@@ -85,7 +101,6 @@ $('btnPreviewGrid').onclick = async () => {
     $('previewBox').innerHTML = '<div class="chip err" style="margin-top:12px">' + ic('xCircle') + '<span>连接失败：' + esc(ex) + '</span></div>';
   }
 };
-
 $('btnPreviewSub').onclick = async () => {
   const sel = $('pv_subsel').value;
   const isTrack = String(sel).indexOf('track:') === 0;
@@ -112,21 +127,9 @@ $('btnPreviewSub').onclick = async () => {
     $('btnPreviewSub').disabled = false;
   }
 };
-
 $('btnPvVideo').onclick = () => openBrowser(v => $('pv_video').value = v, 'video', $('pv_video').value, 'video');
 $('btnPvSub').onclick = () => openBrowser(v => $('pv_sub').value = v, 'sub', $('pv_sub').value, 'sub');
 $('btnPvSubB').onclick = () => openBrowser(v => $('pv_sub_b').value = v, 'sub', $('pv_sub_b').value, 'sub');
-const pvBaseName = p => (p || '').split(/[\\/]/).pop();
-function pvClearTracks() {
-  [...$('pv_subsel').options].forEach(o => { if (String(o.value).indexOf('track:') === 0) o.remove(); });
-  pvSyncSubInput();
-}
-/* 外部字幕输入框/浏览按钮仅在下拉=自定义路径时显示（选内封轨后隐藏） */
-function pvSyncSubInput() {
-  const ext = $('pv_subsel').value === 'custom';
-  $('pv_sub').style.display = ext ? '' : 'none';
-  $('btnPvSub').style.display = ext ? '' : 'none';
-}
 $('pv_video').addEventListener('change', pvClearTracks);
 $('btnPvTracks').onclick = async () => {
   const v = $('pv_video').value.trim() || $('video').value.trim();
@@ -154,3 +157,4 @@ $('btnPvTracks').onclick = async () => {
 };
 $('btnPvFonts').onclick = () => openBrowser(v => $('pv_fonts').value = v, 'dir', $('pv_fonts').value, 'fonts');
 $('pv_subsel').onchange = pvSyncSubInput;
+}

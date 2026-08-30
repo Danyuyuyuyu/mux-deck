@@ -5,6 +5,7 @@
  * 应用级初始化在 init.js；DOM 等待与脚本注入在 loader.js。 */
 
 let lastBatchResult = null;   // 最近一次批量任务结果，列表变更后清除
+function getBatchTaskStatus() { return { running: !!bJob, result: lastBatchResult }; }
 function refreshBatchSticky() {
   updateConsoleStatus();
   const note = $('batchStickyNote'), txt = note.querySelector('.sticky-txt');
@@ -32,23 +33,6 @@ function refreshBatchSticky() {
 }
 
 /* 运行中：把顶部状态镜像到粘性操作条 + 同步进度条 */
-(function () {
-  new MutationObserver(function () {
-    const s = $('status');
-    updateConsoleStatus();   // 控制台折叠条状态与顶部状态联动（含运行中实时文案）
-    const t = s.textContent.trim();
-    if ((job || bJob) && t && t.indexOf('服务已就绪') !== 0 && t.indexOf('连接中') !== 0) {
-      const note = job ? $('stickyNote') : $('batchStickyNote');
-      const clsMap = { ok:'ok', err:'err', run:'run', '':'info' };
-      const cls = clsMap[s.className] || 'info';
-      const iconMap = { ok:'checkCircle', err:'xCircle', run:'loader', info:'info' };
-      note.className = 'sticky-note ' + cls;
-      note.firstElementChild.innerHTML = ic(iconMap[cls]);
-      note.querySelector('.sticky-txt').textContent = t;
-    }
-  }).observe($('status'), { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
-  // 单封装面板内进度条已删除，进度直接写底部状态条（onAny 内）；批量同理由 batch.js 直写
-})();
 
 /* ==================== 拖放识别 ==================== */
 function pickDropCandidates(entries, done) {
@@ -101,12 +85,33 @@ function pickDropCandidates(entries, done) {
   document.body.appendChild(ov);
 }
 let dragDepth = 0;
+
+/* ==================== 初始化（由 init.js bootstrap 统一调用，仅执行一次） ==================== */
+function initAppGlue() {
+(function () {
+  new MutationObserver(function () {
+    const s = $('status');
+    updateConsoleStatus();   // 控制台折叠条状态与顶部状态联动（含运行中实时文案）
+    const t = s.textContent.trim();
+    const stSingle = getSingleTaskStatus(), stBatch = getBatchTaskStatus();
+    if ((stSingle.running || stBatch.running) && t && t.indexOf('服务已就绪') !== 0 && t.indexOf('连接中') !== 0) {
+      const note = stSingle.running ? $('stickyNote') : $('batchStickyNote');
+      const clsMap = { ok:'ok', err:'err', run:'run', '':'info' };
+      const cls = clsMap[s.className] || 'info';
+      const iconMap = { ok:'checkCircle', err:'xCircle', run:'loader', info:'info' };
+      note.className = 'sticky-note ' + cls;
+      note.firstElementChild.innerHTML = ic(iconMap[cls]);
+      note.querySelector('.sticky-txt').textContent = t;
+    }
+  }).observe($('status'), { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  // 单封装面板内进度条已删除，进度直接写底部状态条（onAny 内）；批量同理由 batch.js 直写
+})();
 window.addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; $('dropOverlay').style.display = 'block'; });
 window.addEventListener('dragover', e => e.preventDefault());
 window.addEventListener('dragleave', e => { e.preventDefault(); dragDepth--; if (dragDepth <= 0) { dragDepth = 0; $('dropOverlay').style.display = 'none'; } });
 window.addEventListener('drop', async e => {
   e.preventDefault(); dragDepth = 0; $('dropOverlay').style.display = 'none';
-  if ($('browserModal').style.display === 'block') { setStatus('文件浏览器已打开，请先关闭再拖放', 'err'); return; }
+  if (isModalOpen('browserModal')) { setStatus('文件浏览器已打开，请先关闭再拖放', 'err'); return; }
   const files = [...(e.dataTransfer.files || [])];
   if (!files.length) return;
   const names = files.map(f => f.name);
@@ -158,7 +163,7 @@ window.addEventListener('drop', async e => {
       else { if (!isScName(base)) plainSub = true; $('sc_sub').value = s; autoTrackName('sc_sub', 'sc_name', 'sc'); }
     }
     syncSubStatus();
-    lastResult = null; refreshSticky();
+    clearSingleResult(); refreshSticky();
     setStatus('已填充：' + vids[0] + (plainSub ? ' · 无简/繁标识的字幕已按简体处理' : ''), 'ok');
     window.scrollTo({top: 0, behavior: 'smooth'});
   } else if (vids.length >= 1) {
@@ -181,3 +186,4 @@ window.addEventListener('drop', async e => {
     setStatus('已填充字幕' + (plainSub ? ' · 无简/繁标识的字幕已按简体处理' : ''), 'ok');
   }
 });
+}

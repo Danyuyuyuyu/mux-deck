@@ -25,3 +25,16 @@ py -3 app\tools\smoke_test.py    # 13 项端点/页面断言，服务未运行�
 ```
 
 约定：改前端跑 jsdom 回归；改后端先 py_compile 全量 + unittest，再重启服务跑冒烟；涉及真实封装链路时用测试素材做一次端到端。
+
+## UI 冒烟（Playwright，真实浏览器）
+
+```powershell
+cd tests\smoke
+npm install                          # 首次：装 @playwright/test
+npx playwright install chromium     # 首次：装浏览器（慢/失败可加 PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright）
+npm run test:smoke
+```
+
+- 默认自动在 8765 拉起后端（`py -3 app/server.py`）；该端口已有服务则直接复用——**若复用的服务是旧代码，测试会 404 失败**（典型表现：modal.js 404），重启服务或用 `MUXUI_URL=http://127.0.0.1:<port>` 指向新实例（可配 `MUXUI_PORT` 用 `tests/smoke/smoke_server.py` 起临时实例）。
+- 覆盖：fragments 挂载与就绪信号（`window.MUXUI_READY`）、导航/字幕工具下拉、设置三入口、预设管理窗口、Modal Esc/focus、高级选项、控制台折叠、切换不丢状态；任何 pageerror / console.error 都判失败。
+- 不跑真实封装、不增删用户预设数据。

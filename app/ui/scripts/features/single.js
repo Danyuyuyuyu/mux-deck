@@ -1,5 +1,5 @@
 /* 单个封装主交互：视频卡/probe/轨道选择/字幕卡(SC·TC)/编码检查/内容体检/字体体检/自动匹配/重置/
- * 输出预览/高级折叠/折叠分区摘要/sticky 状态与时间/提交任务（job + btnStart + startMuxTask）。 */
+ * 输出预览/高级折叠/折叠分区摘要/sticky 状态与时间/提交任务（singleState.job + btnStart + startMuxTask）。 */
 
 /* ===== 底部状态条时间信息（耗时 / 预计剩余；纯展示，不影响任务逻辑） ===== */
 let stickyStartTs = 0;   // 本轮任务开始时刻
@@ -58,19 +58,18 @@ function renderVideoCard() {
   }
   wireVideo();
 }
-let lastVideo = '';
 function wireVideo() {
   const inp = $('video');
   inp.onchange = async function () {
-    lastResult = null;   // 输入变更：清除上次任务结果，恢复静态状态
+    singleState.lastResult = null;   // 输入变更：清除上次任务结果，恢复静态状态
     hideTaskSummary();
     const v = inp.value.trim();
-    const replaced = v && v !== lastVideo;
+    const replaced = v && v !== singleState.lastVideo;
     if (replaced) {
-      // 视频已更换：旧字幕属于旧视频，清空防止重新匹配时张冠李戴
+      // 视频已更换：旧字幕属于旧视频，清空防止重新匹配时张冠李戴（预设已选时轨道名保留预设值）
       $('sc_sub').value = ''; $('tc_sub').value = '';
       $('sc_enc').textContent = ''; $('tc_enc').textContent = '';
-      $('sc_name').value = 'SC'; $('tc_name').value = 'TC';
+      if (!presetTrackNameLocked()) { $('sc_name').value = 'SC'; $('tc_name').value = 'TC'; }
       subCheckUi.sc = null; subCheckUi.tc = null;   // 换视频后旧体检结果作废
       subCheckSig.sc = ''; subCheckSig.tc = '';
       fontSig = '';
@@ -78,13 +77,13 @@ function wireVideo() {
       syncSubStatus();
       setStatus('视频已更换，字幕已清空；正在自动识别字幕与字体目录…', 'run');
     }
-    lastVideo = v;
+    singleState.lastVideo = v;
     trackSel.audio.clear(); trackSel.sub.clear();
     trackSel.allAudio = []; trackSel.allSub = []; trackSel.keepAtt = false;
     $('probeBox').innerHTML = '';
     renderVideoCard();
-    if (!v) probeCache = null;
-    else if (!probeCache || probeCache.video !== v) autoProbe(v);   // 自动探测媒体信息（紧凑摘要行 + {res} 预览）
+    if (!v) singleState.probeCache = null;
+    else if (!singleState.probeCache || singleState.probeCache.video !== v) autoProbe(v);   // 自动探测媒体信息（紧凑摘要行 + {res} 预览）
     refreshOutPreview();
     if (!replaced) hidePreflightIssues();
     refreshSticky();
@@ -96,7 +95,7 @@ function wireVideo() {
       autoTrackName('sc_sub', 'sc_name', 'sc');
       autoTrackName('tc_sub', 'tc_name', 'tc');
       syncSubStatus();
-      lastResult = null; refreshSticky();
+      singleState.lastResult = null; refreshSticky();
       const hits = [id.sc && '简体字幕', id.tc && '繁体字幕', id.fontsDir && '字体目录', id.chapters && '章节'].filter(Boolean);
       if (hits.length) setStatus('已自动识别：' + hits.join('、'), 'ok');
       else setStatus('未自动识别到字幕与字体目录，可手动填写或点「自动匹配字幕」重试', 'info');
@@ -106,16 +105,15 @@ function wireVideo() {
 }
 
 /* ==================== 状态刷新（粘性操作条） ==================== */
-let lastResult = null;   // 最近一次任务结果（完成/失败/停止），输入变更后清除
 function refreshSticky() {
   updateConsoleStatus();
   const note = $('stickyNote'), txt = note.querySelector('.sticky-txt');
   const btn = $('btnStart');
-  if (job) return;
-  if (lastResult) {
-    note.className = 'sticky-note ' + lastResult.cls;
-    note.firstElementChild.innerHTML = ic(lastResult.icon);
-    txt.textContent = lastResult.text;
+  if (singleState.job) return;
+  if (singleState.lastResult) {
+    note.className = 'sticky-note ' + singleState.lastResult.cls;
+    note.firstElementChild.innerHTML = ic(singleState.lastResult.icon);
+    txt.textContent = singleState.lastResult.text;
     btn.disabled = false;
     return;
   }
@@ -242,77 +240,14 @@ function syncDefaultBadge() {
 }
 
 /* ==================== 重置单个封装 ==================== */
-$('btnSingleReset').onclick = () => {
-  if (job) { setStatus('封装任务进行中，不能重置', 'err'); return; }
-  if (!confirm('确定重置单个封装的全部设置？')) return;
-  pickVideoPath(''); // 清视频并联动：轨道选择/探测结果清空、卡片重渲染、粘性条刷新
-  $('sc_sub').value = ''; $('tc_sub').value = '';
-  $('sc_name').value = 'SC'; $('tc_name').value = 'TC';
-  $('sc_enc').textContent = ''; $('tc_enc').textContent = '';
-  $('fonts_dir').value = '';
-  $('chapters').value = '';
-  $('out_name_tmpl').value = '';
-  $('title').value = '';
-  $('audio').value = ''; $('audio_lang').value = ''; $('audio_name').value = '';
-  $('out_dir').value = '';
-  $('backup').checked = true; $('force').checked = false;
-  $('fontCheckBox').innerHTML = '';
-  $('subCheckBox').innerHTML = '';   // 内容体检明细区一并清空（与卡片摘要行同步复位）
-  subCheckUi.sc = null; subCheckUi.tc = null;
-  subCheckSig.sc = ''; subCheckSig.tc = '';
-  fontState = { status: 'idle', missing: 0 };
-  fontSig = '';
-  hideTaskSummary();
-  hidePreflightIssues();
-  setResult('');
-  // 底部状态条一并复位（与启动时初态一致）
-  $('stickyProgress').classList.remove('run');
-  $('stickyBar').style.width = '0%';
-  $('stickyPct').textContent = '--';
-  $('stickyElapsed').textContent = '--:--:--';
-  $('stickyEta').textContent = '--:--:--';
-  syncSubStatus();
-  refreshSticky();
-  setStatus('已重置单个封装设置', 'ok');
-};
 
 /* ==================== 自动匹配字幕（单个） ==================== */
-$('btnAutoMatch').onclick = async () => {
-  const v = $('video').value.trim();
-  if (!v) { alert('请先选择视频文件'); return; }
-  $('btnAutoMatch').disabled = true;
-  try {
-    const id = await identify(v);   // 统一识别：字幕 + 字体目录（识别逻辑见 identify.js）
-    if ($('video').value.trim() !== v) return; // 视频已变更，丢弃过期结果
-    const scHad = !!$('sc_sub').value.trim(), tcHad = !!$('tc_sub').value.trim();
-    let sc = false, tc = false;
-    if (id.sc && !scHad) { $('sc_sub').value = id.sc; autoTrackName('sc_sub', 'sc_name', 'sc'); sc = true; }
-    if (id.tc && !tcHad) { $('tc_sub').value = id.tc; autoTrackName('tc_sub', 'tc_name', 'tc'); tc = true; }
-    syncSubStatus();
-    const fontFound = !!(id.fontsDir && !$('fonts_dir').value.trim() && ($('fonts_dir').value = id.fontsDir, true));
-    const chapFound = !!(id.chapters && !$('chapters').value.trim() && ($('chapters').value = id.chapters, true));
-    lastResult = null; refreshSticky();   // 字幕已填充：同步底部操作栏状态
-    const extra = (fontFound ? ' · 已自动识别字体目录' : '') + (chapFound ? ' · 已自动识别章节' : '');
-    if (sc || tc) {
-      setStatus('字幕匹配完成：已填充 ' + (sc ? '简体' : '') + (sc && tc ? ' + ' : '') + (tc ? '繁体' : '') + extra, 'ok');
-    } else if (id.sc || id.tc) {
-      setStatus('匹配到的字幕槽位已有内容，未覆盖（重置后可重新填充）' + extra, 'ok');
-    } else {
-      setStatus('未匹配到任何字幕（简 0 / 繁 0）' + extra, 'err');
-    }
-  } catch (ex) {
-    setStatus('字幕匹配失败：' + ex, 'err');
-  } finally {
-    $('btnAutoMatch').disabled = false;
-  }
-};
 
 /* ==================== 查看轨道 / 视频媒体信息自动探测 ==================== */
-let probeCache = null;   // { video, data } 最近一次 probe 结果（紧凑摘要行 / 输出预览 {res} / 查看轨道共用）
 function renderVideoTrackInfo() {
   const el = $('videoTrackInfo');
   if (!el) return;
-  const d = probeCache && probeCache.data;
+  const d = singleState.probeCache && singleState.probeCache.data;
   if (!d) { el.textContent = ''; return; }
   if (d.error) { el.textContent = '⚠ 无法读取完整媒体信息（仍可封装，轨道信息可能不完整）'; el.className = 'file-trackinfo warn'; return; }
   el.className = 'file-trackinfo';
@@ -323,7 +258,7 @@ function renderVideoTrackInfo() {
 async function fetchProbe(v) {
   const d = await api('/api/probe?path=' + encodeURIComponent(v));
   if ($('video').value.trim() !== v) return null;   // 视频已变更，丢弃过期结果
-  probeCache = { video: v, data: d };
+  singleState.probeCache = { video: v, data: d };
   renderVideoTrackInfo();
   refreshOutPreview();   // {res} 高度就绪后输出预览自动补全
   return d;
@@ -332,109 +267,19 @@ async function autoProbe(v) {
   if (!v) return;
   const el = $('videoTrackInfo');
   if (el) el.innerHTML = ic('loader', 'spin') + '<span> 正在读取媒体信息…</span>';
-  try { await fetchProbe(v); } catch (ex) { probeCache = null; renderVideoTrackInfo(); }
+  try { await fetchProbe(v); } catch (ex) { singleState.probeCache = null; renderVideoTrackInfo(); }
 }
 const trackSel = { audio: new Set(), sub: new Set(), keepAtt: false, allAudio: [], allSub: [] };
 function toggleSel(id, kind) { const set = kind === 'audio' ? trackSel.audio : trackSel.sub; if (set.has(id)) set.delete(id); else set.add(id); }
 function toggleAtt(v) { trackSel.keepAtt = v; }
-$('btnProbe').onclick = async () => {
-  const v = $('video').value.trim();
-  if (!v) { alert('请先选择视频文件'); return; }
-  const d = await fetchProbe(v);
-  if (!d) return;
-  const box = $('probeBox');
-  if (d.error) { box.innerHTML = '<div class="chip err" style="margin-top:8px">' + ic('xCircle') + '<span>' + esc(d.error) + '</span></div>'; return; }
-  trackSel.audio.clear(); trackSel.sub.clear();
-  trackSel.allAudio = []; trackSel.allSub = [];
-  let h = '<div class="table-wrap" style="margin-top:12px;"><table style="min-width:620px;"><tr><th style="width:34px"></th><th>ID</th><th>类型</th><th>语言</th><th>名称</th><th>默认</th><th>编码</th></tr>';
-  d.tracks.forEach(t => {
-    let cb = '';
-    if (t.type === 'video') { cb = '<input type="checkbox" checked disabled title="视频轨必须保留">'; }
-    else if (t.type === 'audio') { trackSel.allAudio.push(t.id); trackSel.audio.add(t.id); cb = '<input type="checkbox" checked onchange="toggleSel(' + t.id + ',\'audio\')">'; }
-    else if (t.type === 'subtitles') { trackSel.allSub.push(t.id); cb = '<input type="checkbox" onchange="toggleSel(' + t.id + ',\'sub\')">'; }
-    const dcol = { video:'var(--run-line)', audio:'var(--ok-line)', subtitles:'var(--warn-line)' }[t.type] || 'var(--border)';
-    h += '<tr><td>' + cb + '</td><td class="mono">' + t.id + '</td><td><span class="tdot" style="background:' + dcol + '"></span>' + t.type + '</td><td class="mono">' + esc(t.lang) + '</td><td>' + esc(t.name || '') + '</td><td>' + (t.default ? esc('✔') : '') + '</td><td class="mono">' + esc(t.codec || '') + '</td></tr>';
-  });
-  h += '</table></div>';
-  h += '<div class="field" style="margin-top:12px;"><label class="check"><input type="checkbox" onchange="toggleAtt(this.checked)"> 保留源附件（字体/封面）</label><span class="t-cap">源附件 ' + d.attachments + ' 个；不勾选则用新子集字体重建</span></div>';
-  h += '<div class="t-sec">音轨默认全保留（取消勾选即去除）；源字幕默认不保留（会用新字幕替换），需保留源字幕请勾选。</div>';
-  box.innerHTML = h;
-};
 
 /* ==================== 字幕编码检查 ==================== */
-$('btnPrepSubs').onclick = async () => {
-  const sc = $('sc_sub').value.trim(), tc = $('tc_sub').value.trim();
-  if (!sc && !tc) { alert('请先填写字幕路径'); return; }
-  $('btnPrepSubs').disabled = true;
-  try {
-    const r = await api('/api/prep_subs', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({sc, tc}) });
-    const show = (key, el) => {
-      const d = r[key];
-      if (!d) return;
-      const label = $(el + '_enc');
-      if (d.ambiguous) { label.textContent = 'GBK/BIG5 歧义→按简/繁槽判定 ⚠'; }
-      else if (d.converted) { label.textContent = d.encoding.toUpperCase() + ' → UTF-8 ✓'; }
-      else if (d.encoding === 'utf-8') { label.textContent = 'UTF-8 ✓'; }
-      else { label.textContent = d.error ? ('错误: ' + d.error) : ''; }
-      if (d.converted && d.path) { $(el + '_sub').value = d.path; }
-      syncSubStatus();
-    };
-    show('sc','sc'); show('tc','tc');
-  } catch (ex) {
-    const msg = '连接失败：' + ex;
-    if (sc) $('sc_enc').textContent = msg;
-    if (tc) $('tc_enc').textContent = msg;
-    syncSubStatus();   // 编码摘要行随错误文案一并刷新
-  } finally {
-    $('btnPrepSubs').disabled = false;
-  }
-};
 
 /* ==================== 字幕内容体检（时间轴/CPS/行宽/样式，纯文本分析） ==================== */
 const SUBCHECK_TYPE = { overlap: '时间重叠', empty: '空台词', bad_time: '时间错误', bad_style: '坏样式', cps: 'CPS 超速', long_line: '单行过长' };
 const subCheckUi = { sc: null, tc: null };   // 各轨体检摘要（写入字幕卡摘要行，结果明细仍在 subCheckBox）
 const subCheckSig = { sc: '', tc: '' };      // 体检时的字幕路径：路径变更即结果过期（preflight 降级为 info）
 function setSubCheckUi(kind, cls, icon, text) { subCheckUi[kind] = { cls, icon, text }; subCheckSig[kind] = $(kind + '_sub').value.trim(); renderSubCard(kind); }
-$('btnSubCheck').onclick = async () => {
-  const subs = [['sc', $('sc_sub').value.trim()], ['tc', $('tc_sub').value.trim()]].filter(x => x[1]);
-  if (!subs.length) { alert('请先填写字幕路径'); return; }
-  $('btnSubCheck').disabled = true;
-  $('subCheckBox').innerHTML = '<div class="chip run" style="margin-top:8px">' + ic('loader', 'spin') + '<span>正在分析…</span></div>';
-  const blocks = [];
-  try {
-    for (const [kind, sub] of subs) {
-      let r;
-      try {
-        r = await api('/api/sub_check', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sub }) });
-      } catch (ex) {
-        blocks.push('<div class="chip err" style="margin-top:8px">' + ic('xCircle') + '<span>' + esc(pvBaseName ? pvBaseName(sub) : sub) + ' 连接失败：' + esc(ex) + '</span></div>');
-        setSubCheckUi(kind, 'err', 'xCircle', '体检失败（连接失败）');
-        continue;
-      }
-      const name = esc(sub.split(/[\\/]/).pop());
-      if (r.error) {
-        blocks.push('<div class="chip err" style="margin-top:8px">' + ic('xCircle') + '<span>' + name + '：' + esc(r.error) + '</span></div>');
-        setSubCheckUi(kind, 'err', 'xCircle', '体检失败');
-        continue;
-      }
-      if (r.status === 'ok') {
-        blocks.push('<div class="chip ok" style="margin-top:8px">' + ic('checkCircle') + '<span>' + name + '：内容体检通过（' + r.dialogue + ' 行 Dialogue）</span></div>');
-        setSubCheckUi(kind, 'on', 'checkCircle', '体检通过');
-        continue;
-      }
-      const cnt = r.counts || {};
-      const parts = Object.keys(SUBCHECK_TYPE).filter(k => cnt[k]).map(k => SUBCHECK_TYPE[k] + ' ' + cnt[k]);
-      const total = r.total_issues || 0;
-      let h = '<div class="chip warn" style="margin-top:8px">' + ic('alertTriangle') + '<span>' + name + '：' + (parts.join(' · ') || (total + ' 项预警')) + '（' + r.dialogue + ' 行）</span></div>';
-      h += '<details class="check-detail"><summary>展开明细</summary><pre class="log-pre">' + esc(r.issues.map(i => '第' + i.line + '行 [' + (SUBCHECK_TYPE[i.type] || i.type) + '] ' + i.detail).join('\n')) + (r.truncated ? '\n…（仅显示前 200 条）' : '') + '</pre></details>';
-      blocks.push(h);
-      setSubCheckUi(kind, 'warn', 'alertTriangle', total + ' 项预警');
-    }
-    $('subCheckBox').innerHTML = blocks.join('');
-  } finally {
-    $('btnSubCheck').disabled = false;
-  }
-};
 
 /* ==================== 字体体检 ==================== */
 let fontState = { status: 'idle', missing: 0 };   // 体检状态（字体折叠摘要 + 字幕卡摘要行引用）
@@ -444,26 +289,6 @@ function refreshFontSummaryUI() {
   updateFontsSummary();
   ['sc', 'tc'].forEach(renderSubCard);
 }
-$('btnCheckFonts').onclick = async () => {
-  const subs = [$('sc_sub').value.trim(), $('tc_sub').value.trim()].filter(Boolean);
-  const fonts_dir = $('fonts_dir').value.trim();
-  if (!subs.length) { alert('请先填写字幕路径'); return; }
-  $('btnCheckFonts').disabled = true;
-  fontState = { status: 'loading', missing: 0 };
-  refreshFontSummaryUI();
-  $('fontCheckBox').innerHTML = '<div class="chip run" style="margin-top:8px">' + ic('loader', 'spin') + '<span>正在检查字体，请稍候…</span></div>';
-  try {
-    const r = await api('/api/check_fonts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({subs, fonts_dir}) });
-    renderFontCheck(r, subs, fonts_dir);
-    markFontChecked();
-  } catch (ex) {
-    fontState = { status: 'error', missing: 0 };
-    refreshFontSummaryUI();
-    $('fontCheckBox').innerHTML = '<div class="chip err" style="margin-top:8px">' + ic('xCircle') + '<span>连接失败：' + esc(ex) + '</span></div>';
-  } finally {
-    $('btnCheckFonts').disabled = false;
-  }
-};
 /* 体检结果渲染（含缺字体时的补给入口） */
 function renderFontCheck(r, subs, fonts_dir) {
   const box = $('fontCheckBox');
@@ -522,30 +347,6 @@ function renderFontCheck(r, subs, fonts_dir) {
 }
 
 /* ==================== 单个封装（封装前检查 + 提交） ==================== */
-let job = null;
-$('btnStart').onclick = async () => {
-  if (job) {
-    setStatus('正在停止…', 'run');
-    await api('/api/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: job }) });
-    return;
-  }
-  if (!$('video').value.trim()) { alert('请选择视频文件'); return; }
-  hidePreflightIssues();
-  setStatus('正在检查封装条件…', 'run');
-  let pf;
-  try { pf = await getPreflightResult(); }
-  catch (ex) { startMuxTask(); return; }   // 检查自身异常不阻断任务（保持原有可用性）
-  if (pf.blocking.length) {
-    showPreflightIssues(pf);   // 阻断项就近列出（含修复入口），不打扰其他区域
-    setStatus('有 ' + pf.blocking.length + ' 项问题需要处理', 'err');
-    return;
-  }
-  // 仅“未提供字幕”一项提醒时沿用原有原生确认（一次确认，不叠加弹窗）
-  const noSubOnly = pf.warnings.length === 1 && pf.warnings[0].code === 'no_subtitle';
-  if (pf.warnings.length && !noSubOnly) { openPreflightModal(pf); return; }
-  if (noSubOnly && !confirm('未提供任何字幕，将保留源字幕与源字体（无新字幕时不做字体子集化）。继续？')) return;
-  startMuxTask();
-};
 
 async function startMuxTask() {
   const common = buildMuxCommon('');   // 公共参数（字体/输出/备份/旗标，与批量同一份逻辑，见 task.js）
@@ -562,7 +363,7 @@ async function startMuxTask() {
   setStatus('正在提交…', 'run'); setResult(''); hideTaskSummary(); hidePreflightIssues();
   const r = await api('/api/mux', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   if (r.error) { setStatus('错误：' + r.error, 'err'); return; }
-  job = r.job;
+  singleState.job = r.job;
   stickyStartTs = Date.now();
   $('stickyProgress').classList.add('run');   // 进度条流动高光
   $('stickyBar').style.width = '0%';
@@ -572,17 +373,17 @@ async function startMuxTask() {
   setRunButton($('btnStart'), true, '停止封装', '开始封装');
   showLogTab('mux'); setLog('mux', '');
   const fin = (s, lastR, statusMsg, statusCls, resultHtml) => {
-    job = null;
+    singleState.job = null;
     setRunButton($('btnStart'), false, '停止封装', '开始封装');
     $('stickyProgress').classList.remove('run');
     stickyTimesFreeze();   // 耗时定格、剩余清空（进度条与百分比一致定格，下次启动时归零）
     setStatus(statusMsg, statusCls);
-    lastResult = lastR;
+    singleState.lastResult = lastR;
     if (resultHtml) $('result').innerHTML = resultHtml;
     refreshSticky();
   };
   startTaskPolling({
-    job, interval: 1200,
+    job: singleState.job, interval: 1200,
     onAny: s => { setLog('mux', s.log); if (s.progress != null) $('stickyBar').style.width = s.progress + '%'; },
     onTick: s => {
       setStickyRun($('stickyNote'), muxStage(s).label);   // 运行中：分阶段 + 进度
@@ -617,32 +418,29 @@ function pickNameToken(path, kind) {
   if ((kind === 'sc' && isSc) || (kind === 'tc' && isTc)) return m[1].toUpperCase();
   return '';
 }
+/* 预设已选择时轨道名以预设为准：自动识别/匹配/拖放/手输均不改写轨道名（清空预设选择即恢复自动识别） */
+function presetTrackNameLocked() {
+  const sel = $('preset_sel');
+  return !!(sel && sel.value && PRESETS[sel.value]);
+}
 function autoTrackName(subField, nameField, kind) {
+  if (presetTrackNameLocked()) return;
   var tok = pickNameToken($(subField).value, kind);
   if (tok) $(nameField).value = tok;
 }
 /* 手动填字幕（手输 change/input、浏览按钮）后同步粘性操作栏与字幕状态 */
 function onManualSub(subField, nameField, kind) {
-  lastResult = null;
+  singleState.lastResult = null;
   autoTrackName(subField, nameField, kind);
   const row = $(kind + 'FileInputRow');
   if (row && $(subField).value.trim()) row.style.display = 'none';   // 路径已填：回到文件信息展示
   syncSubStatus();
   refreshSticky();
 }
-$('sc_sub').addEventListener('change', function () { onManualSub('sc_sub', 'sc_name', 'sc'); });
-$('tc_sub').addEventListener('change', function () { onManualSub('tc_sub', 'tc_name', 'tc'); });
-$('sc_sub').addEventListener('input', function () { lastResult = null; syncSubStatus(); refreshSticky(); });
-$('tc_sub').addEventListener('input', function () { lastResult = null; syncSubStatus(); refreshSticky(); });
-$('sc_name').addEventListener('input', function () { });
 /* 字幕选择：摘要区「选择字幕」（主操作）与编辑区「浏览」共用同一入口 */
 function browseSub(kind) {
   openBrowser(v => { $(kind + '_sub').value = v; fireChange($(kind + '_sub')); }, 'sub', $(kind + '_sub').value, 'sub');
 }
-$('btnSc').onclick = () => browseSub('sc');
-$('btnTc').onclick = () => browseSub('tc');
-$('btnScPick').onclick = () => browseSub('sc');
-$('btnTcPick').onclick = () => browseSub('tc');
 /* 移除字幕：清空输入并联动状态（轨道名复位默认、编码徽章/体检摘要清除、sticky 刷新）；摘要区删除图标共用 */
 function clearSub(kind) {
   $(kind + '_sub').value = '';
@@ -660,16 +458,7 @@ function toggleMoreMenu(kind, force) {
   menu.style.display = open ? 'block' : 'none';
   btn.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
-$('btnScClear').onclick = () => { toggleMoreMenu('sc', false); clearSub('sc'); };
-$('btnTcClear').onclick = () => { toggleMoreMenu('tc', false); clearSub('tc'); };
 /* Header 折叠：点击/键盘均可；Header 内按钮与 ⋯ 菜单不触发折叠 */
-['sc', 'tc'].forEach(function (kind) {
-  const head = $(kind + 'Card').querySelector('.sub-head');
-  head.addEventListener('click', function (e) { if (e.target.closest('button') || e.target.closest('.more-wrap')) return; toggleSubCard(kind); });
-  head.addEventListener('keydown', function (e) {
-    if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('button') && !e.target.closest('.more-wrap')) { e.preventDefault(); toggleSubCard(kind); }
-  });
-});
 /* 文件区展示模式优先；「编辑文件路径」（⋯ 菜单）按需展开输入行 */
 function toggleManualPath(kind) {
   const row = $(kind + 'FileInputRow');
@@ -678,13 +467,6 @@ function toggleManualPath(kind) {
   row.style.display = show ? '' : 'none';
   if (show) { setSubCardOpen(kind, true); $(kind + '_sub').focus(); }
 }
-$('btnScManual').onclick = () => { toggleMoreMenu('sc', false); toggleManualPath('sc'); };
-$('btnTcManual').onclick = () => { toggleMoreMenu('tc', false); toggleManualPath('tc'); };
-$('btnScMore').onclick = function (e) { e.stopPropagation(); toggleMoreMenu('sc'); };
-$('btnTcMore').onclick = function (e) { e.stopPropagation(); toggleMoreMenu('tc'); };
-document.addEventListener('click', function (e) {
-  if (!e.target.closest('.more-wrap')) { toggleMoreMenu('sc', false); toggleMoreMenu('tc', false); }
-});
 /* 默认轨三态 segmented control：写回隐藏域（'' 自动 / '1' 是 / '0' 否，语义与原 select 一致） */
 function syncSegControls() {
   ['sc', 'tc'].forEach(function (kind) {
@@ -694,23 +476,6 @@ function syncSegControls() {
     seg.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.v === val));
   });
 }
-document.querySelectorAll('.seg').forEach(function (seg) {
-  seg.addEventListener('click', function (e) {
-    const b = e.target.closest('.seg-btn');
-    if (!b) return;
-    const kind = seg.id === 'sc_default_seg' ? 'sc' : 'tc';
-    $(kind + '_default').value = b.dataset.v;
-    syncSegControls();
-    syncDefaultBadge();   // 摘要徽章即时反映
-    updatePresetHint();
-  });
-});
-$('sc_forced').addEventListener('change', syncDefaultBadge);
-$('tc_forced').addEventListener('change', syncDefaultBadge);
-$('btnFonts').onclick = () => openBrowser(v => { $('fonts_dir').value = v; updateFontsSummary(); }, 'dir', $('fonts_dir').value, 'fonts');
-$('btnAudio').onclick = () => openBrowser(v => { $('audio').value = v; updateAudioSummary(); }, 'audio', $('audio').value, 'audio');
-$('btnOut').onclick = () => openBrowser(v => { $('out_dir').value = v; scheduleOutPreview(); }, 'dir', $('out_dir').value, 'out');
-$('btnChapters').onclick = () => openBrowser(v => $('chapters').value = v, 'any', $('chapters').value, 'chapters');
 
 /* ==================== 输出预览（服务端 /api/out_preview 复用 mux_cli.resolve_out_name，与实际封装同一套规则） ==================== */
 let outPreviewTimer = null;
@@ -718,7 +483,7 @@ function scheduleOutPreview() {
   clearTimeout(outPreviewTimer);
   outPreviewTimer = setTimeout(refreshOutPreview, 300);
 }
-function videoHeight() { return (probeCache && probeCache.data && probeCache.data.video_height) || 0; }
+function videoHeight() { return (singleState.probeCache && singleState.probeCache.data && singleState.probeCache.data.video_height) || 0; }
 async function refreshOutPreview() {
   const box = $('outPreview');
   if (!box) return;
@@ -741,21 +506,8 @@ async function refreshOutPreview() {
     box.innerHTML = '<span class="t-cap">输出预览不可用（' + esc(ex) + '）</span>';
   }
 }
-$('out_dir').addEventListener('input', scheduleOutPreview);
-$('out_dir').addEventListener('change', scheduleOutPreview);
-$('out_name_tmpl').addEventListener('input', scheduleOutPreview);
-$('out_name_tmpl').addEventListener('change', scheduleOutPreview);
-$('title').addEventListener('input', scheduleOutPreview);   // {title} 占位符：标题变化实时反映到输出预览
 
 /* ==================== 高级选项折叠 ==================== */
-(function () {
-  const toggle = $('advToggle'), body = $('advBody');
-  toggle.onclick = function () {
-    const open = body.classList.toggle('show');
-    toggle.classList.toggle('open', open);
-    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-  };
-})();
 
 /* ==================== 折叠分区（字体设置 / 外部音轨）+ 摘要 ==================== */
 function toggleCollapse(id, force) {
@@ -786,7 +538,356 @@ function updateAudioSummary() {
   el.className = 'c-summary';
 }
 /* 程序赋值 fonts_dir / audio 不触发 input/change，输入监听之外经 syncSubStatus 兜底刷新 */
+
+/* ==================== 模块状态（single 域私有；跨模块一律走下方 getter） ==================== */
+const singleState = { job: null, lastResult: null, lastVideo: '', probeCache: null };
+
+/* ---- 跨模块轻量读取接口（console / preflight 使用；不暴露内部可变引用） ---- */
+function getSingleTaskStatus() {
+  return { running: !!singleState.job, result: singleState.lastResult };
+}
+function clearSingleResult() { singleState.lastResult = null; }
+function fontCheckFresh() {
+  return (fontState.status === 'ok' || fontState.status === 'warn' || fontState.status === 'error') &&
+    fontSig === JSON.stringify([$('sc_sub').value.trim(), $('tc_sub').value.trim(), $('fonts_dir').value.trim()]);
+}
+function getSingleValidationState() {
+  const video = $('video').value.trim();
+  const fresh = kind => !!subCheckUi[kind] && subCheckSig[kind] === $(kind + '_sub').value.trim();
+  return {
+    video,
+    sc: $('sc_sub').value.trim(), tc: $('tc_sub').value.trim(),
+    outDir: $('out_dir').value.trim(), template: $('out_name_tmpl').value.trim(), title: $('title').value.trim(),
+    height: videoHeight(),
+    probe: (singleState.probeCache && singleState.probeCache.video === video) ? singleState.probeCache.data : null,
+    enc: { sc: ($('sc_enc').textContent || '').trim(), tc: ($('tc_enc').textContent || '').trim() },
+    checks: {
+      sc: subCheckUi.sc ? { cls: subCheckUi.sc.cls, text: subCheckUi.sc.text, fresh: fresh('sc') } : null,
+      tc: subCheckUi.tc ? { cls: subCheckUi.tc.cls, text: subCheckUi.tc.text, fresh: fresh('tc') } : null,
+    },
+    fonts: { status: fontState.status, missing: fontState.missing, fresh: fontCheckFresh() },
+  };
+}
+
+/* ==================== 字幕检查（统一入口：编码 → 内容 → 字体） ====================
+ * 三个底层检查各自独立可用（原按钮保留，调用同一函数，零逻辑复制）；
+ * runSubtitleCheck 串行编排并汇总，全部复用既有状态（编码徽章 / subCheckUi / fontState），
+ * 不建第二套检查状态；单项失败相互隔离，不改变任何 preflight 判定规则。 */
+async function runEncodingCheck(quiet) {
+  const sc = $('sc_sub').value.trim(), tc = $('tc_sub').value.trim();
+  if (!sc && !tc) { if (!quiet) alert('请先填写字幕路径'); return null; }
+  $('btnPrepSubs').disabled = true;
+  try {
+    const r = await api('/api/prep_subs', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({sc, tc}) });
+    const show = (key, el) => {
+      const d = r[key];
+      if (!d) return;
+      const label = $(el + '_enc');
+      if (d.ambiguous) { label.textContent = 'GBK/BIG5 歧义→按简/繁槽判定 ⚠'; }
+      else if (d.converted) { label.textContent = d.encoding.toUpperCase() + ' → UTF-8 ✓'; }
+      else if (d.encoding === 'utf-8') { label.textContent = 'UTF-8 ✓'; }
+      else { label.textContent = d.error ? ('错误: ' + d.error) : ''; }
+      if (d.converted && d.path) { $(el + '_sub').value = d.path; }
+      syncSubStatus();
+    };
+    show('sc','sc'); show('tc','tc');
+    const badge = k => ($(k + '_enc').textContent || '').trim();
+    const bad = ['sc', 'tc'].filter(k => { const x = badge(k); return x && (x.indexOf('错误') === 0 || x.indexOf('歧义') >= 0); }).length;
+    return { ok: bad === 0, warn: bad };
+  } catch (ex) {
+    const msg = '连接失败：' + ex;
+    if (sc) $('sc_enc').textContent = msg;
+    if (tc) $('tc_enc').textContent = msg;
+    syncSubStatus();   // 编码摘要行随错误文案一并刷新
+    return { ok: false, warn: 0, err: 1 };
+  } finally {
+    $('btnPrepSubs').disabled = false;
+  }
+}
+async function runContentCheck(quiet) {
+  const subs = [['sc', $('sc_sub').value.trim()], ['tc', $('tc_sub').value.trim()]].filter(x => x[1]);
+  if (!subs.length) { if (!quiet) alert('请先填写字幕路径'); return null; }
+  $('btnSubCheck').disabled = true;
+  $('subCheckBox').innerHTML = '<div class="chip run" style="margin-top:8px">' + ic('loader', 'spin') + '<span>正在分析…</span></div>';
+  const blocks = [];
+  try {
+    for (const [kind, sub] of subs) {
+      let r;
+      try {
+        r = await api('/api/sub_check', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sub }) });
+      } catch (ex) {
+        blocks.push('<div class="chip err" style="margin-top:8px">' + ic('xCircle') + '<span>' + esc(pvBaseName ? pvBaseName(sub) : sub) + ' 连接失败：' + esc(ex) + '</span></div>');
+        setSubCheckUi(kind, 'err', 'xCircle', '体检失败（连接失败）');
+        continue;
+      }
+      const name = esc(sub.split(/[\\/]/).pop());
+      if (r.error) {
+        blocks.push('<div class="chip err" style="margin-top:8px">' + ic('xCircle') + '<span>' + name + '：' + esc(r.error) + '</span></div>');
+        setSubCheckUi(kind, 'err', 'xCircle', '体检失败');
+        continue;
+      }
+      if (r.status === 'ok') {
+        blocks.push('<div class="chip ok" style="margin-top:8px">' + ic('checkCircle') + '<span>' + name + '：内容体检通过（' + r.dialogue + ' 行 Dialogue）</span></div>');
+        setSubCheckUi(kind, 'on', 'checkCircle', '体检通过');
+        continue;
+      }
+      const cnt = r.counts || {};
+      const parts = Object.keys(SUBCHECK_TYPE).filter(k => cnt[k]).map(k => SUBCHECK_TYPE[k] + ' ' + cnt[k]);
+      const total = r.total_issues || 0;
+      let h = '<div class="chip warn" style="margin-top:8px">' + ic('alertTriangle') + '<span>' + name + '：' + (parts.join(' · ') || (total + ' 项预警')) + '（' + r.dialogue + ' 行）</span></div>';
+      h += '<details class="check-detail"><summary>展开明细</summary><pre class="log-pre">' + esc(r.issues.map(i => '第' + i.line + '行 [' + (SUBCHECK_TYPE[i.type] || i.type) + '] ' + i.detail).join('\n')) + (r.truncated ? '\n…（仅显示前 200 条）' : '') + '</pre></details>';
+      blocks.push(h);
+      setSubCheckUi(kind, 'warn', 'alertTriangle', total + ' 项预警');
+    }
+    $('subCheckBox').innerHTML = blocks.join('');
+  } finally {
+    $('btnSubCheck').disabled = false;
+  }
+  const warn = ['sc', 'tc'].filter(k => subCheckUi[k] && subCheckUi[k].cls === 'warn').length;
+  const err = ['sc', 'tc'].filter(k => subCheckUi[k] && subCheckUi[k].cls === 'err').length;
+  return { ok: warn + err === 0, warn, err };
+}
+async function runFontCheck(quiet) {
+  const subs = [$('sc_sub').value.trim(), $('tc_sub').value.trim()].filter(Boolean);
+  const fonts_dir = $('fonts_dir').value.trim();
+  if (!subs.length) { if (!quiet) alert('请先填写字幕路径'); return null; }
+  $('btnCheckFonts').disabled = true;
+  fontState = { status: 'loading', missing: 0 };
+  refreshFontSummaryUI();
+  $('fontCheckBox').innerHTML = '<div class="chip run" style="margin-top:8px">' + ic('loader', 'spin') + '<span>正在检查字体，请稍候…</span></div>';
+  try {
+    const r = await api('/api/check_fonts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({subs, fonts_dir}) });
+    renderFontCheck(r, subs, fonts_dir);
+    markFontChecked();
+  } catch (ex) {
+    fontState = { status: 'error', missing: 0 };
+    refreshFontSummaryUI();
+    $('fontCheckBox').innerHTML = '<div class="chip err" style="margin-top:8px">' + ic('xCircle') + '<span>连接失败：' + esc(ex) + '</span></div>';
+  } finally {
+    $('btnCheckFonts').disabled = false;
+  }
+  return { ok: fontState.status === 'ok', status: fontState.status, missing: fontState.missing };
+}
+async function runSubtitleCheck() {
+  const btn = $('btnSubtitleCheck');
+  const hasSub = $('sc_sub').value.trim() || $('tc_sub').value.trim();
+  if (!hasSub) { setStatus('请先选择简/繁字幕，再运行字幕检查', 'err'); return; }
+  if (btn.disabled) return;   // 检查进行中，防重复触发
+  btn.disabled = true;
+  const oldHtml = btn.innerHTML;
+  btn.innerHTML = ic('loader', 'spin') + '<span>检查中…</span>';
+  let warns = 0;
+  try {
+    setStatus('字幕检查：正在检查编码…', 'run');
+    const enc = await runEncodingCheck(true) || { ok: true, warn: 0 };
+    setStatus('字幕检查：正在检查字幕内容…', 'run');
+    const content = await runContentCheck(true) || { ok: true, warn: 0, err: 0 };
+    setStatus('字幕检查：正在检查字体…', 'run');
+    const fonts = await runFontCheck(true) || { ok: true, status: 'idle', missing: 0 };
+    // 汇总：复用编码徽章 / subCheckUi / fontState，不建第二套检查状态
+    const seg = [];
+    ['sc', 'tc'].forEach(kind => {
+      if (!$(kind + '_sub').value.trim()) return;
+      const cell = [];
+      const encTxt = ($(kind + '_enc').textContent || '').trim();
+      cell.push('编码' + (encTxt ? (encTxt.indexOf('错误') === 0 ? '✗' : encTxt.indexOf('歧义') >= 0 ? '⚠' : '✓') : '—'));
+      const st = subCheckUi[kind];
+      cell.push('内容' + (st ? (st.cls === 'on' ? '✓' : st.cls === 'err' ? '✗' : '⚠') : '—'));
+      if (fontState.status !== 'idle') cell.push('字体' + (fontState.status === 'ok' ? '✓' : fontState.status === 'warn' ? '⚠' + fontState.missing : '✗'));
+      seg.push(kind.toUpperCase() + ' ' + cell.join(' '));
+    });
+    if (enc && enc.warn) warns += enc.warn;
+    if (content) warns += content.warn + content.err;
+    if (fonts && fonts.status === 'warn') warns += 1;
+    else if (fonts && fonts.status === 'error') warns += 1;
+    setStatus('字幕检查完成：' + seg.join(' · ') + (warns ? '（' + warns + ' 项建议处理）' : '（可以封装）'), warns ? 'warn' : 'ok');
+  } catch (ex) {
+    setStatus('字幕检查失败：' + ex, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = oldHtml;
+  }
+}
+
+/* ==================== 初始化（由 init.js bootstrap 统一调用，仅执行一次） ==================== */
+function initSingle() {
+$('btnSingleReset').onclick = () => {
+  if (singleState.job) { setStatus('封装任务进行中，不能重置', 'err'); return; }
+  if (!confirm('确定重置单个封装的全部设置？')) return;
+  pickVideoPath(''); // 清视频并联动：轨道选择/探测结果清空、卡片重渲染、粘性条刷新
+  $('sc_sub').value = ''; $('tc_sub').value = '';
+  $('sc_name').value = 'SC'; $('tc_name').value = 'TC';
+  $('sc_enc').textContent = ''; $('tc_enc').textContent = '';
+  $('fonts_dir').value = '';
+  $('chapters').value = '';
+  $('out_name_tmpl').value = '';
+  $('title').value = '';
+  $('audio').value = ''; $('audio_lang').value = ''; $('audio_name').value = '';
+  $('out_dir').value = '';
+  $('backup').checked = true; $('force').checked = false;
+  $('fontCheckBox').innerHTML = '';
+  $('subCheckBox').innerHTML = '';   // 内容体检明细区一并清空（与卡片摘要行同步复位）
+  subCheckUi.sc = null; subCheckUi.tc = null;
+  subCheckSig.sc = ''; subCheckSig.tc = '';
+  fontState = { status: 'idle', missing: 0 };
+  fontSig = '';
+  hideTaskSummary();
+  hidePreflightIssues();
+  setResult('');
+  // 底部状态条一并复位（与启动时初态一致）
+  $('stickyProgress').classList.remove('run');
+  $('stickyBar').style.width = '0%';
+  $('stickyPct').textContent = '--';
+  $('stickyElapsed').textContent = '--:--:--';
+  $('stickyEta').textContent = '--:--:--';
+  syncSubStatus();
+  refreshSticky();
+  // 预设已选择：重置 = 先清回默认、再重新套用该预设（回到预设基线），选择器保留
+  const pName = $('preset_sel').value;
+  if (PRESETS[pName]) {
+    applyPreset(PRESETS[pName]);
+    updatePresetHint();
+    setStatus('已重置并套用预设「' + pName + '」', 'ok');
+  } else {
+    setStatus('已重置单个封装设置', 'ok');
+  }
+};
+$('btnAutoMatch').onclick = async () => {
+  const v = $('video').value.trim();
+  if (!v) { alert('请先选择视频文件'); return; }
+  $('btnAutoMatch').disabled = true;
+  try {
+    const id = await identify(v);   // 统一识别：字幕 + 字体目录（识别逻辑见 identify.js）
+    if ($('video').value.trim() !== v) return; // 视频已变更，丢弃过期结果
+    const scHad = !!$('sc_sub').value.trim(), tcHad = !!$('tc_sub').value.trim();
+    let sc = false, tc = false;
+    if (id.sc && !scHad) { $('sc_sub').value = id.sc; autoTrackName('sc_sub', 'sc_name', 'sc'); sc = true; }
+    if (id.tc && !tcHad) { $('tc_sub').value = id.tc; autoTrackName('tc_sub', 'tc_name', 'tc'); tc = true; }
+    syncSubStatus();
+    const fontFound = !!(id.fontsDir && !$('fonts_dir').value.trim() && ($('fonts_dir').value = id.fontsDir, true));
+    const chapFound = !!(id.chapters && !$('chapters').value.trim() && ($('chapters').value = id.chapters, true));
+    singleState.lastResult = null; refreshSticky();   // 字幕已填充：同步底部操作栏状态
+    const extra = (fontFound ? ' · 已自动识别字体目录' : '') + (chapFound ? ' · 已自动识别章节' : '');
+    if (sc || tc) {
+      setStatus('字幕匹配完成：已填充 ' + (sc ? '简体' : '') + (sc && tc ? ' + ' : '') + (tc ? '繁体' : '') + extra, 'ok');
+    } else if (id.sc || id.tc) {
+      setStatus('匹配到的字幕槽位已有内容，未覆盖（重置后可重新填充）' + extra, 'ok');
+    } else {
+      setStatus('未匹配到任何字幕（简 0 / 繁 0）' + extra, 'err');
+    }
+  } catch (ex) {
+    setStatus('字幕匹配失败：' + ex, 'err');
+  } finally {
+    $('btnAutoMatch').disabled = false;
+  }
+};
+$('btnProbe').onclick = async () => {
+  const v = $('video').value.trim();
+  if (!v) { alert('请先选择视频文件'); return; }
+  const d = await fetchProbe(v);
+  if (!d) return;
+  const box = $('probeBox');
+  if (d.error) { box.innerHTML = '<div class="chip err" style="margin-top:8px">' + ic('xCircle') + '<span>' + esc(d.error) + '</span></div>'; return; }
+  trackSel.audio.clear(); trackSel.sub.clear();
+  trackSel.allAudio = []; trackSel.allSub = [];
+  let h = '<div class="table-wrap" style="margin-top:12px;"><table style="min-width:620px;"><tr><th style="width:34px"></th><th>ID</th><th>类型</th><th>语言</th><th>名称</th><th>默认</th><th>编码</th></tr>';
+  d.tracks.forEach(t => {
+    let cb = '';
+    if (t.type === 'video') { cb = '<input type="checkbox" checked disabled title="视频轨必须保留">'; }
+    else if (t.type === 'audio') { trackSel.allAudio.push(t.id); trackSel.audio.add(t.id); cb = '<input type="checkbox" checked onchange="toggleSel(' + t.id + ',\'audio\')">'; }
+    else if (t.type === 'subtitles') { trackSel.allSub.push(t.id); cb = '<input type="checkbox" onchange="toggleSel(' + t.id + ',\'sub\')">'; }
+    const dcol = { video:'var(--run-line)', audio:'var(--ok-line)', subtitles:'var(--warn-line)' }[t.type] || 'var(--border)';
+    h += '<tr><td>' + cb + '</td><td class="mono">' + t.id + '</td><td><span class="tdot" style="background:' + dcol + '"></span>' + t.type + '</td><td class="mono">' + esc(t.lang) + '</td><td>' + esc(t.name || '') + '</td><td>' + (t.default ? esc('✔') : '') + '</td><td class="mono">' + esc(t.codec || '') + '</td></tr>';
+  });
+  h += '</table></div>';
+  h += '<div class="field" style="margin-top:12px;"><label class="check"><input type="checkbox" onchange="toggleAtt(this.checked)"> 保留源附件（字体/封面）</label><span class="t-cap">源附件 ' + d.attachments + ' 个；不勾选则用新子集字体重建</span></div>';
+  h += '<div class="t-sec">音轨默认全保留（取消勾选即去除）；源字幕默认不保留（会用新字幕替换），需保留源字幕请勾选。</div>';
+  box.innerHTML = h;
+};
+$('btnPrepSubs').onclick = () => runEncodingCheck();
+$('btnSubCheck').onclick = () => runContentCheck();
+$('btnCheckFonts').onclick = () => runFontCheck();
+$('btnSubtitleCheck').onclick = () => runSubtitleCheck();   // 统一入口：编码→内容→字体
+$('btnStart').onclick = async () => {
+  if (singleState.job) {
+    setStatus('正在停止…', 'run');
+    await api('/api/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: singleState.job }) });
+    return;
+  }
+  if (!$('video').value.trim()) { alert('请选择视频文件'); return; }
+  hidePreflightIssues();
+  setStatus('正在检查封装条件…', 'run');
+  let pf;
+  try { pf = await getPreflightResult(); }
+  catch (ex) { startMuxTask(); return; }   // 检查自身异常不阻断任务（保持原有可用性）
+  if (pf.blocking.length) {
+    showPreflightIssues(pf);   // 阻断项就近列出（含修复入口），不打扰其他区域
+    setStatus('有 ' + pf.blocking.length + ' 项问题需要处理', 'err');
+    return;
+  }
+  // 仅“未提供字幕”一项提醒时沿用原有原生确认（一次确认，不叠加弹窗）
+  const noSubOnly = pf.warnings.length === 1 && pf.warnings[0].code === 'no_subtitle';
+  if (pf.warnings.length && !noSubOnly) { openPreflightModal(pf); return; }
+  if (noSubOnly && !confirm('未提供任何字幕，将保留源字幕与源字体（无新字幕时不做字体子集化）。继续？')) return;
+  startMuxTask();
+};
+$('sc_sub').addEventListener('change', function () { onManualSub('sc_sub', 'sc_name', 'sc'); });
+$('tc_sub').addEventListener('change', function () { onManualSub('tc_sub', 'tc_name', 'tc'); });
+$('sc_sub').addEventListener('input', function () { singleState.lastResult = null; syncSubStatus(); refreshSticky(); });
+$('tc_sub').addEventListener('input', function () { singleState.lastResult = null; syncSubStatus(); refreshSticky(); });
+$('sc_name').addEventListener('input', function () { });
+$('btnSc').onclick = () => browseSub('sc');
+$('btnTc').onclick = () => browseSub('tc');
+$('btnScPick').onclick = () => browseSub('sc');
+$('btnTcPick').onclick = () => browseSub('tc');
+$('btnScClear').onclick = () => { toggleMoreMenu('sc', false); clearSub('sc'); };
+$('btnTcClear').onclick = () => { toggleMoreMenu('tc', false); clearSub('tc'); };
+['sc', 'tc'].forEach(function (kind) {
+  const head = $(kind + 'Card').querySelector('.sub-head');
+  head.addEventListener('click', function (e) { if (e.target.closest('button') || e.target.closest('.more-wrap')) return; toggleSubCard(kind); });
+  head.addEventListener('keydown', function (e) {
+    if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('button') && !e.target.closest('.more-wrap')) { e.preventDefault(); toggleSubCard(kind); }
+  });
+});
+$('btnScManual').onclick = () => { toggleMoreMenu('sc', false); toggleManualPath('sc'); };
+$('btnTcManual').onclick = () => { toggleMoreMenu('tc', false); toggleManualPath('tc'); };
+$('btnScMore').onclick = function (e) { e.stopPropagation(); toggleMoreMenu('sc'); };
+$('btnTcMore').onclick = function (e) { e.stopPropagation(); toggleMoreMenu('tc'); };
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('.more-wrap')) { toggleMoreMenu('sc', false); toggleMoreMenu('tc', false); }
+});
+document.querySelectorAll('.seg').forEach(function (seg) {
+  seg.addEventListener('click', function (e) {
+    const b = e.target.closest('.seg-btn');
+    if (!b) return;
+    const kind = seg.id === 'sc_default_seg' ? 'sc' : 'tc';
+    $(kind + '_default').value = b.dataset.v;
+    syncSegControls();
+    syncDefaultBadge();   // 摘要徽章即时反映
+    updatePresetHint();
+  });
+});
+$('sc_forced').addEventListener('change', syncDefaultBadge);
+$('tc_forced').addEventListener('change', syncDefaultBadge);
+$('btnFonts').onclick = () => openBrowser(v => { $('fonts_dir').value = v; updateFontsSummary(); }, 'dir', $('fonts_dir').value, 'fonts');
+$('btnAudio').onclick = () => openBrowser(v => { $('audio').value = v; updateAudioSummary(); }, 'audio', $('audio').value, 'audio');
+$('btnOut').onclick = () => openBrowser(v => { $('out_dir').value = v; scheduleOutPreview(); }, 'dir', $('out_dir').value, 'out');
+$('btnChapters').onclick = () => openBrowser(v => $('chapters').value = v, 'any', $('chapters').value, 'chapters');
+$('out_dir').addEventListener('input', scheduleOutPreview);
+$('out_dir').addEventListener('change', scheduleOutPreview);
+$('out_name_tmpl').addEventListener('input', scheduleOutPreview);
+$('out_name_tmpl').addEventListener('change', scheduleOutPreview);
+$('title').addEventListener('input', scheduleOutPreview);   // {title} 占位符：标题变化实时反映到输出预览
+(function () {
+  const toggle = $('advToggle'), body = $('advBody');
+  toggle.onclick = function () {
+    const open = body.classList.toggle('show');
+    toggle.classList.toggle('open', open);
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+})();
 $('fonts_dir').addEventListener('input', updateFontsSummary);
 $('fonts_dir').addEventListener('change', updateFontsSummary);
 $('audio').addEventListener('input', updateAudioSummary);
 $('audio').addEventListener('change', updateAudioSummary);
+}

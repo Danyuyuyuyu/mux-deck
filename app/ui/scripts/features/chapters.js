@@ -9,6 +9,9 @@ function chEditToText(chs) {
     return "CHAPTER" + String(i + 1).padStart(2, "0") + "=" + norm + "\nCHAPTER" + String(i + 1).padStart(2, "0") + "NAME=" + (c.name || "");
   }).join("\n");
 }
+
+/* ==================== 初始化（由 init.js bootstrap 统一调用，仅执行一次） ==================== */
+function initChapters() {
 $('btnChEdit').onclick = () => {
   $('chEditNote').textContent = '';
   if ($('chapters').value.trim()) {
@@ -16,9 +19,9 @@ $('btnChEdit').onclick = () => {
     return;
   }
   $('chEditText').value = '';
-  $('chEditModal').style.display = 'flex';
+  openModal('chEditModal');
 };
-$('chEditClose').onclick = () => { $('chEditModal').style.display = 'none'; };
+$('chEditClose').onclick = () => closeModal('chEditModal');
 $('btnChFromVideo').onclick = async () => {
   const v = $('video').value.trim();
   if (!v) { $('chEditNote').textContent = '请先在主流程选择视频（从源视频提取章节需要）'; return; }
@@ -42,7 +45,7 @@ $('btnChLoadFile').onclick = () => {
       if (r.error) { $('chEditNote').textContent = '加载失败：' + r.error; return; }
       $('chEditText').value = chEditToText(r.chapters);
       $('chEditNote').textContent = '已加载 ' + r.chapters.length + ' 章';
-      $('chEditModal').style.display = 'flex';
+      openModal('chEditModal');
     })
     .catch(ex => { $('chEditNote').textContent = '加载失败：' + ex; });
 };
@@ -67,7 +70,8 @@ $('btnChSave').onclick = async () => {
     const r = await api('/api/chapters/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ chapters: chs }) });
     if (r.error) { $('chEditNote').textContent = '保存失败：' + r.error; return; }
     $('chapters').value = r.path;
-    $('chEditModal').style.display = 'none';
+    closeModal('chEditModal');
     setStatus('章节已保存（' + r.count + ' 章）并填入章节文件框', 'ok');
   } catch (ex) { $('chEditNote').textContent = '保存失败：' + ex; }
 };
+}

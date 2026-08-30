@@ -3,16 +3,13 @@
 
 /* ==================== 封装前检查（preflight） ====================
  * 汇总既有状态与轻量检查，返回 { blocking, warnings, info }；不重跑昂贵检查：
- * 字幕内容/字体体检仅在结果未过期时计为 warning，过期或未跑降级为 info 引导用户手动运行。 */
-function subCheckFresh(kind) { return !!subCheckUi[kind] && subCheckSig[kind] === $(kind + '_sub').value.trim(); }
-function fontCheckFresh() {
-  return (fontState.status === 'ok' || fontState.status === 'warn' || fontState.status === 'error') &&
-    fontSig === JSON.stringify([$('sc_sub').value.trim(), $('tc_sub').value.trim(), $('fonts_dir').value.trim()]);
-}
+ * 字幕内容/字体体检仅在结果未过期时计为 warning，过期或未跑降级为 info 引导用户手动运行。
+ * single 域状态一律经 getSingleValidationState() 读取，不直接触其内部变量。 */
 async function getPreflightResult() {
-  const video = $('video').value.trim();
-  const sc = $('sc_sub').value.trim(), tc = $('tc_sub').value.trim();
-  const outDir = $('out_dir').value.trim();
+  const s = getSingleValidationState();
+  const video = s.video;
+  const sc = s.sc, tc = s.tc;
+  const outDir = s.outDir;
   const items = [];
   const add = (type, code, title, description, source, action) => items.push({ type, code, title, description, source, action: action || '' });
   let fs = {};
@@ -21,13 +18,13 @@ async function getPreflightResult() {
   } catch (ex) { fs = {}; }
   let out = null;
   try {
-    out = await api('/api/out_preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ video: video, template: $('out_name_tmpl').value.trim(), title: $('title').value.trim(), out_dir: outDir, height: videoHeight() }) });
+    out = await api('/api/out_preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ video: video, template: $('out_name_tmpl').value.trim(), title: s.title, out_dir: outDir, height: s.height }) });
   } catch (ex) { out = null; }
 
   /* 视频 */
   if (!video) add('error', 'no_video', '尚未选择视频', '选择视频后才能开始封装。', 'video', 'pick_video');
   else if (fs.video_ok === false) add('error', 'video_missing', '无法读取视频文件', '文件可能已移动、被删除或无访问权限。', 'video', 'pick_video');
-  else if (probeCache && probeCache.video === video && probeCache.data && probeCache.data.error)
+  else if (s.probe && s.probe.error)
     add('warning', 'media_info', '无法读取完整媒体信息', '仍可尝试封装，但轨道信息可能不完整。', 'video', '');
   /* 字幕文件与状态 */
   if (sc && fs.sc_ok === false) add('error', 'sub_missing_sc', '简体字幕文件不存在', '文件可能已被移动或删除，请重新选择。', 'subtitle_sc', 'pick_sub_sc');
@@ -36,10 +33,10 @@ async function getPreflightResult() {
   [['sc', '简体'], ['tc', '繁体']].forEach(function (pair) {
     const kind = pair[0], label = pair[1];
     if (!$(kind + '_sub').value.trim()) return;
-    const enc = ($(kind + '_enc').textContent || '').trim();
+    const enc = s.enc[kind];
     if (enc.indexOf('错误') === 0) add('warning', 'enc_' + kind, label + '字幕编码检查未通过', enc, 'subtitle_' + kind, '');
     else if (enc.indexOf('歧义') >= 0) add('warning', 'enc_ambig_' + kind, label + '字幕编码存在歧义', enc, 'subtitle_' + kind, '');
-    const st = subCheckUi[kind];
+    const st = s.checks[kind];
     if (st) {
       if (st.cls === 'warn') add('warning', 'subcheck_' + kind, label + '字幕内容体检有预警', st.text + '（校对参考，不影响封装）', 'subtitle_' + kind, 'view_subcheck');
       else if (st.cls === 'err') add('warning', 'subcheck_err_' + kind, label + '字幕内容体检失败', '未能完成内容分析，可重新运行体检。', 'subtitle_' + kind, '');
@@ -48,9 +45,9 @@ async function getPreflightResult() {
   });
   /* 字体 */
   if (sc || tc) {
-    if (fontState.status === 'warn') add('warning', 'missing_fonts', '缺少 ' + fontState.missing + ' 个字体', '字幕可以继续封装，但播放效果可能异常。', 'fonts', 'view_fonts');
-    else if (fontState.status === 'error') add('warning', 'font_check_failed', '字体体检失败', '未能确认字体是否齐全，可重试体检。', 'fonts', '');
-    else if (!fontCheckFresh()) add('info', 'fonts_not_checked', '字体尚未检查', '可在「字体设置」中运行字体体检。', 'fonts', '');
+    if (s.fonts.status === 'warn') add('warning', 'missing_fonts', '缺少 ' + s.fonts.missing + ' 个字体', '字幕可以继续封装，但播放效果可能异常。', 'fonts', 'view_fonts');
+    else if (s.fonts.status === 'error') add('warning', 'font_check_failed', '字体体检失败', '未能确认字体是否齐全，可重试体检。', 'fonts', '');
+    else if (!s.fonts.fresh) add('info', 'fonts_not_checked', '字体尚未检查', '可在「字体设置」中运行字体体检。', 'fonts', '');
   }
   /* 输出 */
   if (outDir && fs.out_dir_ok === false) add('error', 'out_dir_missing', '输出目录不存在', '请检查输出目录路径。', 'output', 'pick_out');
@@ -110,16 +107,19 @@ function openPreflightModal(pf) {
   $('pfToggleAll').style.display = hasInfo ? '' : 'none';
   $('pfInfoSec').style.display = 'none';
   $('pfInfoList').innerHTML = pf.info.map(function (it) { return pfItemHtml(it, false); }).join('');
-  $('pfModal').style.display = 'flex';
+  openModal('pfModal', { closeOnBackdrop: false, closeOnEscape: false });   // 确认弹窗：不允许误触关闭
 }
-$('pfCancel').onclick = function () { $('pfModal').style.display = 'none'; };
-$('pfClose').onclick = function () { $('pfModal').style.display = 'none'; };
-$('pfProceed').onclick = function () { $('pfModal').style.display = 'none'; startMuxTask(); };
+/* 修复动作统一分发（就近跳转，不堆 Alert） */
+
+/* ==================== 初始化（由 init.js bootstrap 统一调用，仅执行一次） ==================== */
+function initPreflight() {
+$('pfCancel').onclick = function () { closeModal('pfModal'); };
+$('pfClose').onclick = function () { closeModal('pfModal'); };
+$('pfProceed').onclick = function () { closeModal('pfModal'); startMuxTask(); };
 $('pfToggleAll').onclick = function () {
   const sec = $('pfInfoSec');
   sec.style.display = sec.style.display === 'none' ? '' : 'none';
 };
-/* 修复动作统一分发（就近跳转，不堆 Alert） */
 document.addEventListener('click', function (e) {
   const el = e.target.closest('[data-pf-action]');
   if (!el) return;
@@ -133,3 +133,4 @@ document.addEventListener('click', function (e) {
   else if (a === 'open_env') openEnv();
   else if (a === 'enable_backup') { $('backup').checked = true; }
 });
+}

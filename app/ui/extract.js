@@ -1,7 +1,11 @@
-$('btnXVideo').onclick = () => openBrowser(v => $('x_video').value = v, 'video', $('x_video').value, 'video');
-$('btnXOut').onclick = () => openBrowser(v => $('x_out').value = v, 'dir', $('x_out').value, 'out');
 /* ==================== 字幕提取（独立工具） ==================== */
 let xtTracks = [], xJob = null, xTimer = null;
+function xtSel(i, on) { if (xtTracks[i]) xtTracks[i].sel = on; }
+
+/* ==================== 初始化（由 init.js bootstrap 统一调用，仅执行一次） ==================== */
+function initExtract() {
+$('btnXVideo').onclick = () => openBrowser(v => $('x_video').value = v, 'video', $('x_video').value, 'video');
+$('btnXOut').onclick = () => openBrowser(v => $('x_out').value = v, 'dir', $('x_out').value, 'out');
 $('x_video').addEventListener('change', function () {
   xtTracks = [];
   $('xList').innerHTML = '';
@@ -27,7 +31,6 @@ $('btnXSubs').onclick = async () => {
   h += '</table></div><div class="t-sec">勾选要提取的字幕轨；PGS 图形字幕导出为 .sup，文本字幕导出为 .ass / .srt</div>';
   box.innerHTML = h;
 };
-function xtSel(i, on) { if (xtTracks[i]) xtTracks[i].sel = on; }
 $('btnXExtract').onclick = async () => {
   if (xJob) return;
   const v = $('x_video').value.trim() || $('video').value.trim();
@@ -71,3 +74,4 @@ $('btnXExtract').onclick = async () => {
     }
   }, 1200);
 };
+}

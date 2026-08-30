@@ -149,6 +149,7 @@ def main():
         ui_ok = "pageRoot" in body and "consoleRoot" in body and "modalRoot" in body and "loader.js" in body
         need = ["style.css", "loader.js", "app.js", "batch.js", "extract.js", "preview.js", "env.js", "init.js",
                 "scripts/core/icons.js", "scripts/core/utils.js", "scripts/core/navigation.js",
+                "scripts/components/modal.js",
                 "scripts/components/browser.js", "scripts/components/settings.js", "scripts/components/console.js",
                 "scripts/features/single.js", "scripts/features/preflight.js", "scripts/features/presets.js",
                 "scripts/features/chapters.js",

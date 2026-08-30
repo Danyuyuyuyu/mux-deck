@@ -5,10 +5,12 @@
  *       仅收集用户改动过的轨道提交；后端按 track:<a|s|v>序号 组装 mkvpropedit 参数。 */
 const peEdits = {};   // trackId -> {name, language, default, forced}（仅记录改动）
 
-$('btnPeVideo').onclick = () => openBrowser(v => { $('pe_video').value = v; peEditsClear(); $('peList').innerHTML = ''; }, 'video', $('pe_video').value, 'video');
-$('btnPeChapters').onclick = () => openBrowser(v => $('pe_chapters').value = v, 'any', $('pe_chapters').value, 'chapters');
 function peEditsClear() { Object.keys(peEdits).forEach(k => delete peEdits[k]); }
 
+/* ==================== 初始化（由 init.js bootstrap 统一调用，仅执行一次） ==================== */
+function initPropedit() {
+$('btnPeVideo').onclick = () => openBrowser(v => { $('pe_video').value = v; peEditsClear(); $('peList').innerHTML = ''; }, 'video', $('pe_video').value, 'video');
+$('btnPeChapters').onclick = () => openBrowser(v => $('pe_chapters').value = v, 'any', $('pe_chapters').value, 'chapters');
 $('btnPeProbe').onclick = async () => {
   const v = $('pe_video').value.trim();
   if (!v) { alert('请先填写视频路径'); return; }
@@ -54,7 +56,6 @@ $('btnPeProbe').onclick = async () => {
     ['pe-def', 'pe-forced'].forEach(cls => tr.querySelector('.' + cls).addEventListener('change', mark));
   });
 };
-
 $('btnPeApply').onclick = async () => {
   const video = $('pe_video').value.trim();
   if (!video) { alert('请先填写视频路径'); return; }
@@ -78,3 +79,4 @@ $('btnPeApply').onclick = async () => {
     $('btnPeApply').disabled = false;
   }
 };
+}

@@ -1,0 +1,11 @@
+{
+  "name": "muxui-smoke",
+  "private": true,
+  "description": "字幕封装助手 UI Playwright 冒烟测试（需后端服务或由 webServer 自动拉起）",
+  "scripts": {
+    "test:smoke": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}

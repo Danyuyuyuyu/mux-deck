@@ -16,6 +16,9 @@ function switchMode(mode) {
   refreshBatchSticky();
 }
 /* 字幕工具下拉：点击一级入口开合、点选后收起、点击外部收起 */
+
+/* ==================== 初始化（由 init.js bootstrap 统一调用，仅执行一次） ==================== */
+function initNavigation() {
 (function () {
   const wrap = document.getElementById('toolsDrop');
   const tab = document.getElementById('toolsTab');
@@ -28,3 +31,4 @@ function switchMode(mode) {
   wrap.querySelectorAll('.drop-item').forEach(function (b) { b.addEventListener('click', function () { setToolsDrop(false); }); });
   document.addEventListener('click', function (e) { if (!wrap.contains(e.target)) setToolsDrop(false); });
 })();
+}
