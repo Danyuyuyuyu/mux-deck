@@ -74,7 +74,7 @@ def handle_extract(body):
     if not core.MKVEXTRACT:
         return {"error": "未找到 mkvextract"}
     tmp_xml = os.path.join(core.TMP_DIR, "chapters_%s.xml" % uuid.uuid4().hex[:8])
-    rc = core.run_to_file([core.MKVEXTRACT, "chapters", video, tmp_xml], os.path.join(core.LOG_DIR, "chapters_%s.log" % uuid.uuid4().hex[:8]), timeout=120)
+    rc = core.run_to_file([core.MKVEXTRACT, video, "chapters", tmp_xml], os.path.join(core.LOG_DIR, "chapters_%s.log" % uuid.uuid4().hex[:8]), timeout=120)
     try:
         if rc != 0 or not os.path.isfile(tmp_xml):
             return {"chapters": [], "note": "源视频没有章节（或提取失败）"}
