@@ -119,7 +119,7 @@ function mockFetch(url, opts) {
   let ok = await waitUntil(() => $('sc_sub').value === 'D:\\Video\\EP01.sc.ass' && $('fonts_dir').value === 'D:\\Video\\Fonts');
   check('自动识别填充 sc_sub', ok, 'sc_sub=' + $('sc_sub').value);
   check('自动识别填充 fonts_dir', $('fonts_dir').value === 'D:\\Video\\Fonts', $('fonts_dir').value);
-  check('视频卡片已识别', $('videoCard').className === 'file-card');
+  check('视频卡片已识别（收缩为紧凑态）', $('videoCard').className === 'file-card compact');
   check('sticky=所有资源准备完成(ok) 且按钮可用', stickyTxt() === '所有资源准备完成' && stickyCls().includes('ok') && !$('btnStart').disabled, stickyTxt() + '/' + stickyCls());
   check('状态栏提示已自动识别', ($('status').textContent || '').includes('已自动识别'), $('status').textContent);
   check('scStatus 徽章=已识别', $('scStatus').className.includes('on'));
@@ -152,7 +152,7 @@ function mockFetch(url, opts) {
   ok = await waitUntil(() => $('tc_sub').value === 'D:\\Video\\EP01.tc.ass');
   check('仅繁体自动填充 tc_sub', ok, $('tc_sub').value);
   check('sc 槽位保持为空（上一视频的 sc 已随更换清空）', $('sc_sub').value === '', $('sc_sub').value);
-  check('仅 TC 时 tcDefaultBadge=默认轨道', $('tcDefaultBadge').textContent === '默认轨道', $('tcDefaultBadge').textContent);
+  check('仅 TC 时 tcDefaultBadge=默认轨', $('tcDefaultBadge').textContent === '默认轨', $('tcDefaultBadge').textContent);
   check('sticky=准备完成(ok)', stickyTxt() === '所有资源准备完成' && stickyCls().includes('ok'), stickyTxt() + '/' + stickyCls());
 
   /* ---- 场景6：已有值不覆盖（fonts_dir 手动值保留） ---- */

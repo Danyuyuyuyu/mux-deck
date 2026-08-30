@@ -103,15 +103,17 @@ def probe_json(path):
     except Exception as ex:
         fail("视频信息解析失败: %s" % ex)
 
-def resolve_out_name(tmpl, base, height):
-    """命名模板 -> 实际文件名（无扩展名）。占位符：{src} 源文件名 {ep} 集数 {res} 分辨率(1080P)。
+def resolve_out_name(tmpl, base, height, title=""):
+    """命名模板 -> 实际文件名（无扩展名）。占位符：{src} 源文件名 {ep} 集数 {res} 分辨率(1080P) {title} MKV标题（留空回退 {src}）。
     集数识别按优先级：EP01 / 第01话 / [01] / 分隔符包裹的独立数字 / 最后一串数字。"""
     m = (re.search(r'EP\s*(\d{1,4})', base, re.I) or re.search(r'第\s*(\d{1,4})\s*[话話集]', base)
          or re.search(r'\[\s*(\d{1,4})\s*\]', base)
          or re.search(r'(?:^|[\s_\-\.])(\d{1,4})(?=[\s_\-\.]|$)', base))
     ep = m.group(1) if m else ((re.findall(r'\d+', base) or [''])[-1])
-    name = tmpl.replace('{src}', base).replace('{ep}', ep).replace('{res}', (str(height) + 'P') if height else '')
+    name = (tmpl.replace('{src}', base).replace('{title}', (title or '').strip() or base)
+                .replace('{ep}', ep).replace('{res}', (str(height) + 'P') if height else ''))
     name = re.sub(r'[<>:"/\\|?*]', '_', name).strip().strip('.')
+    name = re.sub(r'[\s\-_]+$', '', name).strip()   # {res} 解析不出时清掉尾部悬空分隔符
     return name or base
 
 def unique_path(dest):
@@ -469,7 +471,7 @@ def main():
                         except ValueError:
                             vh = 0
                 break
-        out_base = resolve_out_name(a.out_name, base, vh)
+        out_base = resolve_out_name(a.out_name, base, vh, a.title)
         print("Output name: " + out_base, flush=True)
     if a.out_dir:
         os.makedirs(a.out_dir, exist_ok=True)

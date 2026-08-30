@@ -20,6 +20,7 @@ def probe(path):
         except Exception as ex:
             return {"error": "parse failed: " + str(ex), "tracks": [], "attachments": 0}
         tracks = []
+        vh = 0
         for t in data.get("tracks", []):
             pr = t.get("properties", {})
             tracks.append({
@@ -27,7 +28,17 @@ def probe(path):
                 "lang": pr.get("language_ietf") or pr.get("language") or "-",
                 "name": pr.get("track_name") or "", "default": bool(pr.get("default_track")),
             })
-        return {"tracks": tracks, "attachments": len(data.get("attachments", []))}
+            if t.get("type") == "video" and not vh:
+                # 视频分辨率高度（与 mux_cli 同口径：height 优先，回退 display_dimensions），供输出名 {res} 预览
+                vh = int(pr.get("height") or 0)
+                if not vh:
+                    dd = str(pr.get("display_dimensions") or "")
+                    if "x" in dd:
+                        try:
+                            vh = int(dd.split("x")[1])
+                        except ValueError:
+                            vh = 0
+        return {"tracks": tracks, "attachments": len(data.get("attachments", [])), "video_height": vh}
     finally:
         try:
             os.remove(out)

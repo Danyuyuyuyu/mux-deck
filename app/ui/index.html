@@ -55,8 +55,6 @@
             <p class="t-sec">选择视频与字幕，检查字体/编码后开始封装为 MKV</p>
           </div>
           <div style="display:flex; gap:8px;">
-            <button class="btn" id="btnProbe"><span data-ic="list" aria-hidden="true"></span>查看轨道</button>
-            <button class="btn" id="btnAutoMatch"><span data-ic="sparkles" aria-hidden="true"></span>自动匹配字幕</button>
             <button class="btn" id="btnSingleReset"><span data-ic="refresh-cw" aria-hidden="true"></span>重置</button>
           </div>
         </div>
@@ -72,71 +70,147 @@
         <div id="probeBox"></div>
 
         <div class="panel-sec">
-          <div class="sec-head">
-            <h3 class="t-section">字幕轨道</h3>
-            <p class="t-sec">字幕文件自动识别简 / 繁；语言固定 zh-Hans / zh-Hant（仅给繁体时繁体自动成为默认轨道）</p>
+          <div class="sec-head sec-head-row">
+            <div>
+              <h3 class="t-section">字幕轨道</h3>
+              <p class="t-sec">字幕文件自动识别简 / 繁；语言固定 zh-Hans / zh-Hant（仅给繁体时繁体自动成为默认轨道）</p>
+            </div>
+            <div class="sec-head-actions">
+              <button class="btn" id="btnProbe"><span data-ic="list" aria-hidden="true"></span>查看轨道</button>
+              <button class="btn" id="btnAutoMatch"><span data-ic="sparkles" aria-hidden="true"></span>自动匹配字幕</button>
+            </div>
           </div>
           <div class="sub-grid">
-            <div class="sub-card">
-              <div class="sub-card-head">
-                <span class="sub-badge sc">SC</span>
-                <span class="sub-title">简体中文 <span class="t-cap mono">zh-Hans</span></span>
-                <span class="chip sm ok" id="scDefaultBadge">默认轨道</span>
+          <div class="sub-card open" id="scCard">
+            <div class="sub-head" role="button" tabindex="0" aria-expanded="true" aria-label="简体字幕：展开或收起设置">
+              <span class="sub-badge sc">SC</span>
+              <span class="sub-title">简体中文 <span class="sub-lang">zh-Hans</span></span>
+              <span class="sub-head-file" id="scHeadFile"></span>
+              <span class="sub-head-status">
+                <span class="sub-status off" id="scStatus"><span data-ic="info" aria-hidden="true"></span><span class="sub-status-txt">未选择字幕</span></span>
+                <span class="chip sm track-default" id="scDefaultBadge">默认轨</span>
+                <span class="chip sm warn" id="scForcedChip" style="display:none">强制</span>
+                <span class="more-wrap">
+                  <button type="button" class="btn ghost icon-btn" id="btnScMore" aria-haspopup="true" aria-expanded="false" aria-label="更多操作"><span data-ic="moreHorizontal" aria-hidden="true"></span></button>
+                  <div class="more-menu" id="scMoreMenu" style="display:none">
+                    <button type="button" class="more-item" id="btnScManual"><span data-ic="type" aria-hidden="true"></span>编辑文件路径</button>
+                    <button type="button" class="more-item danger" id="btnScClear"><span data-ic="trash" aria-hidden="true"></span>删除字幕轨</button>
+                  </div>
+                </span>
+                <span class="sub-chev" data-ic="chevronDown" aria-hidden="true"></span>
+              </span>
+            </div>
+            <div class="sub-body">
+              <div class="sub-file">
+                <div class="sub-file-label">字幕文件</div>
+                <div class="sub-file-row">
+                  <span class="sub-file-icon" data-ic="fileText" aria-hidden="true"></span>
+                  <div class="sub-file-info">
+                    <span class="sub-file-name" id="scFileName">尚未选择字幕文件</span>
+                    <span class="sub-file-path" id="scFilePath"></span>
+                  </div>
+                  <button type="button" class="btn small primary" id="btnScPick"><span data-ic="fileText" aria-hidden="true"></span>选择字幕</button>
+                </div>
+                <div class="sub-file-inputrow" id="scFileInputRow" style="display:none">
+                  <input id="sc_sub" type="text" placeholder="*.ass / *.ssa / *.srt（可手动粘贴路径）" autocomplete="off">
+                  <button class="btn" id="btnSc" aria-label="浏览简体字幕">浏览</button>
+                </div>
               </div>
-              <div class="sub-paths">
-                <input id="sc_sub" type="text" placeholder="*.ass / *.ssa / *.srt（可选）" autocomplete="off">
-                <button class="btn" id="btnSc" aria-label="浏览简体字幕">浏览</button>
-                <button class="btn ghost icon-btn" id="btnScClear" title="移除简体字幕" aria-label="移除简体字幕"><span data-ic="trash" aria-hidden="true"></span></button>
+              <div class="sub-status-rows">
+                <span class="sub-enc-row" id="scEncRow" style="display:none"><span class="t-cap">编码</span><span class="badge" id="sc_enc"></span></span>
+                <span class="sub-status" id="scCheckRow" style="display:none"></span>
+                <span class="sub-status" id="scFontRow" style="display:none"></span>
               </div>
-              <div class="sub-name-row">
-                <label for="sc_name">轨道名</label>
-                <input id="sc_name" type="text" value="SC" autocomplete="off">
-                <span class="t-cap">勾选时自动识别</span>
-              </div>
-              <div class="sub-name-row">
-                <label for="sc_default">默认轨</label>
-                <select id="sc_default" style="height:34px;">
-                  <option value="">自动（有 SC 则默认）</option>
-                  <option value="1">是</option>
-                  <option value="0">否</option>
-                </select>
-                <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary)"><input id="sc_forced" type="checkbox">强制轨 (forced)</label>
-              </div>
-              <div class="sub-card-foot">
-                <span class="sub-status off" id="scStatus"><span data-ic="info" aria-hidden="true"></span><span class="sub-status-txt">未设置</span></span>
-                <span class="badge" id="sc_enc"></span>
+              <div class="sub-settings">
+                <div class="sub-settings-title t-cap">轨道设置</div>
+                <div class="sub-set-grid">
+                  <div class="sub-set-field">
+                    <label for="sc_name">轨道名<span class="tip" tabindex="0" data-tip="填入带 SC / CHS / TC / CHT 标识的文件名时会自动识别轨道名。" data-ic="info"></span></label>
+                    <input id="sc_name" type="text" value="SC" autocomplete="off">
+                  </div>
+                  <div class="sub-set-field">
+                    <label>默认轨<span class="tip" tabindex="0" data-tip="自动：按轨道规则判断默认字幕轨（存在 SC 时优先 SC，仅 TC 时 TC 默认）。选「是 / 否」可强制指定。" data-ic="info"></span></label>
+                    <div class="seg" id="sc_default_seg" role="radiogroup" aria-label="简体字幕默认轨">
+                      <button type="button" class="seg-btn" data-v="">自动</button>
+                      <button type="button" class="seg-btn" data-v="1">是</button>
+                      <button type="button" class="seg-btn" data-v="0">否</button>
+                    </div>
+                    <span class="sub-auto-hint" id="scAutoHint"></span>
+                    <input id="sc_default" type="hidden">
+                  </div>
+                  <div class="sub-set-field">
+                    <label for="sc_forced">强制字幕<span class="tip" tabindex="0" data-tip="播放器可能在关闭普通字幕时仍自动显示此轨道（MKV forced 标记）。" data-ic="info"></span></label>
+                    <div class="sub-set-switch"><input id="sc_forced" type="checkbox" class="switch" aria-label="简体字幕强制字幕"></div>
+                  </div>
+                </div>
               </div>
             </div>
-            <div class="sub-card">
-              <div class="sub-card-head">
-                <span class="sub-badge tc">TC</span>
-                <span class="sub-title">繁體中文 <span class="t-cap mono">zh-Hant</span></span>
-                <span class="chip sm info" id="tcDefaultBadge">可选</span>
+          </div>
+          <div class="sub-card open" id="tcCard">
+            <div class="sub-head" role="button" tabindex="0" aria-expanded="true" aria-label="繁体字幕：展开或收起设置">
+              <span class="sub-badge tc">TC</span>
+              <span class="sub-title">繁體中文 <span class="sub-lang">zh-Hant</span></span>
+              <span class="sub-head-file" id="tcHeadFile"></span>
+              <span class="sub-head-status">
+                <span class="sub-status off" id="tcStatus"><span data-ic="info" aria-hidden="true"></span><span class="sub-status-txt">未选择字幕</span></span>
+                <span class="chip sm track-default" id="tcDefaultBadge">默认轨</span>
+                <span class="chip sm warn" id="tcForcedChip" style="display:none">强制</span>
+                <span class="more-wrap">
+                  <button type="button" class="btn ghost icon-btn" id="btnTcMore" aria-haspopup="true" aria-expanded="false" aria-label="更多操作"><span data-ic="moreHorizontal" aria-hidden="true"></span></button>
+                  <div class="more-menu" id="tcMoreMenu" style="display:none">
+                    <button type="button" class="more-item" id="btnTcManual"><span data-ic="type" aria-hidden="true"></span>编辑文件路径</button>
+                    <button type="button" class="more-item danger" id="btnTcClear"><span data-ic="trash" aria-hidden="true"></span>删除字幕轨</button>
+                  </div>
+                </span>
+                <span class="sub-chev" data-ic="chevronDown" aria-hidden="true"></span>
+              </span>
+            </div>
+            <div class="sub-body">
+              <div class="sub-file">
+                <div class="sub-file-label">字幕文件</div>
+                <div class="sub-file-row">
+                  <span class="sub-file-icon" data-ic="fileText" aria-hidden="true"></span>
+                  <div class="sub-file-info">
+                    <span class="sub-file-name" id="tcFileName">尚未选择字幕文件</span>
+                    <span class="sub-file-path" id="tcFilePath"></span>
+                  </div>
+                  <button type="button" class="btn small primary" id="btnTcPick"><span data-ic="fileText" aria-hidden="true"></span>选择字幕</button>
+                </div>
+                <div class="sub-file-inputrow" id="tcFileInputRow" style="display:none">
+                  <input id="tc_sub" type="text" placeholder="*.ass / *.ssa / *.srt（可手动粘贴路径）" autocomplete="off">
+                  <button class="btn" id="btnTc" aria-label="浏览繁体字幕">浏览</button>
+                </div>
               </div>
-              <div class="sub-paths">
-                <input id="tc_sub" type="text" placeholder="*.ass / *.ssa / *.srt（可选）" autocomplete="off">
-                <button class="btn" id="btnTc" aria-label="浏览繁体字幕">浏览</button>
-                <button class="btn ghost icon-btn" id="btnTcClear" title="移除繁体字幕" aria-label="移除繁体字幕"><span data-ic="trash" aria-hidden="true"></span></button>
+              <div class="sub-status-rows">
+                <span class="sub-enc-row" id="tcEncRow" style="display:none"><span class="t-cap">编码</span><span class="badge" id="tc_enc"></span></span>
+                <span class="sub-status" id="tcCheckRow" style="display:none"></span>
+                <span class="sub-status" id="tcFontRow" style="display:none"></span>
               </div>
-              <div class="sub-name-row">
-                <label for="tc_name">轨道名</label>
-                <input id="tc_name" type="text" value="TC" autocomplete="off">
-                <span class="t-cap">勾选时自动识别</span>
-              </div>
-              <div class="sub-name-row">
-                <label for="tc_default">默认轨</label>
-                <select id="tc_default" style="height:34px;">
-                  <option value="">自动（仅 TC 时默认）</option>
-                  <option value="1">是</option>
-                  <option value="0">否</option>
-                </select>
-                <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary)"><input id="tc_forced" type="checkbox">强制轨 (forced)</label>
-              </div>
-              <div class="sub-card-foot">
-                <span class="sub-status off" id="tcStatus"><span data-ic="info" aria-hidden="true"></span><span class="sub-status-txt">未设置</span></span>
-                <span class="badge" id="tc_enc"></span>
+              <div class="sub-settings">
+                <div class="sub-settings-title t-cap">轨道设置</div>
+                <div class="sub-set-grid">
+                  <div class="sub-set-field">
+                    <label for="tc_name">轨道名<span class="tip" tabindex="0" data-tip="填入带 SC / CHS / TC / CHT 标识的文件名时会自动识别轨道名。" data-ic="info"></span></label>
+                    <input id="tc_name" type="text" value="TC" autocomplete="off">
+                  </div>
+                  <div class="sub-set-field">
+                    <label>默认轨<span class="tip" tabindex="0" data-tip="自动：按轨道规则判断默认字幕轨（存在 SC 时优先 SC，仅 TC 时 TC 默认）。选「是 / 否」可强制指定。" data-ic="info"></span></label>
+                    <div class="seg" id="tc_default_seg" role="radiogroup" aria-label="繁体字幕默认轨">
+                      <button type="button" class="seg-btn" data-v="">自动</button>
+                      <button type="button" class="seg-btn" data-v="1">是</button>
+                      <button type="button" class="seg-btn" data-v="0">否</button>
+                    </div>
+                    <span class="sub-auto-hint" id="tcAutoHint"></span>
+                    <input id="tc_default" type="hidden">
+                  </div>
+                  <div class="sub-set-field">
+                    <label for="tc_forced">强制字幕<span class="tip" tabindex="0" data-tip="播放器可能在关闭普通字幕时仍自动显示此轨道（MKV forced 标记）。" data-ic="info"></span></label>
+                    <div class="sub-set-switch"><input id="tc_forced" type="checkbox" class="switch" aria-label="繁体字幕强制字幕"></div>
+                  </div>
+                </div>
               </div>
             </div>
+          </div>
           </div>
           <div class="field" style="margin-top:12px; align-items:center;">
             <button class="btn" id="btnPrepSubs"><span data-ic="refresh-cw" aria-hidden="true"></span>检查 / 转换字幕编码</button>
@@ -149,39 +223,53 @@
           <div id="subCheckBox"></div>
         </div>
 
-        <div class="panel-sec">
-          <div class="sec-head">
-            <h3 class="t-section">字体</h3>
-            <p class="t-sec">检测字幕所使用的字体是否完整，缺失时会在封装前提示</p>
+        <div class="panel-sec collapse" id="fontsSec">
+          <button type="button" class="collapse-toggle" aria-expanded="false" onclick="toggleCollapse('fontsSec')">
+            <span class="c-title">字体设置</span>
+            <span class="c-summary" id="fontsSummary">自动</span>
+            <span class="c-chev" data-ic="chevronDown" aria-hidden="true"></span>
+          </button>
+          <div class="collapse-body">
+            <div class="sec-head">
+              <h3 class="t-section">字体</h3>
+              <p class="t-sec">检测字幕所使用的字体是否完整，缺失时会在封装前提示</p>
+            </div>
+            <div class="field">
+              <label for="fonts_dir">字体目录</label>
+              <input id="fonts_dir" type="text" placeholder="留空则自动查找视频旁的 Fonts\ 或 Font\" autocomplete="off">
+              <button class="btn" id="btnFonts">浏览</button>
+            </div>
+            <div class="field">
+              <button class="btn" id="btnCheckFonts"><span data-ic="search" aria-hidden="true"></span>字体体检</button>
+              <span class="t-cap">封装前检查字幕用到的字体是否齐全</span>
+            </div>
+            <div id="fontCheckBox"></div>
           </div>
-          <div class="field">
-            <label for="fonts_dir">字体目录</label>
-            <input id="fonts_dir" type="text" placeholder="留空则自动查找视频旁的 Fonts\ 或 Font\" autocomplete="off">
-            <button class="btn" id="btnFonts">浏览</button>
-          </div>
-          <div class="field">
-            <button class="btn" id="btnCheckFonts"><span data-ic="search" aria-hidden="true"></span>字体体检</button>
-            <span class="t-cap">封装前检查字幕用到的字体是否齐全</span>
-          </div>
-          <div id="fontCheckBox"></div>
         </div>
 
-        <div class="panel-sec">
-          <div class="sec-head">
-            <h3 class="t-section">音轨</h3>
-            <p class="t-sec">外部音轨与源音轨共存；源音轨的保留 / 去除在「查看轨道」中勾选</p>
-          </div>
-          <div class="field">
-            <label for="audio">外部音轨</label>
-            <input id="audio" type="text" placeholder="可选：外部音频文件路径（MKA / FLAC / AAC / MP3 / OPUS / AC3 / DTS 等）" autocomplete="off">
-            <button class="btn" id="btnAudio">浏览</button>
-          </div>
-          <div class="field">
-            <label for="audio_lang">语言</label>
-            <input id="audio_lang" type="text" placeholder="如 jpn" style="flex:.22; min-width:90px;" autocomplete="off">
-            <label for="audio_name" style="width:auto; margin-left:8px;">名称</label>
-            <input id="audio_name" type="text" placeholder="可选" style="flex:.3; min-width:110px;" autocomplete="off">
-            <span class="t-cap">填写后外部音轨不替换源音轨、两者共存</span>
+        <div class="panel-sec collapse" id="audioSec">
+          <button type="button" class="collapse-toggle" aria-expanded="false" onclick="toggleCollapse('audioSec')">
+            <span class="c-title">外部音轨</span>
+            <span class="c-summary" id="audioSummary">未添加</span>
+            <span class="c-chev" data-ic="chevronDown" aria-hidden="true"></span>
+          </button>
+          <div class="collapse-body">
+            <div class="sec-head">
+              <h3 class="t-section">音轨</h3>
+              <p class="t-sec">外部音轨与源音轨共存；源音轨的保留 / 去除在「查看轨道」中勾选</p>
+            </div>
+            <div class="field">
+              <label for="audio">外部音轨</label>
+              <input id="audio" type="text" placeholder="可选：外部音频文件路径（MKA / FLAC / AAC / MP3 / OPUS / AC3 / DTS 等）" autocomplete="off">
+              <button class="btn" id="btnAudio">浏览</button>
+            </div>
+            <div class="field">
+              <label for="audio_lang">语言</label>
+              <input id="audio_lang" type="text" placeholder="如 jpn" style="flex:.22; min-width:90px;" autocomplete="off">
+              <label for="audio_name" style="width:auto; margin-left:8px;">名称</label>
+              <input id="audio_name" type="text" placeholder="可选" style="flex:.3; min-width:110px;" autocomplete="off">
+              <span class="t-cap">填写后外部音轨不替换源音轨、两者共存</span>
+            </div>
           </div>
         </div>
 
@@ -207,8 +295,9 @@
           </div>
           <div class="field">
             <label for="out_name_tmpl">命名模板</label>
-            <input id="out_name_tmpl" type="text" placeholder="留空 = 沿用源文件名；支持 {src} 源文件名、{ep} 集数、{res} 分辨率（如 1080P）" autocomplete="off">
+            <input id="out_name_tmpl" type="text" placeholder="留空 = 沿用源文件名；支持 {src} 源文件名、{ep} 集数、{res} 分辨率、{title} MKV 标题（留空回退源文件名）" autocomplete="off">
           </div>
+          <div class="out-preview" id="outPreview" aria-live="polite"><span class="t-cap">选择视频后此处实时预览输出文件</span></div>
         </div>
 
         <div class="advanced">
@@ -219,7 +308,7 @@
           <div class="adv-body" id="advBody">
             <div class="field" style="margin-bottom:10px;">
               <label for="preset_sel">封装预设</label>
-              <select id="preset_sel" style="height:34px;"><option value="">选择预设…</option></select>
+              <select id="preset_sel"><option value="">选择预设…</option></select>
               <button class="btn" id="btnPresetSave">保存当前为预设</button>
               <button class="btn ghost" id="btnPresetDel">删除所选</button>
               <span class="t-cap">保存轨道名 / 默认与强制旗标 / 字体目录 / 输出目录 / 子集工具等，切换即套用（面向字幕组规范）</span>
@@ -227,31 +316,17 @@
             <label class="check"><input id="backup" type="checkbox" checked> 备份原件到 __mux_tmp_manual（不勾选则直接删除原件，有输出目录则不进行备份）</label>
             <div class="field" style="margin-top:10px;">
               <label for="fonts_mode">字体处理</label>
-              <select id="fonts_mode" style="height:34px;">
+              <select id="fonts_mode">
                 <option value="subset">子集化（默认：只嵌用到的字形，体积小）</option>
                 <option value="collect">仅收集（全量嵌入被引用的字体，不裁字形）</option>
               </select>
             </div>
-            <div class="field" style="margin-top:10px;">
-              <label>备份清理</label>
-              <button class="btn" id="btnBackups" type="button">查看替换备份（__mux_tmp_manual）</button>
-              <span class="t-cap">替换模式的原件备份会随使用累积，可在此查看占用并清理磁盘</span>
-            </div>
             <label class="check"><input id="force" type="checkbox"> 强制封装（源视频已有字体附件时）</label>
             <div class="field" style="margin-top:10px;">
-              <label for="cfg_scan">工作目录（扫描根）</label>
-              <input id="cfg_scan" type="text" placeholder="拖放识别搜索的根目录，默认 D:\Video" autocomplete="off">
-              <button class="btn" id="btnCfgScan">浏览</button>
-              <button class="btn" id="btnCfgSave">保存</button>
-              <span class="t-cap">切换主力盘后保存，索引自动重建；新根目录同时作为文件浏览器的默认起点</span>
-            </div>
-            <div class="field" style="margin-top:10px;">
-              <label for="cfg_tool">子集化工具（双轨）</label>
-              <select id="cfg_tool">
-                <option value="afs">AssFontSubset（主用：自动修正字幕字体名；要求字体目录无重复）</option>
-                <option value="assfonts">assfonts（回退：容忍重复字体目录）</option>
-              </select>
-              <span class="t-cap">字体目录有同族重复字体时 AFS 会拒跑，切成 assfonts 即可</span>
+              <label>全局配置</label>
+              <span class="t-sec" id="globalSummary">工作目录 - · 子集化工具 -</span>
+              <button class="btn" id="btnOpenSettings" type="button"><span data-ic="sliders" aria-hidden="true"></span>前往设置</button>
+              <span class="t-cap">工作目录 / 子集化工具 / 备份清理等一次配置长期使用的项已移入设置</span>
             </div>
           </div>
         </div>
@@ -259,6 +334,7 @@
         <div class="result-zone">
           <div id="result" aria-live="polite"></div>
         </div>
+        <div id="preflightBox" style="display:none"></div>
       </div>
 
       <div class="sticky-bar" id="stickySingle">
@@ -315,7 +391,7 @@
         </div>
         <div class="field">
           <label for="b_out_name_tmpl">命名模板</label>
-          <input id="b_out_name_tmpl" type="text" placeholder="留空 = 沿用源文件名；支持 {src} {ep} {res}" autocomplete="off">
+          <input id="b_out_name_tmpl" type="text" placeholder="留空 = 沿用源文件名；支持 {src} {ep} {res} {title}" autocomplete="off">
         </div>
         <div class="field">
           <label class="check"><input id="b_force" type="checkbox" aria-label="强制封装"> 强制封装</label>
@@ -478,24 +554,34 @@
 
     <!-- ==================== 任务控制台 ==================== -->
     <section class="console" aria-label="任务日志">
-      <div class="console-panel">
-        <div class="console-head">
-          <div class="console-tabs" role="tablist" aria-label="日志视图">
-            <button type="button" class="console-tab ltab active" data-tab="mux" onclick="showLogTab('mux')">封装</button>
-            <button type="button" class="console-tab ltab" data-tab="batch" onclick="showLogTab('batch')">批量</button>
-            <button type="button" class="console-tab ltab" data-tab="xt" onclick="showLogTab('xt')">提取</button>
-            <button type="button" class="console-tab ltab" data-tab="hist" onclick="showLogTab('hist')">历史</button>
+      <div class="console-panel collapsed" id="consolePanel">
+        <div id="taskSummary" style="display:none"></div>
+        <button type="button" class="console-collapsed" id="consoleCollapsed" aria-expanded="false">
+          <span class="cc-ic" data-ic="terminal" aria-hidden="true"></span>
+          <span class="cc-title">任务日志</span>
+          <span class="cc-status info" id="consoleStatus">尚未开始</span>
+          <span class="c-chev" data-ic="chevronDown" aria-hidden="true"></span>
+        </button>
+        <div class="console-full" id="consoleFull">
+          <div class="console-head">
+            <div class="console-tabs" role="tablist" aria-label="日志视图">
+              <button type="button" class="console-tab ltab active" data-tab="mux" onclick="showLogTab('mux')">封装</button>
+              <button type="button" class="console-tab ltab" data-tab="batch" onclick="showLogTab('batch')">批量</button>
+              <button type="button" class="console-tab ltab" data-tab="xt" onclick="showLogTab('xt')">提取</button>
+              <button type="button" class="console-tab ltab" data-tab="hist" onclick="showLogTab('hist')">历史</button>
+            </div>
+            <div class="console-tools">
+              <label class="check sm"><input id="soundToggle" type="checkbox" checked> 提示音</label>
+              <button class="btn ghost small" id="btnLogFold"><span data-ic="chevronDown" aria-hidden="true"></span>收起</button>
+              <button class="btn ghost small" id="btnLogClear"><span data-ic="trash" aria-hidden="true"></span>清空</button>
+            </div>
           </div>
-          <div class="console-tools">
-            <label class="check sm"><input id="soundToggle" type="checkbox" checked> 提示音</label>
-            <button class="btn ghost small" id="btnLogClear"><span data-ic="trash" aria-hidden="true"></span>清空</button>
+          <pre id="log" class="console-log">（等待开始…）</pre>
+          <div id="histBox" style="display:none"></div>
+          <div id="histLogWrap" style="display:none">
+            <div class="log-title" style="margin:12px 16px 8px;">任务日志</div>
+            <pre id="histLog" class="console-log" style="height:180px;"></pre>
           </div>
-        </div>
-        <pre id="log" class="console-log">（等待开始…）</pre>
-        <div id="histBox" style="display:none"></div>
-        <div id="histLogWrap" style="display:none">
-          <div class="log-title" style="margin:12px 16px 8px;">任务日志</div>
-          <pre id="histLog" class="console-log" style="height:180px;"></pre>
         </div>
       </div>
     </section>
@@ -563,6 +649,39 @@
     </div>
   </div>
 </div>
+<!-- 全局设置（应用级配置：工作目录 / 子集化工具 / 备份清理；与单次封装无关） -->
+<div id="globalModal" style="position:fixed;inset:0;background:rgba(7,10,15,0.75);z-index:95;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--surface-1,#20202a);border:1px solid var(--border,#333);border-radius:12px;padding:24px 26px;max-width:660px;width:94%;max-height:84vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.5);">
+    <h3 style="margin:0 0 6px;">全局设置</h3>
+    <p class="t-sec" style="margin:0 0 14px;">应用级配置：一次设置、长期使用，不随单次封装改变。配置保存在服务端 config.json。</p>
+    <div class="gs-title">常规</div>
+    <div class="field" style="margin-bottom:14px;">
+      <label for="cfg_scan">工作目录（扫描根）</label>
+      <input id="cfg_scan" type="text" placeholder="拖放识别搜索的根目录，默认 D:\Video" autocomplete="off">
+      <button class="btn" id="btnCfgScan">浏览</button>
+      <button class="btn" id="btnCfgSave">保存</button>
+      <span class="t-cap">切换主力盘后保存，索引自动重建；同时作为文件浏览器的默认起点</span>
+    </div>
+    <div class="gs-title">字体与字幕</div>
+    <div class="field" style="margin-bottom:14px;">
+      <label for="cfg_tool">子集化工具（双轨）</label>
+      <select id="cfg_tool">
+        <option value="afs">AssFontSubset（主用：自动修正字幕字体名；要求字体目录无重复）</option>
+        <option value="assfonts">assfonts（回退：容忍重复字体目录）</option>
+      </select>
+      <span class="t-cap">字体目录有同族重复字体时 AFS 会拒跑，切成 assfonts 即可</span>
+    </div>
+    <div class="gs-title">备份与清理</div>
+    <div class="field" style="margin-bottom:14px;">
+      <button class="btn" id="btnBackups" type="button">查看替换备份（__mux_tmp_manual）</button>
+      <span class="t-cap">替换模式的原件备份会随使用累积，可在此查看占用并清理磁盘</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="flex:1"></span>
+      <a id="globalClose" href="javascript:void(0)" class="t-cap" style="cursor:pointer;">关闭</a>
+    </div>
+  </div>
+</div>
 <!-- 备份清理（替换模式产生的 __mux_tmp_manual 目录） -->
 <div id="backupsModal" style="position:fixed;inset:0;background:rgba(7,10,15,0.75);z-index:95;display:none;align-items:center;justify-content:center;">
   <div style="background:var(--surface-1,#20202a);border:1px solid var(--border,#333);border-radius:12px;padding:24px 26px;max-width:720px;width:94%;max-height:84vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.5);">
@@ -591,6 +710,23 @@
     <div style="display:flex;align-items:center;gap:10px;">
       <button class="btn primary" id="btnChSave" style="padding:6px 22px;"><span data-ic="check" aria-hidden="true"></span>保存并填入</button>
       <a id="chEditClose" href="javascript:void(0)" class="t-cap" style="cursor:pointer;">关闭</a>
+    </div>
+  </div>
+</div>
+<!-- 封装前检查确认（存在 warning / 危险操作时弹出；无风险时不打断） -->
+<div id="pfModal" style="position:fixed;inset:0;background:rgba(7,10,15,0.75);z-index:110;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--surface-1,#20202a);border:1px solid var(--border,#333);border-radius:12px;padding:24px 26px;max-width:580px;width:94%;max-height:84vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.5);">
+    <h3 style="margin:0 0 6px;">封装前检查</h3>
+    <p class="t-sec" id="pfHead" style="margin:0 0 10px;">发现需要确认的项目</p>
+    <div id="pfWarnList"></div>
+    <div id="pfDanger" style="display:none"></div>
+    <button type="button" class="btn small ghost" id="pfToggleAll" style="margin-top:10px;display:none;">查看完整检查结果</button>
+    <div id="pfInfoSec" style="display:none;margin-top:8px;"><div id="pfInfoList"></div></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:16px;">
+      <button class="btn" id="pfCancel">返回修改</button>
+      <button class="btn primary" id="pfProceed">仍然开始封装</button>
+      <span style="flex:1"></span>
+      <a id="pfClose" href="javascript:void(0)" class="t-cap" style="cursor:pointer;">关闭</a>
     </div>
   </div>
 </div>

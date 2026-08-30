@@ -49,6 +49,21 @@ class ResolveOutNameTest(unittest.TestCase):
     def test_empty_template_falls_back(self):
         self.assertEqual(mc.resolve_out_name("   ", "keep", 0), "keep")
 
+    def test_title_placeholder(self):
+        self.assertEqual(mc.resolve_out_name("{title} [{res}]", "src", 1080, "我的标题"),
+                         "我的标题 [1080P]")
+
+    def test_title_empty_falls_back_to_src(self):
+        self.assertEqual(mc.resolve_out_name("{title}", "EP05 x", 0, ""), "EP05 x")
+        self.assertEqual(mc.resolve_out_name("{title}", "EP05 x", 0, "   "), "EP05 x")
+
+    def test_title_stripped(self):
+        self.assertEqual(mc.resolve_out_name("{title}", "x", 0, "  标题  "), "标题")
+
+    def test_dangling_separator_trimmed(self):
+        self.assertEqual(mc.resolve_out_name("{src} - {res}", "Movie", 0), "Movie")
+        self.assertEqual(mc.resolve_out_name("{src}_{res}", "Movie", 0), "Movie")
+
 
 class DisplayCmdTest(unittest.TestCase):
     def test_quotes_spaces(self):

@@ -4,6 +4,7 @@
 import json, os, re, sys, threading, time, uuid
 from app import core
 from app.features import tracks as tracks_mod
+from app.tools import mux_cli
 
 MUX_CLI = os.path.join(core.TOOLS_DIR, "mux_cli.py")
 
@@ -380,8 +381,66 @@ def handle_history(q):
     jid = (q.get("id") or [""])[0]
     return history_log(jid) if jid else history_list()
 
+# ---------------- 输出名预览（POST /api/out_preview） ----------------
+# 复用 mux_cli.resolve_out_name —— 与实际封装完全同一套模板/集数/非法字符规则，杜绝两套逻辑漂移。
+_height_cache = {}   # video -> 分辨率高度（probe 结果缓存，避免预览时反复跑 mkvmerge -J）
+
+def _video_height(video):
+    if video in _height_cache:
+        return _height_cache[video]
+    try:
+        d = tracks_mod.probe(video)
+        h = int((d or {}).get("video_height") or 0)
+    except Exception:
+        h = 0
+    if h:
+        _height_cache[video] = h
+    return h
+
+def handle_out_preview(body):
+    video = (body.get("video") or "").strip()
+    tmpl = (body.get("template") or "").strip()
+    title = (body.get("title") or "").strip()
+    out_dir = (body.get("out_dir") or "").strip()
+    if not video:
+        return {"error": "未选择视频"}
+    if not os.path.exists(video):
+        return {"error": "视频文件不存在"}
+    base = os.path.splitext(os.path.basename(video))[0]
+    ext = os.path.splitext(video)[1] or ".mkv"
+    height = int(body.get("height") or 0) or _video_height(video)
+    unresolved_res = bool(tmpl and ("{res}" in tmpl) and not height)
+    name = mux_cli.resolve_out_name(tmpl, base, height, title) if tmpl else base
+    d = out_dir if out_dir else os.path.dirname(video)
+    full = os.path.join(d, name + ext)
+    replace = not out_dir   # 输出目录为空 = 替换源视频（现有业务行为）
+    exists = (not replace) and os.path.isfile(full)
+    return {"name": name + ext, "dir": d, "full": full, "replace": replace,
+            "exists": exists, "unresolved_res": unresolved_res}
+
+# ---------------- 封装前文件系统检查（POST /api/preflight_fs） ----------------
+# 纯 os.path 检查，无昂贵操作：视频/字幕可访问性、输出目录存在与可写。None = 未提供（跳过）。
+
+def _file_ok(p):
+    p = (p or "").strip()
+    return os.path.isfile(p) if p else None
+
+def handle_preflight_fs(body):
+    out_dir = (body.get("out_dir") or "").strip()
+    d = {
+        "video_ok": _file_ok(body.get("video")),
+        "sc_ok": _file_ok(body.get("sc")),
+        "tc_ok": _file_ok(body.get("tc")),
+    }
+    if out_dir:
+        d["out_dir_ok"] = os.path.isdir(out_dir)
+        d["out_dir_writable"] = os.access(out_dir, os.W_OK) if d["out_dir_ok"] else False
+    return d
+
 handlers = {
     "GET": {"/api/job": handle_job, "/api/history": handle_history},
     "POST": {"/api/mux": handle_mux, "/api/batch": handle_batch,
-             "/api/stop": handle_stop, "/api/rerun": handle_rerun},
+             "/api/stop": handle_stop, "/api/rerun": handle_rerun,
+             "/api/out_preview": handle_out_preview,
+             "/api/preflight_fs": handle_preflight_fs},
 }

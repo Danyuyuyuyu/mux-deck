@@ -6,6 +6,7 @@ $('btnCfgSave').onclick = async () => {
     const r = await api('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scan_root: p }) });
     if (r.error) { setStatus('工作目录保存失败：' + r.error, 'err'); return; }
     CFG.scanRoot = r.scan_root || p;
+    updateGlobalSummary();
     setStatus('工作目录已保存：' + CFG.scanRoot + '（索引将自动重建）', 'ok');
   } catch (ex) { setStatus('工作目录保存失败：' + ex, 'err'); }
 };
@@ -24,6 +25,7 @@ Promise.all([
   if (env && env.items) envRender(env);
   if (c && c.scan_root) { CFG.scanRoot = c.scan_root; $('cfg_scan').value = c.scan_root; }
   if (c && c.subset_tool) { $('cfg_tool').value = c.subset_tool; }
+  updateGlobalSummary();
   if (ps && ps.presets) { PRESETS = ps.presets; refreshPresetSel(); }
   const needSetup = c && (!c.configured || !c.valid);
   const envBroken = env && env.overall === 'broken';
