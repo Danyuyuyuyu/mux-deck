@@ -139,3 +139,19 @@
     </div>
   </div>
 </div>
+
+<!-- 封装预设管理（新建/编辑/重命名/删除；只管理预设，不改变当前任务——应用预设走高级选项下拉） -->
+<div class="modal" id="presetModal" role="dialog" aria-modal="true" aria-label="封装预设">
+  <div class="modal-box pm-box">
+    <div class="mb-head">
+      <span class="t">封装预设</span>
+      <button class="btn small ghost" id="pmClose">关闭</button>
+    </div>
+    <div class="pm-sub t-sec">创建和管理常用的封装参数组合。修改预设不会自动影响当前任务。</div>
+    <div class="pm-body">
+      <div class="pm-list" id="pmList"></div>
+      <div class="pm-editor" id="pmEditor"></div>
+    </div>
+    <div class="pm-note t-cap" id="pmNote" aria-live="polite"></div>
+  </div>
+</div>

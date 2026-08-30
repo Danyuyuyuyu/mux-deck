@@ -81,7 +81,7 @@
                     <input id="sc_name" type="text" value="SC" autocomplete="off">
                   </div>
                   <div class="sub-set-field">
-                    <label>默认轨<span class="tip" tabindex="0" data-tip="自动：按轨道规则判断默认字幕轨（存在 SC 时优先 SC，仅 TC 时 TC 默认）。选「是 / 否」可强制指定。" data-ic="info"></span></label>
+                    <span class="set-label">默认轨<span class="tip" tabindex="0" data-tip="自动：按轨道规则判断默认字幕轨（存在 SC 时优先 SC，仅 TC 时 TC 默认）。选「是 / 否」可强制指定。" data-ic="info"></span></span>
                     <div class="seg" id="sc_default_seg" role="radiogroup" aria-label="简体字幕默认轨">
                       <button type="button" class="seg-btn" data-v="">自动</button>
                       <button type="button" class="seg-btn" data-v="1">是</button>
@@ -146,7 +146,7 @@
                     <input id="tc_name" type="text" value="TC" autocomplete="off">
                   </div>
                   <div class="sub-set-field">
-                    <label>默认轨<span class="tip" tabindex="0" data-tip="自动：按轨道规则判断默认字幕轨（存在 SC 时优先 SC，仅 TC 时 TC 默认）。选「是 / 否」可强制指定。" data-ic="info"></span></label>
+                    <span class="set-label">默认轨<span class="tip" tabindex="0" data-tip="自动：按轨道规则判断默认字幕轨（存在 SC 时优先 SC，仅 TC 时 TC 默认）。选「是 / 否」可强制指定。" data-ic="info"></span></span>
                     <div class="seg" id="tc_default_seg" role="radiogroup" aria-label="繁体字幕默认轨">
                       <button type="button" class="seg-btn" data-v="">自动</button>
                       <button type="button" class="seg-btn" data-v="1">是</button>
@@ -261,9 +261,7 @@
             <div class="field" style="margin-bottom:10px;">
               <label for="preset_sel">封装预设</label>
               <select id="preset_sel"><option value="">选择预设…</option></select>
-              <button class="btn" id="btnPresetSave">保存当前为预设</button>
-              <button class="btn ghost" id="btnPresetDel">删除所选</button>
-              <span class="t-cap">保存轨道名 / 默认与强制旗标 / 字体目录 / 输出目录 / 子集工具等，切换即套用（面向字幕组规范）</span>
+              <span class="t-cap" id="presetHint"></span>
             </div>
             <label class="check"><input id="backup" type="checkbox" checked> 备份原件到 __mux_tmp_manual（不勾选则直接删除原件，有输出目录则不进行备份）</label>
             <div class="field" style="margin-top:10px;">
@@ -274,12 +272,6 @@
               </select>
             </div>
             <label class="check"><input id="force" type="checkbox"> 强制封装（源视频已有字体附件时）</label>
-            <div class="field" style="margin-top:10px;">
-              <label>全局配置</label>
-              <span class="t-sec" id="globalSummary">工作目录 - · 子集化工具 -</span>
-              <button class="btn" id="btnOpenSettings" type="button"><span data-ic="sliders" aria-hidden="true"></span>前往设置</button>
-              <span class="t-cap">工作目录 / 子集化工具 / 备份清理等一次配置长期使用的项已移入设置</span>
-            </div>
           </div>
         </div>
 

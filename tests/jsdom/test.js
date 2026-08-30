@@ -281,8 +281,9 @@ function mockFetch(url, opts) {
   check('连拍完成：注入网格图', ok && String($('previewImg').src).indexOf('test.png') >= 0, $('previewImg') && $('previewImg').src);
   check('连拍完成：按钮恢复连拍 8 帧', $('btnPreviewGrid').textContent.includes('连拍 8 帧') && !$('btnPreviewGrid').disabled);
 
-  /* ---- 场景14：预设保存/套用/删除 + 新参数（章节/模板/标题/collect）进提交体 ---- */
-  check('预设控件存在', !!$('preset_sel') && !!$('btnPresetSave') && !!$('btnPresetDel') && !!$('fonts_mode') && !!$('chapters') && !!$('out_name_tmpl') && !!$('title'));
+  /* ---- 场景14：预设管理（管理器新建/套用） + 新参数（章节/模板/标题/collect）进提交体 ---- */
+  check('预设控件存在（高级选项只保留选择器，管理入口在右上角）', !!$('preset_sel') && !$('btnPresetSave') && !$('btnPresetDel') && !!$('fonts_mode') && !!$('chapters') && !!$('out_name_tmpl') && !!$('title') && !!$('presetHint'));
+  check('高级选项已移除全局配置区', !$('globalSummary') && !$('btnOpenSettings'));
   matchSubsRet = { sc: 'D:\\Video\\EP01.sc.ass', tc: '' };
   fontsDirRet = { fonts_dir: 'D:\\Video\\Fonts' };
   window.pickVideoPath('D:\\Video\\EP01.mkv');
@@ -293,15 +294,26 @@ function mockFetch(url, opts) {
     if (String(url).split('?')[0] === '/api/mux' && opts && opts.body) { try { savedBody = JSON.parse(opts.body); } catch (e) {} }
     return mockFetch(url, opts);
   };
-  $('sc_name').value = '简中'; $('fonts_mode').value = 'collect';   // 先改字段再存预设
-  $('btnPresetSave').click();   // prompt 已 mock 为 '测试预设'
-  await sleep(60);
+  const savePresetViaManager = async (name) => {
+    window.openPresetManager();
+    $('pmNewBtn').click();
+    const radio = window.document.querySelector('input[name="pmNewMode"][value="task"]');
+    radio.checked = true; radio.dispatchEvent(new window.Event('change', { bubbles: true }));   // 以当前任务配置为基底
+    $('pmName').value = name;
+    $('pmSaveBtn').click();
+    await sleep(60);
+    $('pmClose').click();
+  };
+  $('sc_name').value = '简中'; $('fonts_mode').value = 'collect';   // 先改字段再经管理器存预设
+  await savePresetViaManager('测试预设');
+  check('管理器新建后主页面下拉立即同步', [...$('preset_sel').options].some(o => o.value === '测试预设'));
   $('preset_sel').value = '测试预设';
   $('preset_sel').dispatchEvent(new window.Event('change', { bubbles: true }));
   check('套用预设：轨道名/字体模式生效', $('sc_name').value === '简中' && $('fonts_mode').value === 'collect', $('sc_name').value + '/' + $('fonts_mode').value);
-  $('btnPresetSave').click();
-  await sleep(50);
-  check('保存预设调用成功（prompt 名称）', true);
+  check('dirty 提示=已应用：测试预设', $('presetHint').textContent === '已应用：测试预设', $('presetHint').textContent);
+  $('sc_name').value = '简中2'; $('sc_name').dispatchEvent(new window.Event('input', { bubbles: true }));
+  check('改字段后 dirty 提示=已修改', $('presetHint').textContent === '测试预设 · 已修改', $('presetHint').textContent);
+  $('sc_name').value = '简中'; $('sc_name').dispatchEvent(new window.Event('input', { bubbles: true }));
   $('chapters').value = 'C:\\c.txt'; $('out_name_tmpl').value = '[G] {ep}'; $('title').value = 'T1';
   window.pickVideoPath('D:\\Video\\EP01.mkv');   // 重触发（复用已有）
   await sleep(80);
@@ -322,7 +334,7 @@ function mockFetch(url, opts) {
   window.eval('batchDelSub(0, "chapters")');
   check('移除章节按钮清空输入与数据', $('b_c_0').value === '' && window.eval('batchItems[0].chapters') === '');
   $('sc_name').value = '简中'; $('fonts_mode').value = 'collect'; $('sc_default').value = '1'; $('b_out_name_tmpl').value = '';
-  $('btnPresetSave').click();
+  await savePresetViaManager('测试预设');   // 同名覆盖保存（与原「保存当前为预设」语义一致）
   await sleep(60);
   $('b_sc_default').value = ''; $('b_out_name_tmpl').value = '旧值'; $('b_fonts_mode').value = 'subset';
   $('preset_sel').value = '测试预设';
