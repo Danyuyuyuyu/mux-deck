@@ -66,10 +66,14 @@ function wireVideo() {
     const v = inp.value.trim();
     const replaced = v && v !== singleState.lastVideo;
     if (replaced) {
-      // 视频已更换：旧字幕属于旧视频，清空防止重新匹配时张冠李戴（预设已选时轨道名保留预设值）
+      // 视频已更换：旧字幕属于旧视频，清空防止重新匹配时张冠李戴（预设已选时轨道名/语言保留预设值）
       $('sc_sub').value = ''; $('tc_sub').value = '';
       $('sc_enc').textContent = ''; $('tc_enc').textContent = '';
-      if (!presetTrackNameLocked()) { $('sc_name').value = 'SC'; $('tc_name').value = 'TC'; }
+      if (!presetTrackNameLocked()) {
+        $('sc_name').value = 'SC'; $('tc_name').value = 'TC';
+        $('sc_lang').value = ''; $('tc_lang').value = '';
+        $('sc_lang').removeAttribute('data-auto'); $('tc_lang').removeAttribute('data-auto');
+      }
       subCheckUi.sc = null; subCheckUi.tc = null;   // 换视频后旧体检结果作废
       subCheckSig.sc = ''; subCheckSig.tc = '';
       fontSig = '';
@@ -91,7 +95,10 @@ function wireVideo() {
       // 新视频自动识别（与批量添加文件同一入口，见 identify.js）；识别期间视频又被更换则丢弃结果
       const id = await identify(v);
       if (inp.value.trim() !== v) return;
-      applyIdentify($('sc_sub'), $('tc_sub'), $('fonts_dir'), id, $('chapters'));   // 已有值不覆盖
+      // 语言回填与轨道名同守卫：预设已选时不改写语言字段（参数以预设为准）
+      const langLock = presetTrackNameLocked();
+      applyIdentify($('sc_sub'), $('tc_sub'), $('fonts_dir'), id, $('chapters'),
+        langLock ? null : $('sc_lang'), langLock ? null : $('tc_lang'));   // 已有值不覆盖
       autoTrackName('sc_sub', 'sc_name', 'sc');
       autoTrackName('tc_sub', 'tc_name', 'tc');
       syncSubStatus();
@@ -143,6 +150,7 @@ function syncSubStatus() {
     if (sub) { el.className = 'sub-status on'; el.firstElementChild.innerHTML = ic('check'); txt.textContent = '已加载'; }
     else { el.className = 'sub-status off'; el.firstElementChild.innerHTML = ic('info'); txt.textContent = '未选择字幕'; }
   });
+  syncLangBadges();
   syncDefaultBadge();
   ['sc', 'tc'].forEach(renderSubCard);
   syncSegControls();
@@ -353,6 +361,7 @@ async function startMuxTask() {
   const body = Object.assign({
     video: $('video').value.trim(), sc_sub: $('sc_sub').value.trim(), tc_sub: $('tc_sub').value.trim(),
     sc_name: $('sc_name').value.trim() || 'SC', tc_name: $('tc_name').value.trim() || 'TC',
+    sc_lang: $('sc_lang').value.trim(), tc_lang: $('tc_lang').value.trim(),
     audio: $('audio').value.trim(),
     chapters: $('chapters').value.trim(),
     audio_tracks: (trackSel.allAudio.length === 0) ? '' : (trackSel.audio.size === 0) ? 'none' : (trackSel.audio.size < trackSel.allAudio.length) ? [...trackSel.audio].join(',') : '',
@@ -427,10 +436,26 @@ function autoTrackName(subField, nameField, kind) {
   var tok = pickNameToken($(subField).value, kind);
   if (tok) $(nameField).value = tok;
 }
+/* 自动语言回填：仅填空并打「自动」标记（data-auto）；预设已选时不改写（与轨道名同守卫） */
+function autoFillLang(kind, lang) {
+  if (presetTrackNameLocked()) return;
+  const inp = $(kind + '_lang');
+  if (!inp || inp.value.trim() || !lang) return;
+  inp.value = lang;
+  inp.dataset.auto = '1';
+}
+/* 「自动」徽章显隐：仅 data-auto=1 时显示 */
+function syncLangBadges() {
+  ['sc', 'tc'].forEach(function (kind) {
+    const inp = $(kind + '_lang'), badge = $(kind + 'LangBadge');
+    if (inp && badge) badge.style.display = inp.dataset.auto === '1' ? '' : 'none';
+  });
+}
 /* 手动填字幕（手输 change/input、浏览按钮）后同步粘性操作栏与字幕状态 */
 function onManualSub(subField, nameField, kind) {
   singleState.lastResult = null;
   autoTrackName(subField, nameField, kind);
+  autoFillLang(kind, langFromName($(subField).value));   // 文件名标签派生语言，填空不覆盖
   const row = $(kind + 'FileInputRow');
   if (row && $(subField).value.trim()) row.style.display = 'none';   // 路径已填：回到文件信息展示
   syncSubStatus();
@@ -440,10 +465,12 @@ function onManualSub(subField, nameField, kind) {
 function browseSub(kind) {
   openBrowser(v => { $(kind + '_sub').value = v; fireChange($(kind + '_sub')); }, 'sub', $(kind + '_sub').value, 'sub');
 }
-/* 移除字幕：清空输入并联动状态（轨道名复位默认、编码徽章/体检摘要清除、sticky 刷新）；摘要区删除图标共用 */
+/* 移除字幕：清空输入并联动状态（轨道名/语言复位默认、编码徽章/体检摘要清除、sticky 刷新）；摘要区删除图标共用 */
 function clearSub(kind) {
   $(kind + '_sub').value = '';
   $(kind + '_name').value = kind.toUpperCase();
+  $(kind + '_lang').value = '';
+  $(kind + '_lang').removeAttribute('data-auto');
   $(kind + '_enc').textContent = '';
   subCheckUi[kind] = null;
   subCheckSig[kind] = '';
@@ -733,6 +760,8 @@ $('btnSingleReset').onclick = () => {
   pickVideoPath(''); // 清视频并联动：轨道选择/探测结果清空、卡片重渲染、粘性条刷新
   $('sc_sub').value = ''; $('tc_sub').value = '';
   $('sc_name').value = 'SC'; $('tc_name').value = 'TC';
+  $('sc_lang').value = ''; $('tc_lang').value = '';
+  $('sc_lang').removeAttribute('data-auto'); $('tc_lang').removeAttribute('data-auto');
   $('sc_enc').textContent = ''; $('tc_enc').textContent = '';
   $('fonts_dir').value = '';
   $('chapters').value = '';
@@ -777,8 +806,8 @@ $('btnAutoMatch').onclick = async () => {
     if ($('video').value.trim() !== v) return; // 视频已变更，丢弃过期结果
     const scHad = !!$('sc_sub').value.trim(), tcHad = !!$('tc_sub').value.trim();
     let sc = false, tc = false;
-    if (id.sc && !scHad) { $('sc_sub').value = id.sc; autoTrackName('sc_sub', 'sc_name', 'sc'); sc = true; }
-    if (id.tc && !tcHad) { $('tc_sub').value = id.tc; autoTrackName('tc_sub', 'tc_name', 'tc'); tc = true; }
+    if (id.sc && !scHad) { $('sc_sub').value = id.sc; autoTrackName('sc_sub', 'sc_name', 'sc'); autoFillLang('sc', id.scLang); sc = true; }
+    if (id.tc && !tcHad) { $('tc_sub').value = id.tc; autoTrackName('tc_sub', 'tc_name', 'tc'); autoFillLang('tc', id.tcLang); tc = true; }
     syncSubStatus();
     const fontFound = !!(id.fontsDir && !$('fonts_dir').value.trim() && ($('fonts_dir').value = id.fontsDir, true));
     const chapFound = !!(id.chapters && !$('chapters').value.trim() && ($('chapters').value = id.chapters, true));
@@ -856,6 +885,9 @@ $('tc_sub').addEventListener('change', function () { onManualSub('tc_sub', 'tc_n
 $('sc_sub').addEventListener('input', function () { singleState.lastResult = null; syncSubStatus(); refreshSticky(); });
 $('tc_sub').addEventListener('input', function () { singleState.lastResult = null; syncSubStatus(); refreshSticky(); });
 $('sc_name').addEventListener('input', function () { });
+/* 语言输入：手动编辑即清除「自动」标记（徽章随之隐藏） */
+$('sc_lang').addEventListener('input', function () { this.removeAttribute('data-auto'); syncLangBadges(); });
+$('tc_lang').addEventListener('input', function () { this.removeAttribute('data-auto'); syncLangBadges(); });
 $('btnSc').onclick = () => browseSub('sc');
 $('btnTc').onclick = () => browseSub('tc');
 $('btnScPick').onclick = () => browseSub('sc');

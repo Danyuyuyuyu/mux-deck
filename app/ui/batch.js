@@ -119,8 +119,8 @@ function addBatchVideo(video, subPool, matched) {
   const stem = video.slice(video.lastIndexOf('\\') + 1).replace(/\.[^.]+$/, '');
   let sc = '', tc = '';
   const stems = [stem, stem.replace(/\s*[-_ ]\d+\s*$/, '')];
-  const scSfx = ['.sc.ass', '.chs.ass', '.jpsc.ass', '.SC.ass', '.CHS.ass', '.JPSC.ass'];
-  const tcSfx = ['.tc.ass', '.cht.ass', '.jptc.ass', '.TC.ass', '.CHT.ass', '.JPTC.ass'];
+  const scSfx = ['.sc.ass', '.chs.ass', '.jpsc.ass', '.SC.ass', '.CHS.ass', '.JPSC.ass', '.zh-hans.ass', '.zh-cn.ass'];
+  const tcSfx = ['.tc.ass', '.cht.ass', '.jptc.ass', '.TC.ass', '.CHT.ass', '.JPTC.ass', '.zh-hant.ass', '.zh-tw.ass'];
   for (const st of stems) {
     for (const sfx of scSfx) { if (!sc && subPool.some(p => p.toLowerCase() === (dir + st + sfx).toLowerCase())) sc = dir + st + sfx; }
     for (const sfx of tcSfx) { if (!tc && subPool.some(p => p.toLowerCase() === (dir + st + sfx).toLowerCase())) tc = dir + st + sfx; }
@@ -144,7 +144,8 @@ function rerunFailed(i) {
 /* 预设套用 → 批量公共字段联动（由 presets.js applyPreset 调用；映射集中在此，batch 域自持） */
 function applyPresetToBatchCommon(d) {
   const bm = { fonts_mode: 'b_fonts_mode', out_name_tmpl: 'b_out_name_tmpl', title: 'b_title',
-               sc_default: 'b_sc_default', tc_default: 'b_tc_default', sc_forced: 'b_sc_forced', tc_forced: 'b_tc_forced' };
+               sc_default: 'b_sc_default', tc_default: 'b_tc_default', sc_forced: 'b_sc_forced', tc_forced: 'b_tc_forced',
+               sc_lang: 'b_sc_lang', tc_lang: 'b_tc_lang' };
   Object.keys(bm).forEach(k => { if (d[k] !== undefined && d[k] !== '' && $(bm[k])) { if (bm[k].endsWith('_forced')) $(bm[k]).checked = !!d[k]; else $(bm[k]).value = d[k]; } });
   if (d.fonts_dir && $('b_fonts')) $('b_fonts').value = d.fonts_dir;
 }
@@ -212,6 +213,8 @@ $('btnBatchClear').onclick = () => {
   $('b_skip').checked = false;   // 跳过已存在输出
   $('b_sc_default').value = ''; $('b_tc_default').value = '';   // 字幕旗标
   $('b_sc_forced').checked = false; $('b_tc_forced').checked = false;
+  if ($('b_sc_lang')) $('b_sc_lang').value = '';   // 字幕语言（空 = 按文件名自动）
+  if ($('b_tc_lang')) $('b_tc_lang').value = '';
   // 底部批量状态条一并复位（与启动时初态一致）
   $('bStickyPct').textContent = '--';
   $('batchStickyBar').style.width = '0%';
@@ -289,6 +292,10 @@ $('btnBatchStart').onclick = async () => {
       return;
     }
   }
+  /* 字幕语言：公共输入非空则统一使用，否则按各集字幕文件名标签派生（无标签给空串 = CLI 默认 zh-Hans/zh-Hant） */
+  const bScLang = $('b_sc_lang') ? $('b_sc_lang').value.trim() : '';
+  const bTcLang = $('b_tc_lang') ? $('b_tc_lang').value.trim() : '';
+  items.forEach(it => { it.sc_lang = bScLang || langFromName(it.sc || ''); it.tc_lang = bTcLang || langFromName(it.tc || ''); });
   const body = Object.assign({ items }, buildMuxCommon('b_'));   // 公共参数（字体/输出/备份/旗标，与单个封装同一份逻辑，见 task.js）
   const r = await api('/api/batch', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   if (r.error) { $('batchState').textContent = '错误：' + r.error; return; }

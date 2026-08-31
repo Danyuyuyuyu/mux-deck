@@ -22,6 +22,72 @@ def _load_mux_cli():
 mc = _load_mux_cli()
 from app.features.mux import display_cmd
 from app.features.subcheck import _parse_ts, check_sub
+from app.features.tracks import lang_of, sub_kind, match_subs
+
+
+class LangOfTest(unittest.TestCase):
+    def test_new_style_tags(self):
+        self.assertEqual(lang_of("01.zh-Hans.ass"), "zh-Hans")
+        self.assertEqual(lang_of("EP02.zh-Hant.ass"), "zh-Hant")
+
+    def test_legacy_and_alias_tags(self):
+        self.assertEqual(lang_of("Show_02_zh_SC.ass"), "zh-Hans")
+        self.assertEqual(lang_of("EP01.CHS.srt"), "zh-Hans")
+        self.assertEqual(lang_of("EP01.big5.ass"), "zh-Hant")
+        self.assertEqual(lang_of("EP01.简体.ass"), "zh-Hans")
+        self.assertEqual(lang_of("EP01.繁体.ass"), "zh-Hant")
+        self.assertEqual(lang_of("EP03.zh-TW.ass"), "zh-Hant")
+        self.assertEqual(lang_of("EP03.zh-CN.ass"), "zh-Hans")
+
+    def test_bare_zh(self):
+        self.assertEqual(lang_of("EP01.zh.ass"), "zh")
+        self.assertEqual(lang_of("EP01.chi.ass"), "zh")
+
+    def test_no_tag(self):
+        self.assertIsNone(lang_of("EP01.ass"))
+        self.assertIsNone(lang_of("Kono Subarashii Sekai 12.ass"))
+
+    def test_token_boundary_not_substring(self):
+        self.assertIsNone(lang_of("school.ass"))     # sc 不能命中 school 的子串
+        self.assertIsNone(lang_of("disc.ass"))       # tc 不能命中 disc 的子串
+
+
+class SubKindTest(unittest.TestCase):
+    def test_new_tags(self):
+        self.assertEqual(sub_kind("01.zh-hans.ass"), "sc")
+        self.assertEqual(sub_kind("01.zh-TW.ass"), "tc")
+        self.assertEqual(sub_kind("EP01.big5.ass"), "tc")
+        self.assertEqual(sub_kind("EP01.gb.ass"), "sc")
+
+    def test_legacy_tags_regress(self):
+        self.assertEqual(sub_kind("EP01.sc.ass"), "sc")
+        self.assertEqual(sub_kind("EP01.chs.ass"), "sc")
+        self.assertEqual(sub_kind("EP01.jpsc.ass"), "sc")
+        self.assertEqual(sub_kind("EP01.tc.ass"), "tc")
+        self.assertEqual(sub_kind("EP01.cht.ass"), "tc")
+        self.assertEqual(sub_kind("EP01.jptc.ass"), "tc")
+        self.assertEqual(sub_kind("EP01.ass"), "")
+
+
+class MatchSubsLangTest(unittest.TestCase):
+    def test_lang_fields_in_response(self):
+        with tempfile.TemporaryDirectory() as d:
+            for fn in ("Show01.mkv", "EP01.zh-Hans.ass", "EP01.zh-TW.ass", "EP02.sc.ass"):
+                open(os.path.join(d, fn), "w", encoding="utf-8").close()
+            r = match_subs(os.path.join(d, "Show01.mkv"))
+            self.assertEqual(r["sc"], os.path.join(d, "EP01.zh-Hans.ass"))
+            self.assertEqual(r["tc"], os.path.join(d, "EP01.zh-TW.ass"))
+            self.assertEqual(r["sc_lang"], "zh-Hans")
+            self.assertEqual(r["tc_lang"], "zh-Hant")
+
+    def test_no_match_empty_lang(self):
+        with tempfile.TemporaryDirectory() as d:
+            open(os.path.join(d, "Show01.mkv"), "w", encoding="utf-8").close()
+            r = match_subs(os.path.join(d, "Show01.mkv"))
+            self.assertEqual(r["sc"], "")
+            self.assertEqual(r["tc"], "")
+            self.assertEqual(r["sc_lang"], "")
+            self.assertEqual(r["tc_lang"], "")
 
 
 class ResolveOutNameTest(unittest.TestCase):

@@ -53,6 +53,13 @@
           <label class="check"><input id="b_sc_forced" type="checkbox" aria-label="简体强制轨"> SC强制</label>
           <label class="check"><input id="b_tc_forced" type="checkbox" aria-label="繁体强制轨"> TC强制</label>
         </div>
+        <div class="field">
+          <label for="b_sc_lang">简体语言</label>
+          <input id="b_sc_lang" type="text" placeholder="空 = 按文件名自动" style="flex:.22; min-width:110px;" autocomplete="off">
+          <label for="b_tc_lang" style="width:auto; margin-left:8px;">繁体语言</label>
+          <input id="b_tc_lang" type="text" placeholder="空 = 按文件名自动" style="flex:.22; min-width:110px;" autocomplete="off">
+          <span class="t-cap">留空时按各集字幕文件名标签（zh-Hans / CHS / SC / zh-Hant 等）自动判定</span>
+        </div>
         <div id="batchProgress" style="margin-top:8px;">
           <div id="batchState" class="t-sec"></div>
         </div>

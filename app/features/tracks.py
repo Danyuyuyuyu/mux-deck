@@ -67,17 +67,48 @@ def ep_of(name):
             return int(g[-1])
     return -1
 
+# 文件名语言标签别名表：token（小写，分隔符 [._\- ] 切分）→ BCP-47 语言。
+# 相邻两 token 以 '-' 连接的组合也参与查表（如 'zh'+'hans' → 'zh-hans'）。
+LANG_ALIAS = {
+    'zh-hans': 'zh-Hans', 'zh-cn': 'zh-Hans', 'zh-chs': 'zh-Hans', 'chs': 'zh-Hans', 'sc': 'zh-Hans',
+    'jpsc': 'zh-Hans', '简体': 'zh-Hans', '简': 'zh-Hans', 'gb': 'zh-Hans',
+    'zh-hant': 'zh-Hant', 'zh-tw': 'zh-Hant', 'zh-hk': 'zh-Hant', 'zh-mo': 'zh-Hant', 'cht': 'zh-Hant',
+    'tc': 'zh-Hant', 'jptc': 'zh-Hant', '繁体': 'zh-Hant', '繁': 'zh-Hant', 'big5': 'zh-Hant',
+    'zh': 'zh', 'chi': 'zh', 'zho': 'zh',
+}
+
+def _lang_tokens(name):
+    base = os.path.basename(name or "")
+    return [t for t in re.split(r"[._\- ]+", base.lower()) if t]
+
+def lang_of(filename):
+    """文件名 → 'zh-Hans' | 'zh-Hant' | 'zh' | None。
+    简繁标签优先（先扫 SC/TC 别名含相邻组合，再扫裸 zh），认不出不猜。"""
+    toks = _lang_tokens(filename)
+    for i, t in enumerate(toks):
+        if i + 1 < len(toks):
+            p = LANG_ALIAS.get(t + "-" + toks[i + 1])
+            if p and p != "zh":
+                return p
+        s = LANG_ALIAS.get(t)
+        if s and s != "zh":
+            return s
+    for t in toks:
+        if LANG_ALIAS.get(t) == "zh":
+            return "zh"
+    return None
+
 def sub_kind(name):
-    base = os.path.basename(name)
-    if re.search(r'(?:^|[._\- ])(?:tc|cht|jptc)(?:[._\- ]|$)', base, re.I):
-        return "tc"
-    if re.search(r'(?:^|[._\- ])(?:sc|chs|jpsc)(?:[._\- ]|$)', base, re.I):
+    lang = lang_of(name)
+    if lang == "zh-Hans":
         return "sc"
+    if lang == "zh-Hant":
+        return "tc"
     return ""
 
 def match_subs(video):
     if not video or not os.path.exists(video):
-        return {"sc": "", "tc": ""}
+        return {"sc": "", "tc": "", "sc_lang": "", "tc_lang": ""}
     d = os.path.dirname(video)
     vep = ep_of(video)
     subs = []
@@ -96,7 +127,7 @@ def match_subs(video):
                 sc = sp
             elif k == "tc" and not tc:
                 tc = sp
-    return {"sc": sc, "tc": tc}
+    return {"sc": sc, "tc": tc, "sc_lang": lang_of(sc) or "", "tc_lang": lang_of(tc) or ""}
 
 
 def handle_match(q):

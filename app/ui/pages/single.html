@@ -34,7 +34,7 @@
           <div class="sec-head sec-head-row">
             <div>
               <h3 class="t-section">字幕轨道</h3>
-              <p class="t-sec">字幕文件自动识别简 / 繁；语言固定 zh-Hans / zh-Hant（仅给繁体时繁体自动成为默认轨道）</p>
+              <p class="t-sec">字幕文件自动识别简 / 繁；语言默认 zh-Hans / zh-Hant，可按文件名标签自动填入（仅给繁体时繁体自动成为默认轨道）</p>
             </div>
             <div class="sec-head-actions">
               <button class="btn" id="btnProbe"><span data-ic="list" aria-hidden="true"></span>查看轨道</button>
@@ -89,6 +89,10 @@
                   <div class="sub-set-field">
                     <label for="sc_name">轨道名<span class="tip" tabindex="0" data-tip="填入带 SC / CHS / TC / CHT 标识的文件名时会自动识别轨道名。" data-ic="info"></span></label>
                     <input id="sc_name" type="text" value="SC" autocomplete="off">
+                  </div>
+                  <div class="sub-set-field">
+                    <label for="sc_lang">语言<span class="auto-lang-badge" id="scLangBadge" style="display:none">自动</span><span class="tip" tabindex="0" data-tip="留空默认 zh-Hans；文件名含 zh-Hans / CHS / SC / 简体 等标签时自动填入。" data-ic="info"></span></label>
+                    <input id="sc_lang" type="text" placeholder="默认 zh-Hans" autocomplete="off">
                   </div>
                   <div class="sub-set-field">
                     <span class="set-label">默认轨<span class="tip" tabindex="0" data-tip="自动：按轨道规则判断默认字幕轨（存在 SC 时优先 SC，仅 TC 时 TC 默认）。选「是 / 否」可强制指定。" data-ic="info"></span></span>
@@ -154,6 +158,10 @@
                   <div class="sub-set-field">
                     <label for="tc_name">轨道名<span class="tip" tabindex="0" data-tip="填入带 SC / CHS / TC / CHT 标识的文件名时会自动识别轨道名。" data-ic="info"></span></label>
                     <input id="tc_name" type="text" value="TC" autocomplete="off">
+                  </div>
+                  <div class="sub-set-field">
+                    <label for="tc_lang">语言<span class="auto-lang-badge" id="tcLangBadge" style="display:none">自动</span><span class="tip" tabindex="0" data-tip="留空默认 zh-Hant；文件名含 zh-Hant / CHT / TC / 繁体 等标签时自动填入。" data-ic="info"></span></label>
+                    <input id="tc_lang" type="text" placeholder="默认 zh-Hant" autocomplete="off">
                   </div>
                   <div class="sub-set-field">
                     <span class="set-label">默认轨<span class="tip" tabindex="0" data-tip="自动：按轨道规则判断默认字幕轨（存在 SC 时优先 SC，仅 TC 时 TC 默认）。选「是 / 否」可强制指定。" data-ic="info"></span></span>
