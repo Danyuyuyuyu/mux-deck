@@ -43,11 +43,14 @@ function applyPreset(d) {
   setStatus('已套用预设（含批量公共选项）', 'ok');
 }
 function refreshPresetSel() {
-  const sel = $('preset_sel');
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">选择预设…</option>' +
-    Object.keys(PRESETS).map(n => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('');
-  if (PRESETS[cur]) sel.value = cur;
+  ['preset_sel', 'b_preset_sel'].forEach(function (id) {
+    const sel = $(id);
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">选择预设…</option>' +
+      Object.keys(PRESETS).map(n => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('');
+    if (PRESETS[cur]) sel.value = cur;
+  });
 }
 async function loadPresets() {
   try {
@@ -82,6 +85,7 @@ function getCurrentPresetInfo() {
 function applyPresetToCurrentTask(name) {
   if (!name || !PRESETS[name]) return false;
   $('preset_sel').value = name;
+  if ($('b_preset_sel')) $('b_preset_sel').value = name;
   applyPreset(PRESETS[name]);
   presetSession.currentId = name;
   presetSession.snapshot = pmClone(PRESETS[name]);
@@ -94,6 +98,7 @@ function detachCurrentPreset() {
   presetSession.currentId = null;
   presetSession.snapshot = null;
   $('preset_sel').value = '';
+  if ($('b_preset_sel')) $('b_preset_sel').value = '';
   updatePresetHint();
   rememberPreset();
   setStatus('已解除预设：当前任务参数保留（自定义配置）', 'ok');

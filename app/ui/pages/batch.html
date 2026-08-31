@@ -1,69 +1,146 @@
     <!-- ==================== 批量封装 ==================== -->
     <section class="mode" id="mode-batch">
-      <div class="panel">
-        <div class="panel-head">
-          <div>
-            <h2 class="t-section">批量封装</h2>
-            <p class="t-sec">多个视频排队串行封装，逐个报告成功 / 失败</p>
-          </div>
-          <div style="display:flex; gap:8px;">
-            <button class="btn" id="btnBatchFiles"><span data-ic="folderOpen" aria-hidden="true"></span>添加文件</button>
-            <button class="btn" id="btnBatchAdd"><span data-ic="plus" aria-hidden="true"></span>加空行</button>
-            <button class="btn" id="btnMatchAll"><span data-ic="sparkles" aria-hidden="true"></span>按集数自动匹配</button>
-            <button class="btn" id="btnBatchClear"><span data-ic="refreshCcw" aria-hidden="true"></span>重置</button>
+      <!-- 批量任务区 -->
+      <div class="bq-section">
+        <div class="bq-sec-head">
+          <div class="bq-sec-title-wrap">
+            <h2 class="bq-sec-title">批量任务</h2>
+            <span class="bq-sec-count" id="batchCount"></span>
           </div>
         </div>
-        <div class="t-cap" style="margin:8px 0 14px;">拖入多个 MKV 自动入列；同目录同名或按集数匹配 .sc/.tc/.chs/.cht/.JPSC/.JPTC</div>
-        <div id="batchList" class="batch-list"></div>
-        <div class="field">
-          <label for="b_fonts">字体目录</label>
-          <input id="b_fonts" type="text" placeholder="留空自动" autocomplete="off">
-          <button class="btn" id="btnBFonts">浏览</button>
-          <select id="b_fonts_mode" style="height:34px;" title="字体处理">
-            <option value="subset">子集化</option>
-            <option value="collect">仅收集</option>
-          </select>
+
+        <!-- 操作工具栏 -->
+        <div class="bq-toolbar">
+          <button class="btn primary" id="btnBatchFiles"><span data-ic="plus" aria-hidden="true"></span>添加文件</button>
+          <button class="btn" id="btnBatchDir"><span data-ic="folderOpen" aria-hidden="true"></span>添加文件夹</button>
+          <button class="btn" id="btnMatchAll"><span data-ic="sparkles" aria-hidden="true"></span>自动匹配字幕</button>
+          <div class="bq-more" id="bqMore">
+            <button class="btn ghost" id="btnBatchMore" aria-haspopup="true" aria-expanded="false"><span data-ic="moreHorizontal" aria-hidden="true"></span>更多<span class="bq-chev" data-ic="chevronDown" aria-hidden="true"></span></button>
+            <div class="bq-more-menu" id="bqMoreMenu" role="menu">
+              <button type="button" class="bq-menu-item" id="btnBatchAddRow" role="menuitem"><span data-ic="plus" aria-hidden="true"></span>添加空任务</button>
+              <button type="button" class="bq-menu-item" id="btnBatchRematchAll" role="menuitem"><span data-ic="refreshCw" aria-hidden="true"></span>重新匹配所有任务</button>
+              <button type="button" class="bq-menu-item" id="btnBatchClearSubs" role="menuitem"><span data-ic="trash" aria-hidden="true"></span>清除所有字幕</button>
+              <div class="bq-menu-sep"></div>
+              <button type="button" class="bq-menu-item danger" id="btnBatchClear" role="menuitem"><span data-ic="trash" aria-hidden="true"></span>清空全部任务</button>
+            </div>
+          </div>
+          <span class="bq-toolbar-hint">拖入多个 MKV 自动入列；同目录同名或按集数匹配 .sc/.tc/.chs/.cht/JPSC/JPTC</span>
         </div>
-        <div class="field">
-          <label for="b_out">输出目录</label>
-          <input id="b_out" type="text" placeholder="留空 = 替换各自源文件" autocomplete="off">
-          <button class="btn" id="btnBOut">浏览</button>
+
+        <!-- 选中操作栏（仅存在选中时显示） -->
+        <div class="bq-selbar" id="batchSelBar" style="display:none;">
+          <span class="bq-sel-count" id="batchSelCount"></span>
+          <div class="bq-sel-actions">
+            <button class="btn small" id="btnSelRematch"><span data-ic="refreshCw" aria-hidden="true"></span>重新匹配</button>
+            <button class="btn small" id="btnSelDelete"><span data-ic="trash" aria-hidden="true"></span>删除</button>
+            <button class="btn small ghost" id="btnSelClear"><span data-ic="x" aria-hidden="true"></span>取消选择</button>
+          </div>
         </div>
-        <div class="field">
-          <label for="b_title">MKV 标题</label>
-          <input id="b_title" type="text" placeholder="可选：成品标题元数据" autocomplete="off">
+
+        <!-- 表头 -->
+        <div class="bq-thead">
+          <span class="bq-col-check"><input type="checkbox" id="bqSelectAll" aria-label="全选任务"></span>
+          <span class="bq-col-idx">#</span>
+          <span class="bq-col-file">文件信息</span>
+          <span class="bq-col-sub">字幕 / 章节</span>
+          <span class="bq-col-status">状态</span>
+          <span class="bq-col-ops">操作</span>
         </div>
-        <div class="field">
-          <label for="b_out_name_tmpl">命名模板</label>
-          <input id="b_out_name_tmpl" type="text" placeholder="留空 = 沿用源文件名；支持 {src} {ep} {res} {title}" autocomplete="off">
-        </div>
-        <div class="field">
-          <label class="check"><input id="b_force" type="checkbox" aria-label="强制封装"> 强制封装</label>
-          <label class="check"><input id="b_use_sys_fonts" type="checkbox" aria-label="包含系统已装字体"> 包含系统已装字体</label>
-          <label class="check"><input id="b_backup" type="checkbox" checked aria-label="备份原件"> 备份原件</label>
-          <label class="check"><input id="b_skip" type="checkbox" aria-label="跳过已存在输出"> 跳过已存在输出（输出目录模式）</label>
-        </div>
-        <div class="field">
-          <label for="b_postcmd">后处理命令</label>
-          <input id="b_postcmd" type="text" placeholder="封装成功后执行；{out}={成品路径} {src}={源视频} {ep}={集数}；空 = 用全局默认" autocomplete="off">
-        </div>
-        <div class="field" style="flex-wrap:wrap;">
-          <label for="b_sc_default" style="font-size:12px;color:var(--text-secondary)">字幕旗标</label>
-          <select id="b_sc_default" style="height:34px;" title="简体轨 default 旗标">
-            <option value="">SC默认:自动</option><option value="1">SC默认:是</option><option value="0">SC默认:否</option>
-          </select>
-          <select id="b_tc_default" style="height:34px;" title="繁体轨 default 旗标">
-            <option value="">TC默认:自动</option><option value="1">TC默认:是</option><option value="0">TC默认:否</option>
-          </select>
-          <label class="check"><input id="b_sc_forced" type="checkbox" aria-label="简体强制轨"> SC强制</label>
-          <label class="check"><input id="b_tc_forced" type="checkbox" aria-label="繁体强制轨"> TC强制</label>
-        </div>
-        <div id="batchProgress" style="margin-top:8px;">
-          <div id="batchState" class="t-sec"></div>
-        </div>
-        <div id="batchResults"></div>
+
+        <!-- 任务列表 -->
+        <div id="batchList" class="bq-list"></div>
       </div>
 
+      <!-- 批量封装设置 -->
+      <div class="bq-section bq-settings">
+        <div class="bq-settings-head">
+          <span class="bq-settings-title"><span data-ic="sliders" aria-hidden="true"></span>批量封装设置</span>
+          <button type="button" class="bq-adv-toggle" id="btnBatchAdv" aria-expanded="false">
+            <span class="bq-adv-label">展开高级设置</span>
+            <span class="bq-chev" data-ic="chevronDown" aria-hidden="true"></span>
+          </button>
+        </div>
+
+        <!-- 核心设置：预设 / 输出目录 / 命名模板 -->
+        <div class="bq-settings-grid">
+          <div class="bq-field">
+            <label class="bq-label" for="b_preset_sel">封装预设</label>
+            <div class="bq-control bq-preset">
+              <select id="b_preset_sel" class="bq-preset-sel"><option value="">选择预设…</option></select>
+              <button type="button" class="btn" id="btnBatchPresetManage"><span data-ic="list" aria-hidden="true"></span>管理预设</button>
+            </div>
+          </div>
+          <div class="bq-field">
+            <label class="bq-label" for="b_out_dir">输出目录</label>
+            <div class="bq-control">
+              <input id="b_out_dir" type="text" placeholder="留空 = 替换各自源文件" autocomplete="off">
+              <button class="btn" id="btnBOut"><span data-ic="folderOpen" aria-hidden="true"></span>浏览</button>
+            </div>
+          </div>
+          <div class="bq-field">
+            <label class="bq-label" for="b_out_name_tmpl">命名模板</label>
+            <div class="bq-control">
+              <input id="b_out_name_tmpl" type="text" placeholder="留空 = 沿用源文件名；支持 {src} {ep} {res} {title}" autocomplete="off">
+            </div>
+          </div>
+        </div>
+
+        <!-- 高级设置（默认折叠） -->
+        <div class="bq-adv-body" id="batchAdvBody" style="display:none;">
+          <div class="bq-adv-grid">
+            <div class="bq-field">
+              <label class="bq-label" for="b_fonts_dir">字体目录</label>
+              <div class="bq-control">
+                <input id="b_fonts_dir" type="text" placeholder="留空自动" autocomplete="off">
+                <button class="btn" id="btnBFonts"><span data-ic="folderOpen" aria-hidden="true"></span>浏览</button>
+                <select id="b_fonts_mode" class="bq-select" title="字体处理">
+                  <option value="subset">子集化</option>
+                  <option value="collect">仅收集</option>
+                </select>
+              </div>
+            </div>
+            <div class="bq-field">
+              <label class="bq-label" for="b_title">MKV 标题</label>
+              <div class="bq-control">
+                <input id="b_title" type="text" placeholder="可选：成品标题元数据" autocomplete="off">
+              </div>
+            </div>
+            <div class="bq-field">
+              <label class="bq-label" for="b_postcmd">后处理命令</label>
+              <div class="bq-control">
+                <input id="b_postcmd" type="text" placeholder="封装成功后执行；{out}={成品路径} {src}={源视频} {ep}={集数}；空 = 用全局默认" autocomplete="off">
+              </div>
+            </div>
+            <div class="bq-adv-checks">
+              <label class="check"><input id="b_force" type="checkbox" aria-label="强制封装"> 强制封装</label>
+              <label class="check"><input id="b_use_sys_fonts" type="checkbox" aria-label="包含系统已装字体"> 包含系统已装字体</label>
+              <label class="check"><input id="b_backup" type="checkbox" checked aria-label="备份原件"> 备份原件</label>
+              <label class="check"><input id="b_skip" type="checkbox" aria-label="跳过已存在输出"> 跳过已存在输出</label>
+            </div>
+            <div class="bq-field bq-flag-field">
+              <span class="bq-label" id="bqFlagLabel">字幕旗标</span>
+              <div class="bq-control">
+                <select id="b_sc_default" class="bq-select" aria-labelledby="bqFlagLabel" title="简体轨 default 旗标">
+                  <option value="">SC默认:自动</option><option value="1">SC默认:是</option><option value="0">SC默认:否</option>
+                </select>
+                <select id="b_tc_default" class="bq-select" aria-labelledby="bqFlagLabel" title="繁体轨 default 旗标">
+                  <option value="">TC默认:自动</option><option value="1">TC默认:是</option><option value="0">TC默认:否</option>
+                </select>
+                <label class="check"><input id="b_sc_forced" type="checkbox" aria-label="简体强制轨"> SC强制</label>
+                <label class="check"><input id="b_tc_forced" type="checkbox" aria-label="繁体强制轨"> TC强制</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 批量进度与结果（保留既有 ID：batchState / batchResults） -->
+      <div id="batchProgress" class="bq-progress" style="margin-top:16px;">
+        <div id="batchState" class="t-sec"></div>
+      </div>
+      <div id="batchResults" class="bq-results"></div>
+
+      <!-- 固定底部操作栏 -->
       <div class="sticky-bar" id="stickyBatch">
         <div class="sticky-inner">
           <div class="sticky-note info" id="batchStickyNote"><span data-ic="info" aria-hidden="true"></span><span class="sticky-txt">批量列表为空</span></div>
@@ -75,12 +152,13 @@
             <div class="sp-head"><span class="sp-label">总体进度</span><span class="sp-pct" id="bStickyPct">--</span></div>
             <div class="sp-track" id="batchStickyBarWrap"><div class="sp-fill" id="batchStickyBar"></div></div>
           </div>
-          <div class="sp-count" id="bStickyCount"><span class="sp-count-num" id="bStickyCountNum">0 / 0</span><span class="sp-count-unit">个文件</span></div>
+          <div class="sp-count" id="bStickyCount"><span class="sp-count-num" id="bStickyCountNum">0 / 0</span><span class="sp-count-unit">个任务</span></div>
           <div class="sp-times" id="bStickyTimes">
             <span class="sp-time"><span class="sp-tlabel">已用时</span><span class="sp-tval" id="bStickyElapsed">--:--:--</span></span>
             <span class="sp-vsep" aria-hidden="true"></span>
             <span class="sp-time"><span class="sp-tlabel">预计剩余</span><span class="sp-tval" id="bStickyEta">--:--:--</span></span>
           </div>
+          <button class="btn ghost" id="btnBatchCheck" title="定位到存在问题的任务"><span data-ic="alertTriangle" aria-hidden="true"></span>检查问题</button>
           <button class="btn lg primary" id="btnBatchStart" disabled><span data-ic="play" aria-hidden="true"></span>开始批量封装</button>
         </div>
       </div>

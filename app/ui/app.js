@@ -25,9 +25,11 @@ function refreshBatchSticky() {
     txt.textContent = '批量列表为空';
     btn.disabled = true;
   } else {
-    note.className = 'sticky-note ok';
-    note.firstElementChild.innerHTML = ic('checkCircle');
-    txt.textContent = '已准备 ' + filled + ' 个文件';
+    const ready = batchItems.filter(function (it) { return (it.video || '').trim() && it.sc && it.tc; }).length;
+    const needs = filled - ready;
+    note.className = needs ? 'sticky-note warn' : 'sticky-note ok';
+    note.firstElementChild.innerHTML = ic(needs ? 'alertTriangle' : 'checkCircle');
+    txt.textContent = '已准备 ' + filled + ' 个任务' + (needs ? ' · 需处理 ' + needs + ' 个' : '');
     btn.disabled = false;
   }
 }
