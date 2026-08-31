@@ -19,6 +19,15 @@
     font-size:12px; display:inline-flex; align-items:center; justify-content:center; gap:6px;
     transition:border-color .15s, color .15s, background-color .15s;
   }
+
+  button#popPresetBtn {width: 80px;}
+  button#popGlobalBtn {
+    width: 180px; 
+    margin-bottom: 2px; 
+    justify-content: right;
+  }
+  button#popEnvBtn {width: 140px;}
+
   .pref:hover { border-color:var(--border-hover); color:var(--text-primary); }
   .pref.active { border-color:var(--primary); color:var(--primary); background:var(--run-bg); }
   .pref.dot { width:24px; height:24px; border-radius:50%; background:var(--d); border:2px solid var(--border); }

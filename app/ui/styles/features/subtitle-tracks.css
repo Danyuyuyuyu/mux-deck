@@ -98,7 +98,7 @@
   .sub-status.err  { color:var(--danger); }
   .sub-settings { margin-top:12px; border-top:1px solid var(--border); padding-top:12px; }
   .sub-settings-title { margin-bottom:8px; }
-  .sub-set-grid { display:grid; grid-template-columns:minmax(220px, 320px) minmax(280px, 380px) 120px; column-gap:40px; row-gap:10px; align-items:start; }
+  .sub-set-grid { display:grid; grid-template-columns:minmax(220px, 320px) minmax(160px, 220px) 120px; column-gap:40px; row-gap:10px; align-items:start; }
   .sub-set-field { display:flex; flex-direction:column; gap:6px; min-width:0; }
   .sub-set-field .seg { align-self:flex-start; }   /* 栅格列内不拉伸：否 右侧无空隙 */
   .sub-set-field > label, .sub-set-field > .set-label { font-size:12px; color:var(--text-secondary); display:inline-flex; align-items:center; gap:5px; flex:none; }
