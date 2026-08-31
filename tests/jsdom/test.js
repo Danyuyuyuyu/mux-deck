@@ -39,7 +39,12 @@ function mockFetch(url, opts) {
   let data = {};
   if (u === '/api/version') data = { version: 'test' };
   else if (u === '/api/env_check') data = { overall: 'ready', items: [], missing: [] };
-  else if (u === '/api/config') data = { configured: true, valid: true, scan_root: 'D:\\Video', subset_tool: 'afs' };
+  else if (u === '/api/config') {
+    data = { configured: true, valid: true, scan_root: 'D:\\Video', subset_tool: 'afs', postcmd: '' };
+    if (opts && opts.body) {
+      try { const b = JSON.parse(opts.body); if (typeof b.postcmd === 'string') data = { ok: true, postcmd: b.postcmd }; } catch (e) {}
+    }
+  }
   else if (u === '/api/match_subs') { data = { video: q.replace('path=', ''), sc: matchSubsRet.sc, tc: matchSubsRet.tc, sc_lang: matchSubsRet.sc_lang || '', tc_lang: matchSubsRet.tc_lang || '' }; }
   else if (u === '/api/detect_fonts_dir') { data = { path: q.replace('path=', ''), fonts_dir: fontsDirRet.fonts_dir }; }
   else if (u === '/api/detect_chapters') { data = { path: q.replace('path=', ''), chapters: chaptersRet.chapters }; }
@@ -572,6 +577,45 @@ function mockFetch(url, opts) {
   $('b_use_sys_fonts').checked = true;
   $('btnBatchClear').click();
   check('批量重置后系统字体复选框复位', $('b_use_sys_fonts').checked === false);
+
+  /* ---- 场景22（F4 后处理命令模板）：单页/批量/全局设置输入 + buildMuxCommon 组装 + 预设往返 + 批量重置 ---- */
+  check('单页含后处理命令输入', !!$('postcmd'));
+  check('批量公共区含后处理命令输入', !!$('b_postcmd'));
+  check('全局设置含后处理命令输入', !!$('cfg_postcmd') && $('cfg_postcmd').value === '');
+  $('postcmd').value = 'echo {out}';
+  check('buildMuxCommon 组装 postcmd（单页）', window.buildMuxCommon('').postcmd === 'echo {out}');
+  $('b_postcmd').value = 'copy {out} D:\\x';
+  check('buildMuxCommon 组装 postcmd（批量 b_ 前缀）', window.buildMuxCommon('b_').postcmd === 'copy {out} D:\\x');
+  // 预设编辑器字段 + 保存并应用往返（主页面 + 批量公共区同步）
+  window.openPresetManager();
+  check('预设编辑器含后处理命令字段', !!$('pm_f_postcmd'));
+  $('pm_f_postcmd').value = 'echo done {ep}';
+  $('pm_f_postcmd').dispatchEvent(new window.Event('input', { bubbles: true }));
+  check('编辑器改动后 Footer 切保存态', !!$('pmSaveApplyBtn'), $('pmFootActions') && $('pmFootActions').textContent);
+  $('pmSaveApplyBtn').click();
+  await sleep(80);
+  check('预设保存并应用后主页面后处理命令同步', $('postcmd').value === 'echo done {ep}', $('postcmd').value);
+  check('预设套用同步批量公共区后处理命令', $('b_postcmd').value === 'echo done {ep}', $('b_postcmd').value);
+  $('pmCancelBtn').click();
+  // 旧预设数据无该字段时不改动输入框
+  window.applyPreset({ sc_name: '旧预设' });
+  check('旧预设无 postcmd 字段时不改动输入框', $('postcmd').value === 'echo done {ep}', $('postcmd').value);
+  // 全局设置失焦保存（POST /api/config 回显 postcmd → CFG 镜像更新）
+  let cfgPostVal = null;
+  window.fetch = function (url, opts) {
+    if (String(url).split('?')[0] === '/api/config' && opts && opts.body) {
+      try { const b = JSON.parse(opts.body); if (typeof b.postcmd === 'string') cfgPostVal = b.postcmd; } catch (e) {}
+    }
+    return mockFetch(url, opts);
+  };
+  $('cfg_postcmd').value = 'echo global';
+  $('cfg_postcmd').dispatchEvent(new window.Event('change', { bubbles: true }));
+  await sleep(40);
+  check('全局设置后处理命令失焦保存并更新镜像', cfgPostVal === 'echo global' && window.eval('CFG.postcmd') === 'echo global', String(cfgPostVal) + '/' + window.eval('CFG.postcmd'));
+  window.fetch = mockFetch;
+  // 批量重置复位后处理命令（含存在性守卫路径）
+  $('btnBatchClear').click();
+  check('批量重置后后处理命令输入清空', $('b_postcmd').value === '');
 
   const failed = results.filter(r => !r.ok);
   console.log('\n=== ' + (results.length - failed.length) + '/' + results.length + ' PASS ===');

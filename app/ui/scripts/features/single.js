@@ -767,6 +767,7 @@ $('btnSingleReset').onclick = () => {
   $('chapters').value = '';
   $('out_name_tmpl').value = '';
   $('title').value = '';
+  $('postcmd').value = '';
   $('audio').value = ''; $('audio_lang').value = ''; $('audio_name').value = '';
   $('out_dir').value = '';
   $('backup').checked = true; $('force').checked = false;

@@ -12,7 +12,7 @@ COMMON_KEYS = ("fonts_dir", "audio", "audio_mode", "keep_src_audio", "audio_lang
                "out_dir", "force", "sc_name", "tc_name", "sc_lang", "tc_lang", "no_backup", "audio_tracks",
                "subtitle_tracks", "keep_attachments", "sc_default", "tc_default",
                "sc_forced", "tc_forced", "chapters", "out_name", "title", "fonts_mode", "skip_existing",
-               "use_sys_fonts")
+               "use_sys_fonts", "postcmd")
 
 # ---------------- 命令构造 ----------------
 
@@ -72,6 +72,8 @@ def build_cmd(it, common):
         cmd += ["--fonts-mode", full.get("fonts_mode")]
     if full.get("use_sys_fonts"):   # 布尔开关：关闭时不传参（CLI 默认 0），与 force 同款
         cmd += ["--use-sys-fonts", "1"]
+    # 后处理命令：add 空值跳过——任务级空串是有意义的回落信号（CLI 端回落 config.json 全局默认），不能 if-truthy
+    add("--postcmd", full.get("postcmd"))
     return cmd
 
 # ---------------- 任务生命周期 ----------------
@@ -82,9 +84,9 @@ def _fail_reason(txt):
     return m[-1].strip() if m else ""
 
 def _qc_from_log(txt):
-    """从 item 日志解析 mux_cli 的 QC 输出（QC: / QC-WARN: / FAIL: QC 失败：）。"""
+    """从 item 日志解析 mux_cli 的 QC 输出（QC: / QC-WARN: / POSTPROC-WARN: / FAIL: QC 失败：）。"""
     hard = re.findall(r"^FAIL: QC 失败：(.+)$", txt or "", re.M)
-    warn = re.findall(r"^QC-WARN: (.+)$", txt or "", re.M)
+    warn = re.findall(r"^(?:QC-WARN|POSTPROC-WARN): (.+)$", txt or "", re.M)
     ok = re.findall(r"^QC: (.+)$", txt or "", re.M)
     if hard:
         return {"status": "fail", "hard": hard, "warn": warn}

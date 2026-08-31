@@ -31,6 +31,13 @@ function startup() {
     if (env && env.items) envRender(env);
     if (c && c.scan_root) { CFG.scanRoot = c.scan_root; $('cfg_scan').value = c.scan_root; }
     if (c && c.subset_tool) { $('cfg_tool').value = c.subset_tool; }
+    if (c && typeof c.postcmd === 'string') {
+      CFG.postcmd = c.postcmd;
+      $('cfg_postcmd').value = CFG.postcmd;
+      // 全局默认落任务输入：单/批量任务输入均为空且全局默认非空时填入（用户可见可改；程序赋值不触发事件）
+      const sp = $('postcmd'), bp = $('b_postcmd');
+      if (CFG.postcmd && sp && bp && !sp.value.trim() && !bp.value.trim()) { sp.value = CFG.postcmd; bp.value = CFG.postcmd; }
+    }
     updateGlobalSummary();
     if (ps && ps.presets) { PRESETS = ps.presets; refreshPresetSel(); restoreRememberedPreset(); }   // 恢复上次选中的预设并自动套用（名称失效则回落）
     const needSetup = c && (!c.configured || !c.valid);

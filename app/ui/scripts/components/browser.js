@@ -3,7 +3,7 @@
 const BR = { setter: null, filter: 'any', path: 'D:\\Video' };
 
 /* ==================== 文件浏览器 ==================== */
-const CFG = { scanRoot: 'D:\\Video' };
+const CFG = { scanRoot: 'D:\\Video', postcmd: '' };
 function openBrowser(setter, filter, startPath, slot, dirSetter) {
   BR.setter = setter; BR.filter = filter; BR.slot = slot || filter || 'generic'; BR.dirSetter = dirSetter || null;
   BR.path = startPath || localStorage.getItem('muxui_ld_' + BR.slot) || localStorage.getItem('muxui_lastdir') || CFG.scanRoot;

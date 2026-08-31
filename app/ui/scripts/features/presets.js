@@ -15,6 +15,7 @@ function presetData() {
     use_sys_fonts: $('use_sys_fonts').checked,
     cfg_tool: $('cfg_tool').value, fonts_mode: $('fonts_mode').value,
     out_name_tmpl: $('out_name_tmpl').value.trim(), title: $('title').value.trim(),
+    postcmd: $('postcmd').value.trim(),
   };
 }
 function applyPreset(d) {
@@ -32,6 +33,7 @@ function applyPreset(d) {
   if (d.chapters) $('chapters').value = d.chapters;
   if (d.out_name_tmpl) $('out_name_tmpl').value = d.out_name_tmpl;
   if (d.title) $('title').value = d.title;
+  if (d.postcmd !== undefined) $('postcmd').value = d.postcmd;   // 空串也套用（预设明确清空 = 任务级回落全局默认）
   $('backup').checked = d.backup !== false;
   $('force').checked = !!d.force;
   if (d.use_sys_fonts !== undefined) $('use_sys_fonts').checked = !!d.use_sys_fonts;   // 旧预设无此字段不动
@@ -137,7 +139,7 @@ function updatePresetHint() {
  * 数据层复用同一份 PRESETS 与 /api/presets(+/delete)，不建第二套状态。
  * 点击列表项 = 查看/编辑，不会修改当前任务；删除当前任务引用的预设只清引用、不动参数。 */
 const PM_BLANK = { sc_name: 'SC', tc_name: 'TC', sc_lang: '', tc_lang: '', sc_default: '', tc_default: '', sc_forced: false, tc_forced: false,
-  fonts_mode: 'subset', out_name_tmpl: '', title: '', fonts_dir: '', out_dir: '', chapters: '', backup: true, force: false, use_sys_fonts: false };
+  fonts_mode: 'subset', out_name_tmpl: '', title: '', fonts_dir: '', out_dir: '', chapters: '', backup: true, force: false, use_sys_fonts: false, postcmd: '' };
 const pmState = { editing: null };   // {orig: 已有预设名|null, isNew, mode: 'blank'|'task', base: 建基数据}
 let pmEditorDirty = false;           // 编辑器有未保存修改（切换列表项时提示保护；Footer 按钮组随之切换）
 function pmClone(o) { return JSON.parse(JSON.stringify(o || {})); }
@@ -262,6 +264,7 @@ function pmRenderEditor() {
   h += '<div class="field pm-field"><label for="pm_f_title">MKV 标题</label><input id="pm_f_title" type="text" value="' + esc(d.title || '') + '" placeholder="留空则不写入标题" autocomplete="off"></div>';
   h += '<div class="field pm-field"><label for="pm_f_chapters">章节文件</label><input id="pm_f_chapters" type="text" value="' + esc(d.chapters || '') + '" placeholder="可选：导入章节文件" autocomplete="off">' +
     '<button type="button" class="btn icon-btn" id="pm_f_chapters_btn" aria-label="浏览章节文件">' + ic('folderOpen') + '</button></div>';
+  h += '<div class="field pm-field"><label for="pm_f_postcmd">后处理命令</label><input id="pm_f_postcmd" type="text" value="' + esc(d.postcmd || '') + '" placeholder="封装成功后执行；{out}={成品路径} {src}={源视频} {ep}={集数}；空 = 用全局默认" autocomplete="off"></div>';
   h += '</div><div class="t-cap pm-hint">应用预设会覆盖当前任务的输出位置（留空 = 不改变）</div></div>';
   /* ---- 其他（横向复选） ---- */
   h += '<div class="pm-sec"><div class="pm-sec-title">其他</div><div class="pm-other">' +
@@ -357,6 +360,7 @@ async function pmSave(thenApply) {
     fonts_mode: $('pm_f_fonts_mode').value || 'subset',
     out_name_tmpl: $('pm_f_out_name_tmpl').value.trim(), title: $('pm_f_title').value.trim(),
     fonts_dir: $('pm_f_fonts_dir').value.trim(), out_dir: $('pm_f_out_dir').value.trim(), chapters: $('pm_f_chapters').value.trim(),
+    postcmd: $('pm_f_postcmd').value.trim(),
     backup: $('pm_f_backup').checked, force: $('pm_f_force').checked,
     use_sys_fonts: $('pm_f_use_sys_fonts').checked,
   };
@@ -418,7 +422,7 @@ $('preset_sel').onchange = function () {
   if (this.value && PRESETS[this.value]) applyPresetToCurrentTask(this.value);   // 唯一应用入口
   else detachCurrentPreset();   // 选回「选择预设…」= 解除预设（参数保留）
 };
-['sc_name', 'tc_name', 'sc_lang', 'tc_lang', 'fonts_dir', 'out_dir', 'out_name_tmpl', 'title'].forEach(id => $(id).addEventListener('input', updatePresetHint));
+['sc_name', 'tc_name', 'sc_lang', 'tc_lang', 'fonts_dir', 'out_dir', 'out_name_tmpl', 'title', 'postcmd'].forEach(id => $(id).addEventListener('input', updatePresetHint));
 ['sc_forced', 'tc_forced', 'backup', 'force', 'fonts_mode', 'use_sys_fonts'].forEach(id => $(id).addEventListener('change', updatePresetHint));
 $('pmClose').onclick = closePresetManager;
 /* 新建预设按钮（静态侧栏底部，不随编辑器滚动/重渲染） */

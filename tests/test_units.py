@@ -330,5 +330,71 @@ class FontSourcesTest(unittest.TestCase):
             self.assertEqual(cmd[cmd.index("--use-sys-fonts") + 1], "1")
 
 
+class PostcmdTest(unittest.TestCase):
+    """F4 后处理命令模板：expand_postcmd 占位符展开 + run_postcmd 执行语义（绝不抛出）+ build_cmd 组装。"""
+
+    def test_expand_all_placeholders(self):
+        self.assertEqual(mc.expand_postcmd("copy {out} {src}", "D:\\o.mkv", "D:\\s.mkv", 3),
+                         "copy D:\\o.mkv D:\\s.mkv")
+        self.assertEqual(mc.expand_postcmd("ep={ep}", "o", "s", "12"), "ep=12")
+        self.assertEqual(mc.expand_postcmd("ep={ep}", "o", "s", 12), "ep=12")
+
+    def test_expand_ep_unrecognized_becomes_empty(self):
+        self.assertEqual(mc.expand_postcmd("a {ep} b", "o", "s", -1), "a  b")
+        self.assertEqual(mc.expand_postcmd("a {ep} b", "o", "s", "-1"), "a  b")
+        self.assertEqual(mc.expand_postcmd("a {ep} b", "o", "s", None), "a  b")
+
+    def test_expand_no_placeholder_passthrough(self):
+        self.assertEqual(mc.expand_postcmd("echo hi", "o", "s", 1), "echo hi")
+        self.assertEqual(mc.expand_postcmd("", "o", "s", 1), "")
+
+    def test_expand_extra_braces_kept_intact(self):
+        self.assertEqual(mc.expand_postcmd("x {bogus} {out}", "o", "s", 1), "x {bogus} o")
+        self.assertEqual(mc.expand_postcmd("{out}{out}", "o", "s", 1), "oo")
+
+    def test_run_postcmd_ok_captures_output(self):
+        rc, out = mc.run_postcmd('"%s" -c "print(\'hi\')"' % sys.executable, "o", "s", "EP03")
+        self.assertEqual(rc, 0)
+        self.assertIn("hi", out)
+
+    def test_run_postcmd_expands_placeholders_with_detected_ep(self):
+        rc, out = mc.run_postcmd('"%s" -c "import sys; print(sys.argv[1])" {ep}' % sys.executable,
+                                 "o", "s", "Show EP07 1080P")
+        self.assertEqual(rc, 0)
+        self.assertIn("07", out)
+
+    def test_run_postcmd_nonzero_exit_no_raise(self):
+        rc, out = mc.run_postcmd('"%s" -c "import sys; sys.exit(3)"' % sys.executable, "o", "s", "x")
+        self.assertEqual(rc, 3)
+        self.assertIsInstance(out, str)
+
+    def test_run_postcmd_missing_binary_no_raise(self):
+        rc, out = mc.run_postcmd("definitely_not_a_real_cmd_9x7x5", "o", "s", "x")
+        self.assertNotEqual(rc, 0)
+        self.assertTrue(out)
+
+    def test_run_postcmd_empty_command_skips(self):
+        rc, out = mc.run_postcmd("", "o", "s", "x")
+        self.assertEqual((rc, out), (0, ""))
+        rc, out = mc.run_postcmd("   ", "o", "s", "x")
+        self.assertEqual((rc, out), (0, ""))
+
+    def test_build_cmd_postcmd_empty_falls_back(self):
+        from app.features.mux import build_cmd
+        it = {"video": "V:\\v.mkv"}
+        for empty in ("", "   ", None):
+            self.assertNotIn("--postcmd", build_cmd(it, {"postcmd": empty}),
+                             "任务级空串不传参 = CLI 回落全局默认")
+        cmd = build_cmd(it, {"postcmd": "echo hi"})
+        self.assertIn("--postcmd", cmd)
+        self.assertEqual(cmd[cmd.index("--postcmd") + 1], "echo hi")
+
+    def test_qc_from_log_accepts_postproc_warn(self):
+        from app.features.mux import _qc_from_log
+        q = _qc_from_log("POSTPROC-OK: 后处理完成\nPOSTPROC-WARN: 后处理命令失败（退出码 1）")
+        self.assertEqual(q["status"], "warn")
+        self.assertEqual(q["warn"], ["后处理命令失败（退出码 1）"])
+
+
 if __name__ == "__main__":
     unittest.main()

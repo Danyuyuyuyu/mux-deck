@@ -14,6 +14,7 @@ function updateGlobalSummary() {
 }
 function openGlobal() {
   $('cfg_scan').value = CFG.scanRoot || $('cfg_scan').value;
+  $('cfg_postcmd').value = CFG.postcmd || '';
   updateGlobalSummary();
   openModal('globalModal');
 }
@@ -151,5 +152,16 @@ $('cfg_tool').onchange = async () => {
     if (r.error) { setStatus('子集工具保存失败：' + r.error, 'err'); return; }
     setStatus('子集化工具已切换：' + (r.subset_tool || $('cfg_tool').value), 'ok');
   } catch (ex) { setStatus('子集工具保存失败：' + ex, 'err'); }
+};
+/* 后处理命令（全局默认）：失焦即保存（空串 = 清除全局默认，合法值） */
+$('cfg_postcmd').onchange = async () => {
+  const v = $('cfg_postcmd').value.trim().slice(0, 2000);
+  try {
+    const r = await api('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ postcmd: v }) });
+    if (r.error) { setStatus('后处理命令保存失败：' + r.error, 'err'); return; }
+    CFG.postcmd = r.postcmd || '';
+    $('cfg_postcmd').value = CFG.postcmd;
+    setStatus(CFG.postcmd ? '后处理命令（全局默认）已保存' : '后处理命令（全局默认）已清除', 'ok');
+  } catch (ex) { setStatus('后处理命令保存失败：' + ex, 'err'); }
 };
 }

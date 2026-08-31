@@ -79,5 +79,6 @@ function buildMuxCommon(prefix) {
     tc_default: v('tc_default') || '',
     sc_forced: c('sc_forced'),
     tc_forced: c('tc_forced'),
+    postcmd: v('postcmd').trim(),
   };
 }

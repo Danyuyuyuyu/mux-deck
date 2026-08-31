@@ -291,6 +291,11 @@
             </div>
             <label class="check"><input id="force" type="checkbox"> 强制封装（源视频已有字体附件时）</label>
             <label class="check"><input id="use_sys_fonts" type="checkbox"> 包含系统已装字体（用户目录缺字体时并入 C:\Windows\Fonts 与当前用户安装的字体）</label>
+            <div class="field" style="margin-top:10px;">
+              <label for="postcmd">后处理命令</label>
+              <input id="postcmd" type="text" placeholder="封装成功后执行；{out}={成品路径} {src}={源视频} {ep}={集数}；空 = 用全局默认" autocomplete="off">
+              <span class="t-cap">将以你的用户身份执行任意命令，请仅填写自己理解的命令</span>
+            </div>
           </div>
         </div>
 

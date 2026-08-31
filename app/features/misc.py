@@ -14,7 +14,8 @@ def handle_config_get(q):
     return {"scan_root": core.CONFIG["scan_root"],
             "valid": os.path.isdir(core.CONFIG["scan_root"]),
             "configured": os.path.isfile(core.CONFIG_PATH),
-            "subset_tool": core.CONFIG.get("subset_tool", "afs")}
+            "subset_tool": core.CONFIG.get("subset_tool", "afs"),
+            "postcmd": core.CONFIG.get("postcmd", "")}
 
 def handle_config_post(body):
     tool = (body.get("subset_tool") or "").strip()
@@ -26,6 +27,16 @@ def handle_config_post(body):
         except Exception as ex:
             return {"error": "保存失败: %s" % ex}
         return {"ok": True, "subset_tool": tool}
+    if "postcmd" in body:   # 全局默认后处理命令：str 类型，超长截断；空串 = 清除（合法值）
+        pc = body.get("postcmd")
+        if not isinstance(pc, str):
+            return {"error": "无效的后处理命令"}
+        pc = pc.strip()[:2000]
+        try:
+            core.save_config(postcmd=pc)
+        except Exception as ex:
+            return {"error": "保存失败: %s" % ex}
+        return {"ok": True, "postcmd": pc}
     p = (body.get("scan_root") or "").strip()
     if not p or not os.path.isdir(p):
         return {"error": "目录不存在: %s" % (p or "(空)")}

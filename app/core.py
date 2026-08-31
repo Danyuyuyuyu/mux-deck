@@ -56,7 +56,7 @@ for d in (JOBS_DIR, LEGACY_JOBS_DIR, TMP_DIR, PREVIEW_DIR, LEGACY_PREVIEW_DIR, L
 
 # ---------- 配置（工作目录/扫描根 + 子集工具双轨 + 封装预设） ----------
 DEFAULT_SCAN_ROOT = "D:" + chr(92) + "Video"
-CONFIG = {"scan_root": DEFAULT_SCAN_ROOT, "subset_tool": "afs", "presets": {}}
+CONFIG = {"scan_root": DEFAULT_SCAN_ROOT, "subset_tool": "afs", "presets": {}, "postcmd": ""}
 
 def load_config():
     try:
@@ -68,19 +68,23 @@ def load_config():
             CONFIG["subset_tool"] = c["subset_tool"]
         if isinstance(c.get("presets"), dict):
             CONFIG["presets"] = c["presets"]
+        if isinstance(c.get("postcmd"), str):
+            CONFIG["postcmd"] = c["postcmd"][:2000]
     except Exception:
         pass
 
-def save_config(scan_root=None, subset_tool=None, presets=None):
+def save_config(scan_root=None, subset_tool=None, presets=None, postcmd=None):
     if scan_root:
         CONFIG["scan_root"] = scan_root
     if subset_tool in ("afs", "assfonts"):
         CONFIG["subset_tool"] = subset_tool
     if presets is not None and isinstance(presets, dict):
         CONFIG["presets"] = presets
+    if postcmd is not None and isinstance(postcmd, str):   # 空串是有效值（清除全局默认），不能 if-truthy
+        CONFIG["postcmd"] = postcmd
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump({"scan_root": CONFIG["scan_root"], "subset_tool": CONFIG["subset_tool"],
-                   "presets": CONFIG["presets"]},
+                   "presets": CONFIG["presets"], "postcmd": CONFIG["postcmd"]},
                   f, ensure_ascii=False, indent=2)
     with INDEX_LOCK:
         INDEX["t"] = 0.0  # 扫描根变更后索引失效，下次访问重建

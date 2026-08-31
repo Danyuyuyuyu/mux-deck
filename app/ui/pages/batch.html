@@ -43,6 +43,10 @@
           <label class="check"><input id="b_backup" type="checkbox" checked aria-label="备份原件"> 备份原件</label>
           <label class="check"><input id="b_skip" type="checkbox" aria-label="跳过已存在输出"> 跳过已存在输出（输出目录模式）</label>
         </div>
+        <div class="field">
+          <label for="b_postcmd">后处理命令</label>
+          <input id="b_postcmd" type="text" placeholder="封装成功后执行；{out}={成品路径} {src}={源视频} {ep}={集数}；空 = 用全局默认" autocomplete="off">
+        </div>
         <div class="field" style="flex-wrap:wrap;">
           <label for="b_sc_default" style="font-size:12px;color:var(--text-secondary)">字幕旗标</label>
           <select id="b_sc_default" style="height:34px;" title="简体轨 default 旗标">

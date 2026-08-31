@@ -80,6 +80,12 @@
       </select>
       <span class="t-cap">字体目录有同族重复字体时 AFS 会拒跑，切成 assfonts 即可</span>
     </div>
+    <div class="gs-title">后处理</div>
+    <div class="field" style="margin-bottom:14px;">
+      <label for="cfg_postcmd">后处理命令（全局默认）</label>
+      <input id="cfg_postcmd" type="text" placeholder="封装成功后执行；{out}={成品路径} {src}={源视频} {ep}={集数}；留空 = 不执行" autocomplete="off">
+      <span class="t-cap">任务/预设未填写时生效；失焦即保存。将以你的用户身份执行任意命令，请仅填写自己理解的命令</span>
+    </div>
     <div class="gs-title">备份与清理</div>
     <div class="field" style="margin-bottom:14px;">
       <button class="btn" id="btnBackups" type="button">查看替换备份（__mux_tmp_manual）</button>

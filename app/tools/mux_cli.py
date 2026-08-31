@@ -108,13 +108,16 @@ def probe_json(path):
     except Exception as ex:
         fail("视频信息解析失败: %s" % ex)
 
-def resolve_out_name(tmpl, base, height, title=""):
-    """命名模板 -> 实际文件名（无扩展名）。占位符：{src} 源文件名 {ep} 集数 {res} 分辨率(1080P) {title} MKV标题（留空回退 {src}）。
-    集数识别按优先级：EP01 / 第01话 / [01] / 分隔符包裹的独立数字 / 最后一串数字。"""
+def detect_ep(base):
+    """从文件名识别集数字符串（与 resolve_out_name 同一套优先级；识别不出返回空串）。"""
     m = (re.search(r'EP\s*(\d{1,4})', base, re.I) or re.search(r'第\s*(\d{1,4})\s*[话話集]', base)
          or re.search(r'\[\s*(\d{1,4})\s*\]', base)
          or re.search(r'(?:^|[\s_\-\.])(\d{1,4})(?=[\s_\-\.]|$)', base))
-    ep = m.group(1) if m else ((re.findall(r'\d+', base) or [''])[-1])
+    return m.group(1) if m else ((re.findall(r'\d+', base) or [''])[-1])
+
+def resolve_out_name(tmpl, base, height, title=""):
+    """命名模板 -> 实际文件名（无扩展名）。占位符：{src} 源文件名 {ep} 集数 {res} 分辨率(1080P) {title} MKV标题（留空回退 {src}）。"""
+    ep = detect_ep(base)
     name = (tmpl.replace('{src}', base).replace('{title}', (title or '').strip() or base)
                 .replace('{ep}', ep).replace('{res}', (str(height) + 'P') if height else ''))
     name = re.sub(r'[<>:"/\\|?*]', '_', name).strip().strip('.')
@@ -132,6 +135,43 @@ def unique_path(dest):
         if not os.path.exists(cand):
             return cand
         n += 1
+
+def _global_postcmd():
+    """config.json 的全局默认后处理命令（任务级 --postcmd 为空时回落；三层优先级最低层）。"""
+    try:
+        with open(os.path.join(BASE, "app", "config.json"), encoding="utf-8") as f:
+            c = json.load(f)
+        if isinstance(c.get("postcmd"), str):
+            return c["postcmd"].strip()
+    except Exception:
+        pass
+    return ""
+
+def expand_postcmd(tmpl, out, src, ep):
+    """后处理命令模板展开：{out} 成品最终安装路径 {src} 源视频路径 {ep} 集数。
+    ep 为 -1 / "-1" / None 时视为未识别，替换为空串。其余花括号内容原样保留。"""
+    ep_s = "" if (ep is None or ep in (-1, "-1")) else str(ep)
+    return (tmpl or "").replace("{out}", out or "").replace("{src}", src or "").replace("{ep}", ep_s)
+
+def run_postcmd(cmd, out, src, base):
+    """安装成功后执行后处理命令（shell 执行，超时上限 600s）。
+    绝不抛出：返回 (退出码, stdout+stderr 尾部)；超时/启动失败等异常统一归一为非零退出码 + 错误摘要。"""
+    cmd = (cmd or "").strip()
+    if not cmd:
+        return (0, "")
+    try:
+        ep = detect_ep(base or "")
+    except Exception:
+        ep = ""
+    full = expand_postcmd(cmd, out, src, ep)
+    try:
+        p = subprocess.run(full, shell=True, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=600)
+        return (p.returncode, ((p.stdout or "") + (p.stderr or ""))[-4000:])
+    except subprocess.TimeoutExpired:
+        return (1, "后处理命令超时（上限 600 秒），已终止")
+    except Exception as ex:
+        return (1, "后处理命令启动失败: %s" % ex)
 
 def collect_fonts(subs, fonts_dir, out_dir, extra_dirs=None):
     """仅收集模式：解析字幕引用的字体名（Style + \\fn），从字体目录匹配并全量复制（不裁字形）。
@@ -239,6 +279,9 @@ def main():
                     help="字体处理：subset=子集化（默认）；collect=仅收集被引用字体全量嵌入（不裁字形）")
     ap.add_argument("--use-sys-fonts", type=int, default=0,
                     help="把 Windows 系统已装字体并入字体搜索源（用户目录优先）；默认 0 关闭")
+    ap.add_argument("--postcmd", default="",
+                    help="封装+QC 成功且成品就位后执行的自定义命令模板，支持 {out} 成品路径 {src} 源视频 {ep} 集数"
+                         "（空 = 回落 config.json 全局默认，都空则不执行）；注意：将以当前用户身份执行任意命令，请仅填写自己理解的命令")
     a = ap.parse_args()
 
     # ---------- 校验输入 ----------
@@ -576,6 +619,23 @@ def main():
 
     shutil.rmtree(TMP, ignore_errors=True)
     TMP = ""
+
+    # ---------- 后处理命令（封装+QC 全部成功且成品就位后才到这里；单任务仅执行一次） ----------
+    # 三层优先级：任务级 --postcmd > config.json 全局默认 > 都空则不执行。
+    # 失败仅输出 POSTPROC-WARN 软警告行（不阻塞、不影响任务成败），成功输出 POSTPROC-OK。
+    postcmd = (a.postcmd or "").strip()
+    if not postcmd:
+        postcmd = _global_postcmd()
+    if postcmd:
+        prc, ptail = run_postcmd(postcmd, dest, video, base)
+        if prc == 0:
+            print("POSTPROC-OK: 后处理完成", flush=True)
+        else:
+            print("POSTPROC-WARN: 后处理命令失败（退出码 %s）" % prc, flush=True)
+            for ln in (ptail or "").splitlines()[-8:]:
+                ln = ln.strip()
+                if ln:
+                    print("POSTPROC-WARN: " + ln[:300], flush=True)
 
 if __name__ == "__main__":
     main()
