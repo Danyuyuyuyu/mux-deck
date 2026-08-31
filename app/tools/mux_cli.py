@@ -523,6 +523,9 @@ def main():
         qc_hard.append("SC 轨应为默认轨但未打 default 旗标")
     qc_soft = []
     att_got = len(vo.get("attachments") or [])
+    # 成品 0 条字幕轨 = 未封装任何字幕（提供了 sc_sub/tc_sub 却缺失时会先在上方触发硬失败，走不到这里）
+    if st == 0:
+        qc_soft.append("成品无字幕轨（未提供 SC/TC 字幕，未做语言/旗标校验）")
     if fonts and att_got < len(fonts):
         qc_soft.append("附件 %d 个少于待嵌字体 %d 个" % (att_got, len(fonts)))
     if a.chapters and not (vo.get("chapters") or []):
@@ -531,7 +534,9 @@ def main():
         print("QC-WARN: " + w, flush=True)
     if qc_hard:
         fail("QC 失败：" + "；".join(qc_hard))
-    print("QC: 通过（字幕轨 %d 条，语言/旗标符合预期；附件 %d）" % (st, att_got), flush=True)
+    # 仅在有字幕轨时才宣称「通过」；无字幕轨只发 QC-WARN，避免「0 条字幕却语言符合预期」的误导
+    if st > 0:
+        print("QC: 通过（字幕轨 %d 条，语言/旗标符合预期；附件 %d）" % (st, att_got), flush=True)
     print("--- Result ---", flush=True)
     for tr in (vo.get("tracks") or []):
         pr = tr.get("properties") or {}
