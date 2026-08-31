@@ -4,6 +4,13 @@
 # 行为与旧 ps1 完全对齐：assfonts 两阶段子集化 -> mkvmerge 组装 -> 校验 -> 安装(替换/备份)。
 import argparse, json, os, re, shutil, subprocess, sys, tempfile, uuid
 
+# Windows 下 stdout 重定向到文件时默认 cp936(GBK)，会与 mkvmerge 输出的 UTF-8 混在同一日志文件，
+# 导致 read_tail/decode_log 二选一编码时把 UTF-8 段解成乱码。这里强制 print 输出 UTF-8 与 mkvmerge 对齐。
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # 项目根（本文件位于 app/tools/）
 
 try:   # 独立脚本直跑与被 app 包导入两种场景都能找到同目录的 font_sources
