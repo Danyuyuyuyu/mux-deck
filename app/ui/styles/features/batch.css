@@ -192,6 +192,27 @@
   /* ================= 批量进度 / 结果 ================= */
   .bq-progress .t-sec { font-size:12.5px; color:var(--text-secondary); }
 
+  /* 封装运行态锁定：禁用控件淡化 + 指针禁点（配合 JS setBatchControlsLocked 的 disabled 属性） */
+  .bq-locked .bq-settings, .bq-locked .bq-toolbar { opacity:.55; pointer-events:none; }
+  .bq-locked .bq-row { pointer-events:none; }
+  .bq-locked .bq-row .bq-detail-toggle { pointer-events:auto; opacity:.7; }   /* 详情展开仍可查看 */
+
+  /* 结果表内相邻 chip（成功 / QC通过）垂直对齐与间距：inline-flex 默认 baseline 会错位，统一 middle */
+  .bq-results td .chip { vertical-align:middle; margin:1px 4px 1px 0; }
+  .bq-results td .chip:last-child { margin-right:0; }
+
+  /* 失败项重跑进度横幅（结果表顶部） */
+  .bq-rerun-banner {
+    display:flex; align-items:center; gap:8px;
+    margin:8px 0 0; padding:8px 12px;
+    background:var(--run-bg); color:var(--primary);
+    border:1px solid var(--run-line); border-radius:var(--radius-sm);
+    font-size:12.5px; font-weight:500;
+  }
+  .bq-rerun-banner .ic { font-size:14px; }
+  /* 重跑中的结果行：淡蓝高亮 */
+  .bq-row-rerunning { background:var(--run-bg); }
+
   /* ================= 响应式 ================= */
   @media (max-width:1240px) {
     .bq-toolbar-hint { display:none; }

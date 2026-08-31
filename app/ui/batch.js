@@ -151,7 +151,7 @@ function renderBatch() {
     list.appendChild(div.firstElementChild);
   });
   wireBatchRowEvents();
-  refreshBatchSticky();
+  updateBatchSelUI();     // 删除/增删后同步选中栏显隐与「全选」勾选态（内含 refreshBatchSticky）
   refreshBatchCount();
   saveBatchQueue();
 }
@@ -388,17 +388,87 @@ function addBatchVideo(video, subPool, matched) {
   batchItems.push({video, sc, tc, chapters: (matched && matched.chapters) || '', __open: false});
 }
 let bJob = null;
-/* 失败单集重跑：用列表中对应项（含已匹配字幕）重组为单项队列并直接开始 */
-function rerunFailed(i) {
+let lastBatchRun = null;       // 上次批量提交的 { items, common }：items 供失败项重跑定位（不触碰 batchItems）；common 仅用于正常批量结果区「打开输出目录」指向（重跑已改实时读 buildMuxCommon）
+let lastBatchResults = null;   // 上次批量终态结果数组，供失败项重跑后按行 patch 更新
+let rerunState = null;         // 失败项重跑运行态：{ index, name, progress }；null = 未在重跑
+/* 失败单集重跑：仅重跑该失败项，保留原任务列表与结果区，重跑完成后用新结果覆盖该行。
+ * 反馈闭环：结果行内「重跑中…」loading + 结果区顶部进度横幅 + 下方日志实时输出 + 完成提示音。 */
+async function rerunFailed(i) {
   if (bJob) { setStatus('批量任务进行中，不能重跑', 'err'); return; }
-  const it = batchItems[i];
-  if (!it || !it.video) { alert('找不到对应列表项（列表可能已被修改）'); return; }
-  batchItems.splice(0, batchItems.length);
-  batchItems.push({ video: it.video, sc: it.sc || '', tc: it.tc || '', chapters: it.chapters || '', __open: false });
-  renderBatch();
-  setStatus('已重组为单项队列并开始重跑：' + it.video.split(/[\\/]/).pop(), 'ok');
-  $('btnBatchStart').click();
+  if (rerunState) { setStatus('已有任务在重跑，请等待完成', 'err'); return; }
+  const ctx = lastBatchRun;
+  const it = ctx && ctx.items && ctx.items[i];
+  if (!it || !it.video) { alert('找不到该失败项的提交参数（请重新发起批量封装）'); return; }
+  const name = it.video.split(/[\\/]/).pop();
+  const common = buildMuxCommon('b_');   // 公共参数实时读取当前设置区（重跑前修改的设置即时生效）；items 仍用提交快照
+  const outDir = common.out_dir;
+  rerunState = { index: i, name: name, progress: null };
+  renderBatchResults(lastBatchResults, outDir);   // 该行切「重跑中…」+ 禁用所有重跑按钮
+  showLogTab('batch'); setLog('batch', '');
+  setStatus('正在重跑：' + name + ' …', 'run');
+  try {
+    const body = Object.assign({ items: [it] }, common);
+    const r = await api('/api/batch', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (r.error) { rerunState = null; renderBatchResults(lastBatchResults, outDir); setStatus('重跑失败：' + r.error, 'err'); return; }
+    // 轮询该单项任务：实时写日志 + 更新行内/横幅进度；结束后把新结果替换到结果表第 i 行
+    const rerunRes = await new Promise((resolve) => {
+      startTaskPolling({
+        job: r.job, interval: 800,
+        onAny: s => {
+          setLog('batch', s.log || '');
+          rerunState.progress = (s.progress != null ? s.progress : null);
+          renderBatchResults(lastBatchResults, outDir);
+        },
+        onDone: s => { resolve(s); },
+        onError: s => { resolve(s); },
+        onKilled: s => { resolve(s); },
+        onLost: () => { resolve(null); }
+      });
+    });
+    const newRes = rerunRes && rerunRes.results && rerunRes.results[0];
+    const ok = !!(newRes && newRes.ok);
+    if (newRes && lastBatchResults) { lastBatchResults[i] = newRes; }
+    rerunState = null;
+    renderBatchResults(lastBatchResults, outDir);
+    setStatus(ok ? ('重跑成功：' + name) : ('重跑失败：' + name), ok ? 'ok' : 'err');
+    if (ok) beep();
+  } catch (ex) {
+    rerunState = null;
+    renderBatchResults(lastBatchResults, outDir);
+    setStatus('重跑失败：' + ex, 'err');
+  }
 }
+/* 结果表渲染：顶部统一「打开输出目录」（out_dir 非空才显示），行内不再逐行放「打开」；
+ * 失败行仅「重跑」，成功行保留「命令」查看。data-open-dir 事件委托见 console.js。
+ * 重跑中（rerunState.running）：该行状态切「重跑中…」loading、所有重跑按钮禁用、顶部显示进度横幅。 */
+function renderBatchResults(results, outDir) {
+  const resBox = $('batchResults');
+  if (!resBox) return;
+  if (!results || !results.length) { resBox.innerHTML = ''; return; }
+  const rerun = rerunState;   // { index, name, progress }
+  const headOpen = outDir
+    ? '<div style="display:flex;justify-content:flex-end;margin:8px 0 0;"><button class="btn small" data-open-dir="' + encodeURIComponent(outDir) + '">' + ic('arrowUpRight') + '<span>打开输出目录</span></button></div>'
+    : '';
+  const headRerun = rerun
+    ? '<div class="bq-rerun-banner">' + ic('loader', 'spin') + '<span>正在重跑 ' + esc(rerun.name) + (rerun.progress != null ? ('（' + rerun.progress + '%）') : '') + '</span></div>'
+    : '';
+  resBox.innerHTML = headRerun + headOpen +
+    '<div class="table-wrap" style="margin-top:8px;"><table style="min-width:560px;"><tr><th>#</th><th>输出文件</th><th>结果</th><th style="width:130px"></th></tr>' +
+    results.map((r, i) => {
+      const rerunning = rerun && rerun.index === i;
+      const statusCell = rerunning
+        ? '<span class="chip sm run">' + ic('loader', 'spin') + '重跑中…</span>'
+        : (r.skipped ? '<span class="chip sm info">' + ic('info') + '已存在，跳过</span>'
+          : r.ok ? '<span class="chip sm ok">' + ic('check') + '成功</span>'
+          : '<span class="chip sm err">' + ic('xCircle') + '失败' + (r.reason ? '：' + esc(r.reason) : ' (exit ' + r.exit + ')') + '</span>');
+      const qcChip = r.qc ? '<span class="chip sm ' + (r.qc.status === 'ok' ? 'ok' : r.qc.status === 'warn' ? 'warn' : 'err') + '" title="' + esc(((r.qc.warn || []).concat(r.qc.hard || [])).join('\n')) + '">QC' + (r.qc.status === 'ok' ? '通过' : r.qc.status === 'warn' ? '预警' + (r.qc.warn || []).length : '失败') + '</span>' : '';
+      const ops = (r.cmd && !rerunning ? '<button class="btn small" data-cmd="' + b64e(r.cmd) + '" title="查看本次封装的 mkvmerge 命令">' + ic('terminal') + '命令</button>' : '') +
+        (r.ok || rerunning ? '' : '<button class="btn small" onclick="rerunFailed(' + i + ')"' + (rerun ? ' disabled' : '') + '>重跑</button>');
+      return '<tr' + (rerunning ? ' class="bq-row-rerunning"' : '') + '><td>' + (i + 1) + '</td><td class="mono" style="word-break:break-all">' + esc(r.output || r.video) + '</td><td>' +
+        statusCell + qcChip + '</td><td>' + ops + '</td></tr>';
+    }).join('') + '</table></div>';
+}
+
 /* 预设套用 → 批量公共字段联动（由 presets.js applyPreset 调用；映射集中在此，batch 域自持） */
 function applyPresetToBatchCommon(d) {
   const bm = { fonts_mode: 'b_fonts_mode', out_name_tmpl: 'b_out_name_tmpl', title: 'b_title',
@@ -584,6 +654,7 @@ $('btnBatchCheck').onclick = () => {
 $('btnMatchAll').onclick = $('btnBatchRematchAll').onclick;
 $('btnBFonts').onclick = () => openBrowser(v => $('b_fonts_dir').value = v, 'dir', $('b_fonts_dir').value, 'fonts');
 $('btnBOut').onclick = () => openBrowser(v => $('b_out_dir').value = v, 'dir', $('b_out_dir').value, 'out');
+}
 
 /* ---- 批量任务主体（按钮启动逻辑，保留原语义） ---- */
 const _btnStart = $('btnBatchStart');
@@ -624,6 +695,7 @@ _btnStart.onclick = async () => {
     }
   }
   const body = Object.assign({ items }, buildMuxCommon('b_'));   // 公共参数（字体/输出/备份/旗标，与单个封装同一份逻辑，见 task.js）
+  lastBatchRun = { items: items, common: buildMuxCommon('b_') };   // 缓存本次队列与公共参数，供「失败项重跑」仅重跑单项（见 rerunFailed）
   const r = await api('/api/batch', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   if (r.error) { $('batchState').textContent = '错误：' + r.error; return; }
   bJob = r.job;
@@ -638,12 +710,14 @@ _btnStart.onclick = async () => {
   batchRunInfo = { current: 0, total: items.length, results: [] };
   refreshRowStatuses();
   setRunButton(_btnStart, true, '停止批量', '开始批量封装');
+  setBatchControlsLocked(true);   // 封装进行中：禁用设置区与列表操作，防止改动与结果错位
   showLogTab('batch'); setLog('batch', '');
   const bfin = (s, lastR, stateText, statusMsg, statusCls) => {
     bJob = null;
     batchRunInfo = null;
     refreshRowStatuses();
     setRunButton(_btnStart, false, '停止批量', '开始批量封装');
+    setBatchControlsLocked(false);   // 任务结束：恢复设置区与列表可编辑
     const qs = s && s.qc_summary;
     if (qs && qs.total) stateText += ' · QC 通过 ' + qs.ok + '/' + qs.total + (qs.warn ? '，预警 ' + qs.warn : '') + (qs.fail ? '，失败 ' + qs.fail : '');
     $('batchState').textContent = stateText;
@@ -677,10 +751,9 @@ _btnStart.onclick = async () => {
         if (s.results && s.results.length) batchRunInfo.results = s.results;
         refreshRowStatuses();
       }
-      const resBox = $('batchResults');
       if (s.results && s.results.length) {
-        resBox.innerHTML = '<div class="table-wrap" style="margin-top:8px;"><table style="min-width:560px;"><tr><th>#</th><th>输出文件</th><th>结果</th><th style="width:130px"></th></tr>' + s.results.map((r, i) =>
-          '<tr><td>' + (i + 1) + '</td><td class="mono" style="word-break:break-all">' + esc(r.output || r.video) + '</td><td>' + (r.skipped ? '<span class="chip sm info">' + ic('info') + '已存在，跳过</span>' : r.ok ? '<span class="chip sm ok">' + ic('check') + '成功</span>' : '<span class="chip sm err">' + ic('xCircle') + '失败' + (r.reason ? '：' + esc(r.reason) : ' (exit ' + r.exit + ')') + '</span>') + (r.qc ? '<span class="chip sm ' + (r.qc.status === 'ok' ? 'ok' : r.qc.status === 'warn' ? 'warn' : 'err') + '" title="' + esc(((r.qc.warn || []).concat(r.qc.hard || [])).join('\n')) + '">QC' + (r.qc.status === 'ok' ? '通过' : r.qc.status === 'warn' ? '预警' + (r.qc.warn || []).length : '失败') + '</span>' : '') + '</td><td><button class="btn small" data-open-dir="' + encodeURIComponent(r.output || r.video) + '">打开</button>' + (r.cmd ? ' <button class="btn small" data-cmd="' + b64e(r.cmd) + '" title="查看本次封装的 mkvmerge 命令">' + ic('terminal') + '命令</button>' : '') + (r.ok ? '' : ' <button class="btn small" onclick="rerunFailed(' + i + ')">重跑</button>') + '</td></tr>').join('') + '</table></div>';
+        lastBatchResults = s.results;   // 缓存终态结果，供失败项重跑后按行 patch 更新
+        renderBatchResults(s.results, (lastBatchRun && lastBatchRun.common && lastBatchRun.common.out_dir) || '');
       }
     },
     onTick: s => {
@@ -708,6 +781,28 @@ function refreshRowStatuses() {
   refreshBatchCount();
 }
 
+/* 批量封装运行态锁定：封装进行中禁用设置区与任务列表操作（只读详情可展开查看），结束恢复。
+ * 覆盖：设置区控件、工具栏按钮、全选、行复选框、行更多菜单、详情输入与按钮。 */
+function setBatchControlsLocked(locked) {
+  const els = [
+    // 批量封装设置区（核心 + 高级）
+    'b_preset_sel', 'b_out_dir', 'b_out_name_tmpl', 'b_fonts_dir', 'b_fonts_mode', 'b_title', 'b_postcmd',
+    'b_force', 'b_use_sys_fonts', 'b_backup', 'b_skip', 'b_sc_default', 'b_tc_default', 'b_sc_forced', 'b_tc_forced',
+    'btnBOut', 'btnBFonts', 'btnBatchPresetManage',
+    // 顶部工具栏
+    'btnBatchFiles', 'btnBatchDir', 'btnMatchAll', 'btnBatchMore',
+    // 全选
+    'bqSelectAll',
+  ];
+  els.forEach(id => { const el = $(id); if (el) el.disabled = locked; });
+  // 高级设置折叠开关：锁定期间不可展开/收起
+  const adv = $('btnBatchAdv'); if (adv) adv.disabled = locked;
+  // 任务列表：行复选框 + 行更多菜单 + 详情输入框（只读）/按钮
+  document.querySelectorAll('.bq-rowcheck, .bq-more-btn, .bq-detail input, .bq-detail button').forEach(el => { el.disabled = locked; });
+  // 视觉：锁定态给批量设置/列表一个淡化的容器提示（CSS 由 .bq-locked 控制）
+  $('mode-batch').classList.toggle('bq-locked', locked);
+}
+
 (function restoreBatchQueue() {
   try {
     const q = JSON.parse(localStorage.getItem('muxui_batch_queue') || 'null');
@@ -732,4 +827,3 @@ function refreshRowStatuses() {
     setStatus('已恢复上次的批量列表（' + batchItems.length + ' 项）与选项，可续跑', 'ok');
   } catch (e) {}
 })();
-}
