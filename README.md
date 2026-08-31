@@ -36,9 +36,9 @@ start_mux_ui.bat            # 浏览器自动打开 http://127.0.0.1:8765
 
 - **封装 (mux)**：mkvmerge 合成 MKV；简体存在时简体为默认轨道，仅给繁体时繁体自动默认
 - **轨道旗标**：简/繁字幕轨可手动指定 `default`（默认轨）与 `forced`（强制轨），留空则走自动规则；封装后播放器按旗标选轨
-- **封装预设**：轨道名 / 旗标 / 字体目录 / 输出目录 / 子集工具 / 字体处理等一键保存为预设，切换即套用（面向字幕组规范）
+- **封装预设**：轨道名 / 旗标 / 字体目录 / 输出 / 章节 / 命名模板 / MKV 标题 / 字体处理等一键保存为预设（面向字幕组规范）；**预设管理器**（右上角设置 → 封装 → 封装预设）双栏桌面布局：左侧列表区分「当前任务 ✓」与「正在编辑」两个状态，右侧分区编辑器（SC/TC 轨道卡、默认轨三态、路径浏览），底部按状态给出 应用 / 保存修改 / 保存并应用；主页状态条显示当前预设与已修改提示；**预设记忆**——刷新后自动恢复上次预设并重新套用，名称失效自动回落；已选预设时自动识别不改写轨道名，重置 = 回到预设基线
 - **章节**：可选章节文件（OGM txt / XML）随封装写入并替换源章节；留空则保留源章节；内置**章节编辑器**（从源视频提取 / 加载文件 → OGM 明文编辑 → 保存回填）
-- **命名模板**：输出文件名支持 `{src}` 源文件名、`{ep}` 集数、`{res}` 分辨率（如 1080P）占位符，单个与批量通用
+- **命名模板**：输出文件名支持 `{src}` 源文件名、`{ep}` 集数、`{res}` 分辨率（如 1080P）、`{title}` MKV 标题（留空回退源文件名）占位符，单个与批量通用，提交前实时预览成品文件名
 - **封装后校验 (QC)**：封装完成自动复检成品——字幕轨语言与默认旗标硬校验（不符即失败），附件数量/章节软提醒
 - **快速修补**：mkvpropedit 原地修改已有 MKV 的轨道名称/语言/默认与强制旗标、MKV 标题、章节（XML）——秒级完成不重封装，发布后补丁场景专用
 - **字体子集化（双轨）**：默认用 AssFontSubset——子集化后**自动修正 ASS 里引用的字体名**，根治嵌入字体名不匹配导致的缺字；assfonts 保留为回退（`config.json` 的 `subset_tool` 一行切换）。注意 AFS 要求字体目录内同族字体不重复，目录有重复时体检会给出明确提示；另有**仅收集模式**（不裁字形，把被引用字体全量嵌入）
@@ -81,9 +81,15 @@ py -3 app\tools\autostart.py install                                       # 开
 ```
 mux-deck/
 ├── app/                                       # 服务端：server.py 薄路由 + features/ 功能模块 + core.py 共享底座 + config.json
-│   ├── features/                              # Web 功能模块（browse/files/tracks/mux/extract/preview/misc/fonts/env）
-│   ├── ui/                                    # 前端资源（零构建）：index.html 骨架 + style.css + 按功能切分的 js（app 核心 / identify 识别服务 / batch / extract / preview / env / init），server 白名单静态路由直接提供
-│   └── tools/                                 # 可独立执行的脚本/工具：mux_cli（封装引擎）/ bootstrap / batch_cli / smoke_test / selfcheck / font_dup_scan / autostart
+│   ├── features/                              # Web 功能模块（browse/files/tracks/mux/extract/preview/misc/fonts/env/subcheck/propedit/chapters）
+│   ├── ui/                                    # 前端（零构建 vanilla JS，无打包器）：
+│   │   ├── index.html + loader.js + init.js   # App Shell：壳 → loader 并行挂载 fragments 后按序注入脚本 → init.js bootstrap
+│   │   ├── pages/ + partials/                 # 页面 fragment（single/batch/subtitle-tools）与共享 DOM（console/modals）
+│   │   ├── scripts/{core,components,features}/# core 基础能力 → components 通用控件（modal/browser/settings/console）→ features 业务 UI（single/preflight/presets/chapters）
+│   │   ├── styles/{components,features}/      # tokens/base/layout + 控件/业务样式，style.css 为 @import 入口
+│   │   └── app.js 等根目录 js                 # 任务公共逻辑（task）/识别（identify）/批量/环境/提取/预览/修补页业务 + glue（app.js）
+│   └── tools/                                 # 可独立执行的脚本/工具：mux_cli（封装引擎）/ batch_cli / bootstrap / smoke_test / selfcheck / font_dup_scan / autostart
+├── tests/                                     # 三层测试：test_units.py（unittest）/ jsdom（整页回归）/ smoke（Playwright 冒烟，本地运行）
 ├── start_mux_ui.bat / install_autostart.bat / 安装环境.bat / 环境自检.bat   # 操作入口（根目录，纯 ASCII 薄壳）
 ├── bin/                                       # 第三方运行时（app\tools\bootstrap.py 获取，不随 git 分发）
 │   ├── mkvtoolnix/                           # mkvmerge / mkvextract
@@ -91,7 +97,7 @@ mux-deck/
 │   ├── assfonts/                             # 回退子集工具（v0.7.3）
 │   └── assfontsubset/                        # 主用子集工具 AssFontSubset（v2.2.0）
 ├── data/                                     # 运行时数据：mux（任务历史）/ preview / log / tmp（旧 jobs/previews 只读兼容）
-└── docs/                                     # CONTEXT.md（领域术语表）/ adr/（架构决策）/ archive/（历史文献）/ README.md（交接索引，本地维护，不入库）
+└── docs/                                     # 本地维护不入库：ARCHITECTURE.md（架构约束）/ PROGRESS.md（进度）/ PITFALLS.md（坑）/ CONTEXT.md（术语）/ adr/（决策）/ archive/（历史文献）
 ```
 
 ## 环境要求
