@@ -54,7 +54,7 @@ def check_fonts_afs(subs, fonts_dir):
             # 不是缺字、是工具崩溃：最常见根因是字体文件本身不规范
             # （如老字体 cmap 子表 length 字段写错，pyftsubset 严格解析即断言退出）。
             crash_font = _afs_crash_font(txt)
-            tip = "建议在高级选项把子集化工具切换为 assfonts 后重试"
+            tip = "建议在高级选项把子集化工具切换为 assfonts，或把字体处理改为仅收集（不裁字形，坏字体免疫）后重试"
             if crash_font:
                 return {"ok": False,
                         "error": "字体文件 %s 不规范或损坏，AFS 无法解析——%s" % (crash_font, tip),
