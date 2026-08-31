@@ -42,18 +42,23 @@ function batchRowStatus(i) {
   return { cls: 'ok', icon: 'check', text: '就绪' };
 }
 
-/* ---- 文件信息（无探测数据，仅从路径派生格式，不做假元数据） ---- */
+/* ---- 文件信息（无探测数据，仅从路径派生格式，不做假元数据） ----
+ * 文件名按「省略中间、保留两端」展示：fnHead（头部）+ 省略号 + fnTail（尾部）。
+ * 集数通常落在文件名尾部，故尾部保留更多（覆盖后缀 + 集数标记），头部只留开头一段。 */
 function bqFileInfo(it) {
-  if (!it || !it.video) return { nameBase: '', nameExt: '', path: '', fmt: '' };
+  if (!it || !it.video) return { fnHead: '', fnTail: '', path: '', fmt: '' };
   const v = it.video;
   const slash = v.lastIndexOf('/') > v.lastIndexOf('\\') ? v.lastIndexOf('/') : v.lastIndexOf('\\');
   const base = slash >= 0 ? v.slice(slash + 1) : v;   // 兼容正斜杠 / 反斜杠
   const dot = base.lastIndexOf('.');
   const fmt = (dot > 0 ? base.slice(dot + 1) : '').toUpperCase();
+  const extLen = dot > 0 ? base.length - dot : 0;   // 含点后缀长度（如 .mkv=4）
+  const tailN = Math.max(10, extLen + 12);          // 尾部保留：后缀 + 12 字符（覆盖常见集数标记）
   return {
-    nameBase: dot > 0 ? base.slice(0, dot) : base,   // 文件名主体（不含后缀，用于省略号截断）
-    nameExt: dot > 0 ? base.slice(dot) : '',         // 含点后缀（如 .mkv），恒保留展示
-    path: slash >= 0 ? v.slice(0, slash + 1) : '',   // 目录部分（含末尾分隔符）
+    fnHead: base.slice(0, Math.max(0, base.length - tailN)),   // 头部（可能为空 → 不省略，直接显示完整）
+    fnTail: base.slice(-tailN),                                 // 尾部（含后缀，恒保留）
+    nameFull: base,                                             // 完整文件名（用于 title 悬停）
+    path: slash >= 0 ? v.slice(0, slash + 1) : '',              // 目录部分（含末尾分隔符）
     fmt: fmt
   };
 }
@@ -79,7 +84,7 @@ function bqRowHtml(i) {
       '<span class="bq-col-check"><input type="checkbox" class="bq-rowcheck" data-i="' + i + '"' + (sel ? ' checked' : '') + ' aria-label="选择任务 ' + (i + 1) + '"></span>' +
       '<span class="bq-col-idx">' + (i + 1) + '</span>' +
       '<div class="bq-file">' +
-        '<div class="bq-file-top"><span class="bq-file-name" title="' + esc(vidBase || '') + '"><span class="bq-fn-main">' + esc(fi.nameBase || vidBase || '（空任务）') + '</span>' + (fi.nameExt ? '<span class="bq-fn-ext">' + esc(fi.nameExt) + '</span>' : '') + '</span>' + (fi.fmt ? '<span class="bq-fmt">' + fi.fmt + '</span>' : '') + '</div>' +
+        '<div class="bq-file-top"><span class="bq-file-name" title="' + esc(fi.nameFull || vidBase || '') + '"><span class="bq-fn-main">' + esc(fi.fnHead || vidBase || '（空任务）') + '</span>' + (fi.fnTail ? '<span class="bq-fn-ext">' + esc(fi.fnTail) + '</span>' : '') + '</span>' + (fi.fmt ? '<span class="bq-fmt">' + fi.fmt + '</span>' : '') + '</div>' +
         (path ? '<div class="bq-file-path" title="' + esc(it.video) + '">' + esc(path) + '</div>' : '<div class="bq-file-path muted">未设置视频文件</div>') +
       '</div>' +
       '<div class="bq-sub">' +

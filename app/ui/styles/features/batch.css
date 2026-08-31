@@ -86,7 +86,7 @@
     font-size:13.5px; font-weight:600; color:var(--text-primary);
   }
   .bq-fn-main {
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;
+    flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
   .bq-fn-ext { flex:none; white-space:nowrap; font-weight:600; }
   .bq-fmt {
