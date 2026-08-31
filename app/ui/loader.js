@@ -2,7 +2,7 @@
  * index.html 只保留外壳；业务界面拆为 pages/（single / batch / subtitle-tools）与
  * partials/（console / modals）。启动时一次性并行加载全部片段并挂载（无 lazy loading，
  * 切换 mode 仅显示/隐藏，不重新 fetch、不丢输入状态），随后按原加载顺序注入执行业务
- * 脚本（app → identify → task → batch → extract → preview → propedit → env → init）——
+ * 脚本（app → identify → task → batch → extract → preview → propedit → subset → env → init）——
  * 既有 JS 的顶层绑定代码因此运行在完整 DOM 之上，且只执行一次（无重复绑定）。
  * 片段/脚本加载失败时在 pageRoot 给出明确错误与重新加载入口，不静默白屏。 */
 (function () {
@@ -26,7 +26,7 @@
     'scripts/components/console.js',
     'scripts/features/single.js', 'scripts/features/preflight.js', 'scripts/features/presets.js', 'scripts/features/chapters.js',
     // 既有业务页脚本（batch 依赖 console/single 的运行时全局，须在其后）
-    'batch.js', 'extract.js', 'preview.js', 'propedit.js',
+    'batch.js', 'extract.js', 'preview.js', 'propedit.js', 'subset.js',
     // 应用级 glue + 启动初始化
     'app.js', 'init.js'
   ];

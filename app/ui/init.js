@@ -17,6 +17,7 @@ function bootstrap() {
   initExtract();
   initPreview();
   initPropedit();
+  initSubset();
   initEnv();
   initAppGlue();
   startup();

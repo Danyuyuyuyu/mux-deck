@@ -396,5 +396,71 @@ class PostcmdTest(unittest.TestCase):
         self.assertEqual(q["warn"], ["后处理命令失败（退出码 1）"])
 
 
+class SubsetTest(unittest.TestCase):
+    """F3 独立子集化：路由注册 + 参数校验（校验失败不建 job）。"""
+
+    def test_routes_registered(self):
+        from app.features import find, subset
+        self.assertIsNotNone(find("POST", "/api/subset_run"))
+        self.assertIsNotNone(find("GET", "/api/subset_status"))
+        self.assertIsNotNone(find("POST", "/api/subset_stop"))
+        self.assertIn("/api/subset_run", subset.handlers["POST"])
+        self.assertIn("/api/subset_status", subset.handlers["GET"])
+        self.assertIn("/api/subset_stop", subset.handlers["POST"])
+
+    def test_validation_no_job_created(self):
+        from app.features import subset
+        from app import core
+        with tempfile.TemporaryDirectory() as d:
+            sub = os.path.join(d, "EP01.ass")
+            with open(sub, "w", encoding="utf-8"):
+                pass
+            fonts = os.path.join(d, "fonts")
+            os.makedirs(fonts)
+            out = os.path.join(d, "out")
+            jobs_before = set(core.JOBS)
+            cases = [
+                ({}, "字幕"),
+                ({"subs": [], "fonts_dir": fonts, "out_dir": out}, "字幕"),
+                ({"subs": ["   "], "fonts_dir": fonts, "out_dir": out}, "字幕"),
+                ({"subs": [sub], "fonts_dir": "", "out_dir": out}, "字体目录"),
+                ({"subs": [sub], "fonts_dir": os.path.join(d, "nope"), "out_dir": out}, "字体目录"),
+                ({"subs": [sub], "fonts_dir": fonts, "out_dir": ""}, "输出目录"),
+                ({"subs": [sub], "fonts_dir": fonts, "out_dir": "   "}, "输出目录"),
+                ({"subs": [os.path.join(d, "ghost.ass")], "fonts_dir": fonts, "out_dir": out}, "不存在"),
+            ]
+            for body, kw in cases:
+                r = subset.handle_run(body)
+                self.assertIn("error", r, body)
+                self.assertIn(kw, r["error"], body)
+            self.assertEqual(set(core.JOBS), jobs_before, "校验失败不得创建 job")
+
+    def test_out_dir_same_as_fonts_dir_rejected(self):
+        from app.features import subset
+        with tempfile.TemporaryDirectory() as d:
+            sub = os.path.join(d, "EP01.ass")
+            with open(sub, "w", encoding="utf-8"):
+                pass
+            r = subset.handle_run({"subs": [sub], "fonts_dir": d, "out_dir": d})
+            self.assertIn("error", r)
+            self.assertIn("字体目录", r["error"])
+            # 大小写 / 尾斜杠差异（Windows 口径）同样拒绝
+            r2 = subset.handle_run({"subs": [sub], "fonts_dir": d, "out_dir": d.upper() + os.sep})
+            self.assertIn("error", r2)
+
+    def test_status_and_stop_unknown_id(self):
+        from app.features import subset
+        self.assertIn("error", subset.handle_status({"id": ["no_such_job"]}))
+        self.assertIn("error", subset.handle_stop({"id": "no_such_job"}))
+        # 非 subset 任务（共享 JOBS 注册表）不可经 subset 端点查询/停止
+        from app import core
+        core.JOBS["foreign_id"] = {"id": "foreign_id", "status": "running"}
+        try:
+            self.assertIn("error", subset.handle_status({"id": ["foreign_id"]}))
+            self.assertIn("error", subset.handle_stop({"id": "foreign_id"}))
+        finally:
+            del core.JOBS["foreign_id"]
+
+
 if __name__ == "__main__":
     unittest.main()

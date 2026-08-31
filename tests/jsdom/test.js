@@ -32,6 +32,8 @@ let chaptersRet = { chapters: '' };
 let jobCalls = 0;   // /api/job 轮询计数：前 2 次运行中(68%)，之后 done
 let batchJobCalls = 0;   // 批量任务轮询：前 2 次运行中(第 1/1 个, 68%)，之后 done 全成功
 let pvGridJobCalls = 0;  // 连拍轮询：前 2 次运行中(40%, 第 3/9 步)，之后 done 出图
+let ssRunBodies = [];    // 场景23：独立子集化提交体收集
+let ssStatusCalls = 0;   // 场景23：子集化状态轮询计数（前 2 次运行中，之后 done 带结果行）
 const presetStore = { };  // 预设存取 mock
 function mockFetch(url, opts) {
   const u = url.split('?')[0];
@@ -54,6 +56,18 @@ function mockFetch(url, opts) {
   else if (u === '/api/chapters/parse') data = { chapters: [{ time: '00:00:00.000', name: 'OP' }] };
   else if (u === '/api/chapters/save') data = { path: 'C:\\ch_edited.txt', count: 1 };
   else if (u === '/api/propedit') data = { ok: true, log: '', probe: {} };
+  else if (u === '/api/subset_run') {
+    try { ssRunBodies.push(JSON.parse((opts && opts.body) || '{}')); } catch (e) {}
+    data = { job: 'sstest', tool: 'afs' };
+  }
+  else if (u === '/api/subset_status') {
+    ssStatusCalls++;
+    data = ssStatusCalls <= 2
+      ? { status: 'running', done: ssStatusCalls, total: 2, failed: 0, tool: 'afs', current_video: 'EP01.ass', results: [], log: '' }
+      : { status: 'done', done: 2, total: 2, failed: 0, tool: 'afs', result: 'D:\\Out', log: '',
+          results: [ { sub: 'D:\\Video\\EP01.ass', ok: true, missing: [], out_dir: 'D:\\Out\\EP01' },
+                     { sub: 'D:\\Video\\EP02.ass', ok: false, missing: ['FZLanTingHe'], out_dir: 'D:\\Out\\EP02' } ] };
+  }
   else if (u === '/api/sub_check') data = { ok: true, dialogue: 120, counts: { overlap: 1, empty: 0, bad_time: 0, bad_style: 0, cps: 2, long_line: 1 }, issues: [{ line: 12, type: 'cps', detail: 'CPS 18.0 超过 15（27 字 / 1.50s）' }], total_issues: 4, truncated: false, status: 'warn' };
   else if (u === '/api/history') data = { items: [] };
   else if (u === '/api/presets') {
@@ -616,6 +630,35 @@ function mockFetch(url, opts) {
   // 批量重置复位后处理命令（含存在性守卫路径）
   $('btnBatchClear').click();
   check('批量重置后后处理命令输入清空', $('b_postcmd').value === '');
+
+  /* ---- 场景23（F3 独立子集化）：面板/下拉入口/空输入校验/运行轮询渲染 ---- */
+  check('mode-subset 面板存在且核心控件齐备', !!window.document.getElementById('mode-subset') && !!$('ss_subs') && !!$('ss_fonts') && !!$('ss_out') && !!$('ss_use_sys') && !!$('btnSSRun') && !!$('btnSSStop') && !!$('ssBarWrap') && !!$('ssRes'));
+  check('TOOL_MODES 含 subset 且下拉有独立子集化入口', window.eval("TOOL_MODES.indexOf('subset')") >= 0 && !!window.document.querySelector('.drop-item[data-mode="subset"]') && window.document.querySelector('.drop-item[data-mode="subset"]').textContent.includes('独立子集化'));
+  window.switchMode('subset');
+  check('switchMode(subset) 后面板激活', window.document.getElementById('mode-subset').classList.contains('active'));
+  // 空输入：有提示且不发请求
+  let ssAlert = '';
+  window.alert = m => { ssAlert = String(m); };
+  const ssCallsBefore = ssRunBodies.length;
+  $('btnSSRun').click();
+  check('空输入点开始：提示且不发请求', ssAlert.length > 0 && ssRunBodies.length === ssCallsBefore, ssAlert);
+  window.alert = m => console.log('[alert]', m);
+  // 填齐后运行：提交体 + 一轮轮询渲染结果行
+  $('ss_subs').value = 'D:\\Video\\EP01.ass\nD:\\Video\\EP02.ass';
+  $('ss_fonts').value = 'D:\\Video\\Fonts';
+  $('ss_out').value = 'D:\\Out';
+  $('ss_use_sys').checked = true;
+  $('btnSSRun').click();
+  ok = await waitUntil(() => ssRunBodies.length > ssCallsBefore, 3000);
+  const ssBody = ok && ssRunBodies[ssRunBodies.length - 1];
+  check('开始子集化：提交体含字幕列表/目录/系统字体开关', ok && ssBody.subs.length === 2 && ssBody.fonts_dir === 'D:\\Video\\Fonts' && ssBody.out_dir === 'D:\\Out' && ssBody.use_sys_fonts === true, ssRunBodies.length && JSON.stringify(ssRunBodies[ssRunBodies.length - 1]));
+  ok = await waitUntil(() => $('btnSSRun').disabled && $('btnSSStop').style.display !== 'none' && $('ssBarWrap').style.display !== 'none');
+  check('运行中：开始按钮禁用 + 停止按钮可见 + 进度条显示', ok);
+  ok = await waitUntil(() => $('ssRes').innerHTML.indexOf('EP02.ass') >= 0, 8000);
+  check('轮询渲染结果行（失败行含缺字与产物目录）', ok && $('ssRes').innerHTML.indexOf('FZLanTingHe') >= 0 && $('ssRes').innerHTML.indexOf('D:\\Out\\EP01') >= 0, $('ssRes').innerHTML.slice(0, 200));
+  ok = await waitUntil(() => $('ssRes').innerHTML.indexOf('子集化完成') >= 0, 8000);
+  check('终态：完成提示 + 按钮恢复 + 进度 100%', ok && !$('btnSSRun').disabled && $('btnSSStop').style.display === 'none' && $('ssBar').style.width === '100%', $('ssRes').innerHTML.slice(0, 160));
+  check('AFS 主路径结果区无 assfonts 回退提示', $('ssRes').innerHTML.indexOf('assfonts 回退') < 0, $('ssRes').innerHTML.slice(0, 200));
 
   const failed = results.filter(r => !r.ok);
   console.log('\n=== ' + (results.length - failed.length) + '/' + results.length + ' PASS ===');

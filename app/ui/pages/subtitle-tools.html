@@ -112,3 +112,41 @@
         </div>
       </div>
     </section>
+
+    <!-- ==================== 独立子集化 ==================== -->
+    <section class="mode" id="mode-subset">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="t-section">独立子集化</h2>
+            <p class="t-sec">把 ASS 字幕做字体子集化输出到指定目录（含修正后 ASS 与子集字体），供人工检查或后续封装引用；不封装视频</p>
+          </div>
+        </div>
+        <div class="panel-sec" style="padding-top:16px;">
+          <div class="field">
+            <label for="ss_subs">字幕文件</label>
+            <textarea id="ss_subs" rows="4" spellcheck="false" placeholder="每行一个 ASS 路径，例如：&#10;D:\Video\EP01.ass&#10;D:\Video\EP02.ass" style="flex:1;min-height:76px;padding:8px 12px;background:var(--input);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius-sm);font:13px/1.6 var(--mono);resize:vertical;" autocomplete="off"></textarea>
+            <button class="btn" id="btnSSBrowse">浏览</button>
+          </div>
+          <div class="field">
+            <label for="ss_fonts">字体目录</label>
+            <input id="ss_fonts" type="text" placeholder="字幕使用的字体目录" autocomplete="off">
+            <button class="btn" id="btnSSFonts">浏览</button>
+          </div>
+          <div class="field">
+            <label for="ss_out">输出目录</label>
+            <input id="ss_out" type="text" placeholder="子集化产物输出目录（必填，不能与字体目录相同）" autocomplete="off">
+            <button class="btn" id="btnSSOut">浏览</button>
+          </div>
+          <div class="field">
+            <label class="check"><input id="ss_use_sys" type="checkbox"> 包含系统已装字体（并入 C:\Windows\Fonts 与当前用户安装的字体）</label>
+          </div>
+          <div class="field" style="margin-top:16px;">
+            <button class="btn lg primary" id="btnSSRun" style="height:36px;"><span data-ic="type" aria-hidden="true"></span>开始子集化</button>
+            <button class="btn" id="btnSSStop" style="display:none;">停止</button>
+          </div>
+          <div class="progress" id="ssBarWrap" style="display:none"><div id="ssBar" role="progressbar" aria-label="子集化进度"></div></div>
+          <div id="ssRes"></div>
+        </div>
+      </div>
+    </section>

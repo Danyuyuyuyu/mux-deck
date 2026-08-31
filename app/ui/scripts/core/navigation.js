@@ -1,10 +1,10 @@
 /* 模式切换：TOOL_MODES / switchMode（.mode 显隐 + 导航 active）/ 字幕工具下拉开合。
- * mode 名称不变（single/batch/preview/extract/propedit）；switchMode 供 inline onclick 调用，须保持全局。 */
+ * mode 名称不变（single/batch/preview/extract/propedit/subset）；switchMode 供 inline onclick 调用，须保持全局。 */
 
 /* ==================== 模式切换 ==================== */
-/* 字幕工具三模式（preview/extract/propedit）共用一级入口「字幕工具」：工具组内任一模式
+/* 字幕工具四模式（preview/extract/propedit/subset）共用一级入口「字幕工具」：工具组内任一模式
  * 高亮一级 tab，同时高亮下拉中对应 item；mode 名称本身不变。 */
-const TOOL_MODES = ['preview', 'extract', 'propedit'];
+const TOOL_MODES = ['preview', 'extract', 'propedit', 'subset'];
 function switchMode(mode) {
   document.querySelectorAll('.mode').forEach(function (m) { m.classList.toggle('active', m.id === 'mode-' + mode); });
   const isTool = TOOL_MODES.indexOf(mode) >= 0;

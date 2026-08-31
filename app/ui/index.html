@@ -43,6 +43,7 @@
         <button type="button" class="drop-item" data-mode="preview" role="menuitem" onclick="switchMode('preview')"><span data-ic="image" aria-hidden="true"></span>字幕预览</button>
         <button type="button" class="drop-item" data-mode="extract" role="menuitem" onclick="switchMode('extract')"><span data-ic="download" aria-hidden="true"></span>字幕提取</button>
         <button type="button" class="drop-item" data-mode="propedit" role="menuitem" onclick="switchMode('propedit')"><span data-ic="shieldCheck" aria-hidden="true"></span>快速修补</button>
+        <button type="button" class="drop-item" data-mode="subset" role="menuitem" onclick="switchMode('subset')"><span data-ic="type" aria-hidden="true"></span>独立子集化</button>
       </div>
     </div>
   </div>
@@ -60,7 +61,7 @@
 <div id="modalRoot"></div>
 
 <!-- App Shell：业务界面在 pages/ 与 partials/ 中，由 loader.js 启动时一次性并行加载挂载，
-     之后按原顺序注入执行业务脚本（app → identify → task → batch → extract → preview → propedit → env → init） -->
+     之后按原顺序注入执行业务脚本（app → identify → task → batch → extract → preview → propedit → subset → env → init） -->
 <script src="loader.js"></script>
 </body>
 </html>

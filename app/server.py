@@ -34,6 +34,7 @@ STATIC_FILES = {
     "batch.js": "application/javascript; charset=utf-8",
     "extract.js": "application/javascript; charset=utf-8",
     "propedit.js": "application/javascript; charset=utf-8",
+    "subset.js": "application/javascript; charset=utf-8",
     "preview.js": "application/javascript; charset=utf-8",
     "env.js": "application/javascript; charset=utf-8",
     "init.js": "application/javascript; charset=utf-8",
