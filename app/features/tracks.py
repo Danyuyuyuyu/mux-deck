@@ -67,48 +67,37 @@ def ep_of(name):
             return int(g[-1])
     return -1
 
-# 文件名语言标签别名表：token（小写，分隔符 [._\- ] 切分）→ BCP-47 语言。
+# 字幕槽位分类别名表：token（小写，分隔符 [._\- ] 切分）→ 槽位 'sc'/'tc'。
 # 相邻两 token 以 '-' 连接的组合也参与查表（如 'zh'+'hans' → 'zh-hans'）。
-LANG_ALIAS = {
-    'zh-hans': 'zh-Hans', 'zh-cn': 'zh-Hans', 'zh-chs': 'zh-Hans', 'chs': 'zh-Hans', 'sc': 'zh-Hans',
-    'jpsc': 'zh-Hans', '简体': 'zh-Hans', '简': 'zh-Hans', 'gb': 'zh-Hans',
-    'zh-hant': 'zh-Hant', 'zh-tw': 'zh-Hant', 'zh-hk': 'zh-Hant', 'zh-mo': 'zh-Hant', 'cht': 'zh-Hant',
-    'tc': 'zh-Hant', 'jptc': 'zh-Hant', '繁体': 'zh-Hant', '繁': 'zh-Hant', 'big5': 'zh-Hant',
-    'zh': 'zh', 'chi': 'zh', 'zho': 'zh',
+# 项目仅简繁两类字幕：简体槽位固定语言 zh-Hans、繁体槽位固定 zh-Hant（见 mux_cli 默认），不再做语言自动配对。
+SC_TC_ALIAS = {
+    'zh-hans': 'sc', 'zh-cn': 'sc', 'zh-chs': 'sc', 'chs': 'sc', 'sc': 'sc',
+    'jpsc': 'sc', '简体': 'sc', '简': 'sc', 'gb': 'sc',
+    'zh-hant': 'tc', 'zh-tw': 'tc', 'zh-hk': 'tc', 'zh-mo': 'tc', 'cht': 'tc',
+    'tc': 'tc', 'jptc': 'tc', '繁体': 'tc', '繁': 'tc', 'big5': 'tc',
 }
 
-def _lang_tokens(name):
+def _sub_tokens(name):
     base = os.path.basename(name or "")
     return [t for t in re.split(r"[._\- ]+", base.lower()) if t]
 
-def lang_of(filename):
-    """文件名 → 'zh-Hans' | 'zh-Hant' | 'zh' | None。
-    简繁标签优先（先扫 SC/TC 别名含相邻组合，再扫裸 zh），认不出不猜。"""
-    toks = _lang_tokens(filename)
+def sub_kind(name):
+    """文件名 → 字幕槽位 'sc' | 'tc' | ''。仅路由到简/繁槽位，不产出语言值（语言由槽位决定）。
+    简繁标签优先（先扫 SC/TC 别名含相邻组合，再扫单 token），认不出不猜。"""
+    toks = _sub_tokens(name)
     for i, t in enumerate(toks):
         if i + 1 < len(toks):
-            p = LANG_ALIAS.get(t + "-" + toks[i + 1])
-            if p and p != "zh":
+            p = SC_TC_ALIAS.get(t + "-" + toks[i + 1])
+            if p:
                 return p
-        s = LANG_ALIAS.get(t)
-        if s and s != "zh":
+        s = SC_TC_ALIAS.get(t)
+        if s:
             return s
-    for t in toks:
-        if LANG_ALIAS.get(t) == "zh":
-            return "zh"
-    return None
-
-def sub_kind(name):
-    lang = lang_of(name)
-    if lang == "zh-Hans":
-        return "sc"
-    if lang == "zh-Hant":
-        return "tc"
     return ""
 
 def match_subs(video):
     if not video or not os.path.exists(video):
-        return {"sc": "", "tc": "", "sc_lang": "", "tc_lang": ""}
+        return {"sc": "", "tc": ""}
     d = os.path.dirname(video)
     vep = ep_of(video)
     subs = []
@@ -127,7 +116,7 @@ def match_subs(video):
                 sc = sp
             elif k == "tc" and not tc:
                 tc = sp
-    return {"sc": sc, "tc": tc, "sc_lang": lang_of(sc) or "", "tc_lang": lang_of(tc) or ""}
+    return {"sc": sc, "tc": tc}
 
 
 def handle_match(q):

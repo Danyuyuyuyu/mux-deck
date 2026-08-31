@@ -6,7 +6,6 @@ let PRESETS = {};
 function presetData() {
   return {
     sc_name: $('sc_name').value.trim() || 'SC', tc_name: $('tc_name').value.trim() || 'TC',
-    sc_lang: $('sc_lang').value.trim(), tc_lang: $('tc_lang').value.trim(),
     sc_default: $('sc_default').value, tc_default: $('tc_default').value,
     sc_forced: $('sc_forced').checked, tc_forced: $('tc_forced').checked,
     fonts_dir: $('fonts_dir').value.trim(), out_dir: $('out_dir').value.trim(),
@@ -22,8 +21,6 @@ function applyPreset(d) {
   if (!d || typeof d !== 'object') return;
   if (d.sc_name) $('sc_name').value = d.sc_name;
   if (d.tc_name) $('tc_name').value = d.tc_name;
-  if (d.sc_lang) { $('sc_lang').value = d.sc_lang; $('sc_lang').removeAttribute('data-auto'); }
-  if (d.tc_lang) { $('tc_lang').value = d.tc_lang; $('tc_lang').removeAttribute('data-auto'); }
   $('sc_default').value = d.sc_default || '';
   $('tc_default').value = d.tc_default || '';
   $('sc_forced').checked = !!d.sc_forced;
@@ -138,7 +135,7 @@ function updatePresetHint() {
  * 职责分离：主页面 preset_sel 负责"应用"，本窗口负责"管理"（新建/查看/编辑/重命名/删除）。
  * 数据层复用同一份 PRESETS 与 /api/presets(+/delete)，不建第二套状态。
  * 点击列表项 = 查看/编辑，不会修改当前任务；删除当前任务引用的预设只清引用、不动参数。 */
-const PM_BLANK = { sc_name: 'SC', tc_name: 'TC', sc_lang: '', tc_lang: '', sc_default: '', tc_default: '', sc_forced: false, tc_forced: false,
+const PM_BLANK = { sc_name: 'SC', tc_name: 'TC', sc_default: '', tc_default: '', sc_forced: false, tc_forced: false,
   fonts_mode: 'subset', out_name_tmpl: '', title: '', fonts_dir: '', out_dir: '', chapters: '', backup: true, force: false, use_sys_fonts: false, postcmd: '' };
 const pmState = { editing: null };   // {orig: 已有预设名|null, isNew, mode: 'blank'|'task', base: 建基数据}
 let pmEditorDirty = false;           // 编辑器有未保存修改（切换列表项时提示保护；Footer 按钮组随之切换）
@@ -217,7 +214,6 @@ function pmTrackCard(kind, badge, langLabel, d) {
   return '<div class="pm-track-card">' +
     '<div class="pm-track-head"><span class="sub-badge ' + kind + '">' + badge + '</span><span class="pm-track-title">' + langLabel + '</span></div>' +
     '<div class="pm-track-row"><label for="' + fid + '_name">轨道名</label><input id="' + fid + '_name" type="text" value="' + esc(d[kind + '_name'] || badge) + '" autocomplete="off"></div>' +
-    '<div class="pm-track-row"><label for="' + fid + '_lang">语言</label><input id="' + fid + '_lang" type="text" value="' + esc(d[kind + '_lang'] || '') + '" placeholder="默认 ' + (kind === 'sc' ? 'zh-Hans' : 'zh-Hant') + '" autocomplete="off"></div>' +
     '<div class="pm-track-row"><span class="set-label">默认轨</span>' +
       '<div class="seg" id="' + fid + '_default_seg" role="radiogroup" aria-label="' + langLabel + '默认轨">' + segBtn('') + segBtn('1') + segBtn('0') + '</div>' +
       '<input id="' + fid + '_default" type="hidden" value="' + esc(dv) + '"></div>' +
@@ -354,7 +350,6 @@ async function pmSave(thenApply) {
   if (!name) { $('pmNote').textContent = '请填写预设名称'; $('pmNote').style.color = 'var(--danger)'; return; }
   const data = {
     sc_name: $('pm_f_sc_name').value.trim() || 'SC', tc_name: $('pm_f_tc_name').value.trim() || 'TC',
-    sc_lang: $('pm_f_sc_lang').value.trim(), tc_lang: $('pm_f_tc_lang').value.trim(),
     sc_default: $('pm_f_sc_default').value, tc_default: $('pm_f_tc_default').value,
     sc_forced: $('pm_f_sc_forced').checked, tc_forced: $('pm_f_tc_forced').checked,
     fonts_mode: $('pm_f_fonts_mode').value || 'subset',
@@ -422,7 +417,7 @@ $('preset_sel').onchange = function () {
   if (this.value && PRESETS[this.value]) applyPresetToCurrentTask(this.value);   // 唯一应用入口
   else detachCurrentPreset();   // 选回「选择预设…」= 解除预设（参数保留）
 };
-['sc_name', 'tc_name', 'sc_lang', 'tc_lang', 'fonts_dir', 'out_dir', 'out_name_tmpl', 'title', 'postcmd'].forEach(id => $(id).addEventListener('input', updatePresetHint));
+['sc_name', 'tc_name', 'fonts_dir', 'out_dir', 'out_name_tmpl', 'title', 'postcmd'].forEach(id => $(id).addEventListener('input', updatePresetHint));
 ['sc_forced', 'tc_forced', 'backup', 'force', 'fonts_mode', 'use_sys_fonts'].forEach(id => $(id).addEventListener('change', updatePresetHint));
 $('pmClose').onclick = closePresetManager;
 /* 新建预设按钮（静态侧栏底部，不随编辑器滚动/重渲染） */

@@ -47,7 +47,7 @@ function mockFetch(url, opts) {
       try { const b = JSON.parse(opts.body); if (typeof b.postcmd === 'string') data = { ok: true, postcmd: b.postcmd }; } catch (e) {}
     }
   }
-  else if (u === '/api/match_subs') { data = { video: q.replace('path=', ''), sc: matchSubsRet.sc, tc: matchSubsRet.tc, sc_lang: matchSubsRet.sc_lang || '', tc_lang: matchSubsRet.tc_lang || '' }; }
+  else if (u === '/api/match_subs') { data = { video: q.replace('path=', ''), sc: matchSubsRet.sc, tc: matchSubsRet.tc }; }
   else if (u === '/api/detect_fonts_dir') { data = { path: q.replace('path=', ''), fonts_dir: fontsDirRet.fonts_dir }; }
   else if (u === '/api/detect_chapters') { data = { path: q.replace('path=', ''), chapters: chaptersRet.chapters }; }
   else if (u === '/api/list') data = { path: 'D:\\Video', dirs: [], files: [['EP01.sc.ass', 1024], ['EP01.chs.ass', 2048], ['EP01.mkv', 999]] };
@@ -505,46 +505,23 @@ function mockFetch(url, opts) {
   ok = await waitUntil(() => $('chapters').value.indexOf('ch_edited.txt') >= 0);
   check('保存章节生成文件并回填', ok && $('chEditModal').style.display === 'none', $('chapters').value);
 
-  /* ---- 场景20（F1 语言字段链路）：识别回填/自动标记/手动清除/提交体/预设/批量 ---- */
-  check('单页字幕卡含语言输入（placeholder 默认 zh-Hans/zh-Hant）', !!$('sc_lang') && !!$('tc_lang') && $('sc_lang').placeholder.indexOf('zh-Hans') >= 0 && $('tc_lang').placeholder.indexOf('zh-Hant') >= 0);
-  check('langFromName 标签识别（与后端同构）', window.langFromName('EP01.zh-Hans.ass') === 'zh-Hans' && window.langFromName('EP02.zh-TW.ass') === 'zh-Hant' && window.langFromName('EP03.CHS.ass') === 'zh-Hans' && window.langFromName('EP04.zh.ass') === 'zh' && window.langFromName('EP05.ass') === '');
-  check('批量公共区两语言输入存在', !!$('b_sc_lang') && !!$('b_tc_lang'));
-  // 识别回填：预设已解除（自定义配置态），换视频触发 match_subs → 语言自动填入并带「自动」标记
+  /* ---- 场景20（撤销 F1：语言字段已移除，SC=zh-Hans / TC=zh-Hant 由 CLI 固定，无手动语言输入） ---- */
+  check('单页字幕卡不再含语言输入字段', !$('sc_lang') && !$('tc_lang'));
+  check('批量公共区不再含语言输入字段', !$('b_sc_lang') && !$('b_tc_lang'));
+  // 识别仍按新式标签路由到 SC/TC 槽位（语言不产出、不落输入框）
   window.detachCurrentPreset();
-  $('sc_lang').value = ''; $('tc_lang').value = '';
-  matchSubsRet = { sc: 'D:\\Video\\EP01.zh-Hans.ass', tc: 'D:\\Video\\EP01.zh-TW.ass', sc_lang: 'zh-Hans', tc_lang: 'zh-Hant' };
+  matchSubsRet = { sc: 'D:\\Video\\EP01.zh-Hans.ass', tc: 'D:\\Video\\EP01.zh-TW.ass' };
   window.pickVideoPath('D:\\Video\\EP07.mkv');
-  ok = await waitUntil(() => $('sc_sub').value === 'D:\\Video\\EP01.zh-Hans.ass' && $('sc_lang').value === 'zh-Hans' && $('tc_lang').value === 'zh-Hant');
-  check('applyIdentify 自动填入语言（填空不覆盖）', ok, 'sc_lang=' + $('sc_lang').value + '/tc_lang=' + $('tc_lang').value);
-  check('自动填入带自动标记 data-auto=1', $('sc_lang').dataset.auto === '1' && $('tc_lang').dataset.auto === '1', $('sc_lang').dataset.auto + '/' + $('tc_lang').dataset.auto);
-  check('自动标记显示「自动」徽章', $('scLangBadge').style.display !== 'none' && $('tcLangBadge').style.display !== 'none', $('scLangBadge').style.display + '/' + $('tcLangBadge').style.display);
-  // 手动输入清除自动标记
-  $('sc_lang').value = 'zh';
-  $('sc_lang').dispatchEvent(new window.Event('input', { bubbles: true }));
-  check('手动输入清除自动标记且徽章隐藏', $('sc_lang').dataset.auto !== '1' && $('scLangBadge').style.display === 'none', String($('sc_lang').dataset.auto) + '/' + $('scLangBadge').style.display);
-  // 已有值不覆盖：清空字幕槽位后自动匹配，字幕回填但手动语言值保留
-  $('sc_sub').value = '';
-  $('btnAutoMatch').click();
-  ok = await waitUntil(() => $('sc_sub').value === 'D:\\Video\\EP01.zh-Hans.ass' && ($('status').textContent || '').indexOf('字幕匹配完成') >= 0, 3000);
-  check('自动匹配回填字幕但不覆盖手动语言值', ok && $('sc_lang').value === 'zh', $('sc_lang').value);
-  // startMuxTask 请求体携带 sc_lang/tc_lang（先清掉场景17 遗留的体检摘要，避免 preflight 弹确认框拦截）
+  ok = await waitUntil(() => $('sc_sub').value === 'D:\\Video\\EP01.zh-Hans.ass' && $('tc_sub').value === 'D:\\Video\\EP01.zh-TW.ass');
+  check('识别按新式标签路由 SC/TC 槽位', ok, $('sc_sub').value + '/' + $('tc_sub').value);
+  // startMuxTask 请求体不携带 sc_lang/tc_lang（CLI 用默认 zh-Hans/zh-Hant）
   window.eval('subCheckUi.sc = null; subCheckUi.tc = null; subCheckSig.sc = ""; subCheckSig.tc = "";');
   savedBody = null;
   $('btnStart').click();
   ok = await waitUntil(() => savedBody, 3000);
-  check('startMuxTask 请求 body 含 sc_lang/tc_lang', ok && savedBody.sc_lang === 'zh' && savedBody.tc_lang === 'zh-Hant', savedBody && JSON.stringify({ s: savedBody.sc_lang, t: savedBody.tc_lang }));
+  check('startMuxTask 请求 body 不含 sc_lang/tc_lang', ok && !('sc_lang' in savedBody) && !('tc_lang' in savedBody), savedBody && JSON.stringify(Object.keys(savedBody).filter(k => k.indexOf('lang') >= 0)));
   ok = await waitUntil(() => !window.eval('singleState.job'), 6000);
-  // 预设编辑器含语言字段，保存并应用后主页面输入框更新
-  window.openPresetManager();
-  window.document.querySelector('.pm-item[data-name="测试预设"]').click();
-  check('预设编辑器 SC/TC 卡含语言字段', !!$('pm_f_sc_lang') && !!$('pm_f_tc_lang') && $('pm_f_sc_lang').placeholder.indexOf('zh-Hans') >= 0, ($('pm_f_sc_lang') || {}).placeholder);
-  $('pm_f_sc_lang').value = 'zh-Hans';
-  $('pm_f_sc_lang').dispatchEvent(new window.Event('input', { bubbles: true }));
-  $('pmSaveApplyBtn').click();
-  await sleep(80);
-  check('预设应用后主页面语言输入框更新', $('sc_lang').value === 'zh-Hans' && $('b_sc_lang').value === 'zh-Hans', $('sc_lang').value + '/' + $('b_sc_lang').value);
-  $('pmCancelBtn').click();
-  // 批量提交：公共语言空 → 按各集字幕文件名派生；公共非空 → 统一覆盖
+  // 批量提交：请求体各 item 不携带语言字段
   const savedBatchBodies = [];
   window.fetch = function (url, opts) {
     if (String(url).split('?')[0] === '/api/batch' && opts && opts.body) { try { savedBatchBodies.push(JSON.parse(opts.body)); } catch (e) {} }
@@ -554,11 +531,10 @@ function mockFetch(url, opts) {
   window.eval('batchItems.length = 0');
   window.eval('batchItems.push({video: "D:/Video/EP01.mkv", sc: "D:/Video/EP01.zh-Hans.ass", tc: "D:/Video/EP01.zh-TW.ass", chapters: ""})');
   window.renderBatch();
-  $('b_sc_lang').value = ''; $('b_tc_lang').value = '';
   $('btnBatchStart').click();
   ok = await waitUntil(() => savedBatchBodies.length, 4000);
   const bi = ok && savedBatchBodies[0].items[0];
-  check('批量提交逐项按文件名派生语言（公共为空）', ok && bi.sc_lang === 'zh-Hans' && bi.tc_lang === 'zh-Hant', bi && JSON.stringify({ s: bi.sc_lang, t: bi.tc_lang }));
+  check('批量提交各 item 不含语言字段', ok && !('sc_lang' in bi) && !('tc_lang' in bi), bi && JSON.stringify(Object.keys(bi).filter(k => k.indexOf('lang') >= 0)));
   ok = await waitUntil(() => !window.eval('bJob'), 8000);
   check('批量语言任务正常完成', ok && $('btnBatchStart').textContent.includes('开始批量封装'));
 
