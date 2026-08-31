@@ -12,6 +12,7 @@ function presetData() {
     fonts_dir: $('fonts_dir').value.trim(), out_dir: $('out_dir').value.trim(),
     chapters: $('chapters').value.trim(),
     backup: $('backup').checked, force: $('force').checked,
+    use_sys_fonts: $('use_sys_fonts').checked,
     cfg_tool: $('cfg_tool').value, fonts_mode: $('fonts_mode').value,
     out_name_tmpl: $('out_name_tmpl').value.trim(), title: $('title').value.trim(),
   };
@@ -33,6 +34,7 @@ function applyPreset(d) {
   if (d.title) $('title').value = d.title;
   $('backup').checked = d.backup !== false;
   $('force').checked = !!d.force;
+  if (d.use_sys_fonts !== undefined) $('use_sys_fonts').checked = !!d.use_sys_fonts;   // 旧预设无此字段不动
   if (d.cfg_tool) { $('cfg_tool').value = d.cfg_tool; fireChange($('cfg_tool')); }
   if (d.fonts_mode) $('fonts_mode').value = d.fonts_mode;
   // 同步套用到批量公共字段（映射逻辑在 batch.js，batch 域自持）
@@ -135,7 +137,7 @@ function updatePresetHint() {
  * 数据层复用同一份 PRESETS 与 /api/presets(+/delete)，不建第二套状态。
  * 点击列表项 = 查看/编辑，不会修改当前任务；删除当前任务引用的预设只清引用、不动参数。 */
 const PM_BLANK = { sc_name: 'SC', tc_name: 'TC', sc_lang: '', tc_lang: '', sc_default: '', tc_default: '', sc_forced: false, tc_forced: false,
-  fonts_mode: 'subset', out_name_tmpl: '', title: '', fonts_dir: '', out_dir: '', chapters: '', backup: true, force: false };
+  fonts_mode: 'subset', out_name_tmpl: '', title: '', fonts_dir: '', out_dir: '', chapters: '', backup: true, force: false, use_sys_fonts: false };
 const pmState = { editing: null };   // {orig: 已有预设名|null, isNew, mode: 'blank'|'task', base: 建基数据}
 let pmEditorDirty = false;           // 编辑器有未保存修改（切换列表项时提示保护；Footer 按钮组随之切换）
 function pmClone(o) { return JSON.parse(JSON.stringify(o || {})); }
@@ -264,7 +266,8 @@ function pmRenderEditor() {
   /* ---- 其他（横向复选） ---- */
   h += '<div class="pm-sec"><div class="pm-sec-title">其他</div><div class="pm-other">' +
     '<label class="check"><input id="pm_f_backup" type="checkbox"' + (d.backup !== false ? ' checked' : '') + '> 备份原件</label>' +
-    '<label class="check"><input id="pm_f_force" type="checkbox"' + (d.force ? ' checked' : '') + '> 强制封装</label></div></div>';
+    '<label class="check"><input id="pm_f_force" type="checkbox"' + (d.force ? ' checked' : '') + '> 强制封装</label>' +
+    '<label class="check"><input id="pm_f_use_sys_fonts" type="checkbox"' + (d.use_sys_fonts ? ' checked' : '') + '> 包含系统已装字体</label></div></div>';
   box.innerHTML = h;
   $('pmName').value = st.isNew ? '' : st.orig;
   $('pm_f_fonts_mode').value = d.fonts_mode === 'collect' ? 'collect' : 'subset';
@@ -355,6 +358,7 @@ async function pmSave(thenApply) {
     out_name_tmpl: $('pm_f_out_name_tmpl').value.trim(), title: $('pm_f_title').value.trim(),
     fonts_dir: $('pm_f_fonts_dir').value.trim(), out_dir: $('pm_f_out_dir').value.trim(), chapters: $('pm_f_chapters').value.trim(),
     backup: $('pm_f_backup').checked, force: $('pm_f_force').checked,
+    use_sys_fonts: $('pm_f_use_sys_fonts').checked,
   };
   if (st.isNew && st.mode === 'task' && st.base && st.base.cfg_tool !== undefined) data.cfg_tool = st.base.cfg_tool;   // 从当前任务新建：与旧「保存当前为预设」语义一致
   if (!st.isNew) { const od = PRESETS[st.orig] || {}; if ('cfg_tool' in od) data.cfg_tool = od.cfg_tool; }             // 编辑已有：保留历史全局字段不迁移
@@ -415,7 +419,7 @@ $('preset_sel').onchange = function () {
   else detachCurrentPreset();   // 选回「选择预设…」= 解除预设（参数保留）
 };
 ['sc_name', 'tc_name', 'sc_lang', 'tc_lang', 'fonts_dir', 'out_dir', 'out_name_tmpl', 'title'].forEach(id => $(id).addEventListener('input', updatePresetHint));
-['sc_forced', 'tc_forced', 'backup', 'force', 'fonts_mode'].forEach(id => $(id).addEventListener('change', updatePresetHint));
+['sc_forced', 'tc_forced', 'backup', 'force', 'fonts_mode', 'use_sys_fonts'].forEach(id => $(id).addEventListener('change', updatePresetHint));
 $('pmClose').onclick = closePresetManager;
 /* 新建预设按钮（静态侧栏底部，不随编辑器滚动/重渲染） */
 $('pmNewBtn').onclick = function () {

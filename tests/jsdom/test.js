@@ -543,6 +543,36 @@ function mockFetch(url, opts) {
   ok = await waitUntil(() => !window.eval('bJob'), 8000);
   check('批量语言任务正常完成', ok && $('btnBatchStart').textContent.includes('开始批量封装'));
 
+  /* ---- 场景21（F2 系统已装字体源）：单页/批量复选框 + buildMuxCommon 组装 + 预设编辑器往返 ---- */
+  check('单页含「包含系统已装字体」复选框', !!$('use_sys_fonts'));
+  check('批量公共区含「包含系统已装字体」复选框', !!$('b_use_sys_fonts'));
+  $('use_sys_fonts').checked = true;
+  check('buildMuxCommon 组装 use_sys_fonts（勾选=true）', window.buildMuxCommon('').use_sys_fonts === true);
+  $('use_sys_fonts').checked = false;
+  check('buildMuxCommon 关闭态 use_sys_fonts=false', window.buildMuxCommon('').use_sys_fonts === false);
+  window.switchMode('batch');
+  $('b_use_sys_fonts').checked = true;
+  check('批量 buildMuxCommon(b_) 组装 use_sys_fonts', window.buildMuxCommon('b_').use_sys_fonts === true);
+  window.switchMode('single');
+  // 预设编辑器字段 + 保存并应用往返（主页面 + 批量公共区同步）
+  window.openPresetManager();
+  check('预设编辑器「其他」区含系统字体字段', !!$('pm_f_use_sys_fonts'));
+  $('pm_f_use_sys_fonts').checked = true;
+  $('pm_f_use_sys_fonts').dispatchEvent(new window.Event('change', { bubbles: true }));
+  check('编辑器改动后 Footer 切保存态', !!$('pmSaveApplyBtn'), $('pmFootActions') && $('pmFootActions').textContent);
+  $('pmSaveApplyBtn').click();
+  await sleep(80);
+  check('预设保存并应用后主页面复选框同步', $('use_sys_fonts').checked === true, String($('use_sys_fonts').checked));
+  check('预设套用同步批量复选框', $('b_use_sys_fonts').checked === true, String($('b_use_sys_fonts').checked));
+  $('pmCancelBtn').click();
+  // 旧预设数据无该字段时不动复选框
+  window.applyPreset({ sc_name: '旧预设' });
+  check('旧预设无 use_sys_fonts 字段时不改动复选框', $('use_sys_fonts').checked === true);
+  // 批量重置复位该复选框
+  $('b_use_sys_fonts').checked = true;
+  $('btnBatchClear').click();
+  check('批量重置后系统字体复选框复位', $('b_use_sys_fonts').checked === false);
+
   const failed = results.filter(r => !r.ok);
   console.log('\n=== ' + (results.length - failed.length) + '/' + results.length + ' PASS ===');
   window.close();

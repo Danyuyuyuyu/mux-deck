@@ -145,8 +145,8 @@ function rerunFailed(i) {
 function applyPresetToBatchCommon(d) {
   const bm = { fonts_mode: 'b_fonts_mode', out_name_tmpl: 'b_out_name_tmpl', title: 'b_title',
                sc_default: 'b_sc_default', tc_default: 'b_tc_default', sc_forced: 'b_sc_forced', tc_forced: 'b_tc_forced',
-               sc_lang: 'b_sc_lang', tc_lang: 'b_tc_lang' };
-  Object.keys(bm).forEach(k => { if (d[k] !== undefined && d[k] !== '' && $(bm[k])) { if (bm[k].endsWith('_forced')) $(bm[k]).checked = !!d[k]; else $(bm[k]).value = d[k]; } });
+               sc_lang: 'b_sc_lang', tc_lang: 'b_tc_lang', use_sys_fonts: 'b_use_sys_fonts' };
+  Object.keys(bm).forEach(k => { if (d[k] !== undefined && d[k] !== '' && $(bm[k])) { if (bm[k].endsWith('_forced') || k === 'use_sys_fonts') $(bm[k]).checked = !!d[k]; else $(bm[k]).value = d[k]; } });
   if (d.fonts_dir && $('b_fonts')) $('b_fonts').value = d.fonts_dir;
 }
 /* 页面加载恢复上次批量队列（断点续跑） */
@@ -199,7 +199,7 @@ $('btnBatchClear').onclick = () => {
   if (bJob) { setStatus('批量任务进行中，不能重置', 'err'); return; }
   const dirty = batchItems.length || $('batchResults').innerHTML || $('b_fonts').value.trim() || $('b_out').value.trim() ||
     $('b_force').checked || !$('b_backup').checked || $('b_skip').checked || $('b_sc_default').value || $('b_tc_default').value ||
-    $('b_sc_forced').checked || $('b_tc_forced').checked;
+    $('b_sc_forced').checked || $('b_tc_forced').checked || ($('b_use_sys_fonts') && $('b_use_sys_fonts').checked);
   if (!dirty) return;
   if (!confirm('确定重置批量封装的全部设置？\n将清空批量列表、结果展示与字体目录/输出目录等选项（已生成的输出文件保留在磁盘，不会被删除）')) return;
   batchItems.splice(0, batchItems.length);
@@ -213,6 +213,7 @@ $('btnBatchClear').onclick = () => {
   $('b_skip').checked = false;   // 跳过已存在输出
   $('b_sc_default').value = ''; $('b_tc_default').value = '';   // 字幕旗标
   $('b_sc_forced').checked = false; $('b_tc_forced').checked = false;
+  if ($('b_use_sys_fonts')) $('b_use_sys_fonts').checked = false;   // 包含系统已装字体
   if ($('b_sc_lang')) $('b_sc_lang').value = '';   // 字幕语言（空 = 按文件名自动）
   if ($('b_tc_lang')) $('b_tc_lang').value = '';
   // 底部批量状态条一并复位（与启动时初态一致）

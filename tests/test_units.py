@@ -239,5 +239,96 @@ class QcFromLogTest(unittest.TestCase):
         self.assertIsNone(_qc_from_log("nothing"))
 
 
+class FontSourcesTest(unittest.TestCase):
+    """F2：Windows 系统已装字体作为可选额外字体源（font_sources + mux_cli 组装）。"""
+
+    @staticmethod
+    def _mk(d, name, data=b"dummy"):
+        os.makedirs(d, exist_ok=True)
+        p = os.path.join(d, name)
+        with open(p, "wb") as f:
+            f.write(data)
+        return p
+
+    def test_flag_off_zero_change(self):
+        from app.tools import font_sources as fs
+        with tempfile.TemporaryDirectory() as d:
+            user = os.path.join(d, "fonts")
+            os.makedirs(user)
+            self.assertEqual(fs.build_merged_font_dir(user, False, d), user)
+            self.assertEqual(os.listdir(d), ["fonts"])   # 未建任何合并目录
+
+    def test_missing_user_dir_passthrough(self):
+        from app.tools import font_sources as fs
+        with tempfile.TemporaryDirectory() as d:
+            ghost = os.path.join(d, "nope")
+            self.assertEqual(fs.build_merged_font_dir(ghost, True, d), ghost)
+
+    def test_family_names_bad_font_empty(self):
+        from app.tools import font_sources as fs
+        with tempfile.TemporaryDirectory() as d:
+            bad = self._mk(d, "bad.ttf", b"not a real font file")
+            self.assertEqual(fs.family_names(bad), set())
+
+    def test_build_structure_and_dedupe(self):
+        import unittest.mock as mock
+        from app.tools import font_sources as fs
+        with tempfile.TemporaryDirectory() as d:
+            user = os.path.join(d, "user")
+            sysdir = os.path.join(d, "sysfonts")
+            u1 = self._mk(user, "u1.ttf")
+            u_bad = self._mk(user, "u_bad.ttf", b"broken user font")
+            s_own = self._mk(sysdir, "s_own.ttf")
+            s_dup = self._mk(sysdir, "s_dup.ttf")
+            s_bad = self._mk(sysdir, "s_bad.ttf", b"broken sys font")
+            self._mk(sysdir, "ignore.txt")   # 非字体扩展名不收
+            fam_map = {u1: {"arial"}, u_bad: set(), s_own: {"times"},
+                       s_dup: {"arial", "arial bold"}, s_bad: set()}
+
+            def fake_names(p):
+                return set(fam_map.get(p, {"unlisted"}))
+
+            with mock.patch.object(fs, "family_names", side_effect=fake_names), \
+                 mock.patch.object(fs, "system_font_sources", return_value=[sysdir]):
+                merged = fs.build_merged_font_dir(user, True, d)
+            self.assertTrue(os.path.basename(merged).startswith("merged_fonts_"))
+            names = set(os.listdir(merged))
+            self.assertIn("u1.ttf", names)          # 用户目录文件全部并入
+            self.assertIn("u_bad.ttf", names)       # 用户目录文件不做解析校验，原样并入
+            self.assertIn("s_own.ttf", names)       # 无族名冲突的系统字体并入
+            self.assertNotIn("s_dup.ttf", names)    # 族名与用户目录重叠：用户目录优先，跳过
+            self.assertNotIn("s_bad.ttf", names)    # 无族名（坏字体）跳过，不让合并崩溃
+            self.assertNotIn("ignore.txt", names)
+
+    def test_system_dir_unavailable_safe(self):
+        import unittest.mock as mock
+        from app.tools import font_sources as fs
+        with tempfile.TemporaryDirectory() as d:
+            user = os.path.join(d, "user")
+            self._mk(user, "u1.ttf")
+            with mock.patch.object(fs, "system_font_sources", return_value=[os.path.join(d, "ghost")]):
+                merged = fs.build_merged_font_dir(user, True, d)
+            self.assertEqual(os.listdir(merged), ["u1.ttf"])
+
+    def test_system_font_sources_exists(self):
+        from app.tools import font_sources as fs
+        srcs = fs.system_font_sources()
+        self.assertTrue(srcs)
+        self.assertTrue(all(os.path.exists(p) for p in srcs))
+        self.assertEqual(srcs[0], fs.SYSTEM_FONTS_DIR)
+        self.assertTrue(os.path.isdir(fs.SYSTEM_FONTS_DIR))
+
+    def test_build_cmd_use_sys_fonts(self):
+        from app.features.mux import build_cmd
+        it = {"video": "V:\\v.mkv"}
+        for off in (0, None, False, ""):
+            self.assertNotIn("--use-sys-fonts", build_cmd(it, {"use_sys_fonts": off}),
+                             "关闭态不得传参（零变化）")
+        for on in (1, True):
+            cmd = build_cmd(it, {"use_sys_fonts": on})
+            self.assertIn("--use-sys-fonts", cmd)
+            self.assertEqual(cmd[cmd.index("--use-sys-fonts") + 1], "1")
+
+
 if __name__ == "__main__":
     unittest.main()

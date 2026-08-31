@@ -11,7 +11,8 @@ MUX_CLI = os.path.join(core.TOOLS_DIR, "mux_cli.py")
 COMMON_KEYS = ("fonts_dir", "audio", "audio_mode", "keep_src_audio", "audio_lang", "audio_name",
                "out_dir", "force", "sc_name", "tc_name", "sc_lang", "tc_lang", "no_backup", "audio_tracks",
                "subtitle_tracks", "keep_attachments", "sc_default", "tc_default",
-               "sc_forced", "tc_forced", "chapters", "out_name", "title", "fonts_mode", "skip_existing")
+               "sc_forced", "tc_forced", "chapters", "out_name", "title", "fonts_mode", "skip_existing",
+               "use_sys_fonts")
 
 # ---------------- 命令构造 ----------------
 
@@ -69,6 +70,8 @@ def build_cmd(it, common):
     add("--title", full.get("title"))
     if full.get("fonts_mode") in ("subset", "collect"):
         cmd += ["--fonts-mode", full.get("fonts_mode")]
+    if full.get("use_sys_fonts"):   # 布尔开关：关闭时不传参（CLI 默认 0），与 force 同款
+        cmd += ["--use-sys-fonts", "1"]
     return cmd
 
 # ---------------- 任务生命周期 ----------------

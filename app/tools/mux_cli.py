@@ -6,6 +6,11 @@ import argparse, json, os, re, shutil, subprocess, sys, tempfile, uuid
 
 BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # 项目根（本文件位于 app/tools/）
 
+try:   # 独立脚本直跑与被 app 包导入两种场景都能找到同目录的 font_sources
+    import font_sources
+except ImportError:
+    from app.tools import font_sources
+
 TMP = ""
 
 def fail(msg):
@@ -128,9 +133,10 @@ def unique_path(dest):
             return cand
         n += 1
 
-def collect_fonts(subs, fonts_dir, out_dir):
+def collect_fonts(subs, fonts_dir, out_dir, extra_dirs=None):
     """仅收集模式：解析字幕引用的字体名（Style + \\fn），从字体目录匹配并全量复制（不裁字形）。
-    匹配口径 = fontTools name 表 nameID 1/4/6/16（族名/全名/PS 名/首选族名），与字体体检同源。"""
+    匹配口径 = fontTools name 表 nameID 1/4/6/16（族名/全名/PS 名/首选族名），与字体体检同源。
+    用户目录优先；extra_dirs 为额外搜索源（如系统字体），仅在用户目录没找齐时补漏。"""
     try:
         from fontTools.ttLib import TTFont
     except ImportError:
@@ -152,22 +158,43 @@ def collect_fonts(subs, fonts_dir, out_dir):
     need.discard("")
     os.makedirs(out_dir, exist_ok=True)
     picked = {}
-    for fn in sorted(os.listdir(fonts_dir)):
-        if os.path.splitext(fn)[1].lower() not in (".ttf", ".otf", ".ttc", ".otc"):
-            continue
-        path = os.path.join(fonts_dir, fn)
-        try:
-            tt = TTFont(path, fontNumber=0, lazy=True)
-            names = set()
-            for rec in tt["name"].names:
-                if rec.nameID in (1, 4, 6, 16):
-                    names.add(str(rec).strip().lower())
-            tt.close()
-        except Exception:
-            continue
-        for fam in (need & names):
-            picked.setdefault(fam, path)
+    def _scan_dir(d, wanted):
+        """一个字体目录 -> 按 need 匹配（已被更高优先级目录命中的族跳过）。"""
+        for fn in sorted(os.listdir(d)):
+            if os.path.splitext(fn)[1].lower() not in (".ttf", ".otf", ".ttc", ".otc"):
+                continue
+            path = os.path.join(d, fn)
+            try:
+                tt = TTFont(path, fontNumber=0, lazy=True)
+                names = set()
+                for rec in tt["name"].names:
+                    if rec.nameID in (1, 4, 6, 16):
+                        names.add(str(rec).strip().lower())
+                tt.close()
+            except Exception:
+                continue
+            for fam in (wanted & names):
+                picked.setdefault(fam, path)
+    _scan_dir(fonts_dir, need)
     missing = need - set(picked)
+    for d in (extra_dirs or []):
+        if not missing:
+            break
+        for path in font_sources._source_files(d):
+            if not missing:
+                break
+            try:
+                tt = TTFont(path, fontNumber=0, lazy=True)
+                names = set()
+                for rec in tt["name"].names:
+                    if rec.nameID in (1, 4, 6, 16):
+                        names.add(str(rec).strip().lower())
+                tt.close()
+            except Exception:
+                continue
+            for fam in (missing & names):
+                picked.setdefault(fam, path)
+        missing = need - set(picked)
     fonts, seen = [], set()
     for path in picked.values():
         if path in seen:
@@ -210,6 +237,8 @@ def main():
     ap.add_argument("--title", default="", help="MKV 标题（segment title）元数据")
     ap.add_argument("--fonts-mode", default="subset", choices=["subset", "collect"],
                     help="字体处理：subset=子集化（默认）；collect=仅收集被引用字体全量嵌入（不裁字形）")
+    ap.add_argument("--use-sys-fonts", type=int, default=0,
+                    help="把 Windows 系统已装字体并入字体搜索源（用户目录优先）；默认 0 关闭")
     a = ap.parse_args()
 
     # ---------- 校验输入 ----------
@@ -264,12 +293,16 @@ def main():
 
     # ---------- 字体处理（subset=双轨子集化；collect=仅收集全量嵌入） ----------
     fonts_mode = a.fonts_mode if a.fonts_mode in ("subset", "collect") else "subset"
+    use_sys = bool(a.use_sys_fonts)
     tool = subset_tool() if (subs and fonts_mode == "subset") else "-"
     if subs:
         print("Fonts mode: " + fonts_mode + (" (tool: " + tool + ")" if fonts_mode == "subset" else ""), flush=True)
     if subs and fonts_mode == "collect":
-        fonts = collect_fonts(subs, fonts_dir, os.path.join(TMP, "collected"))
+        extra = font_sources.system_font_sources() if use_sys else None
+        fonts = collect_fonts(subs, fonts_dir, os.path.join(TMP, "collected"), extra_dirs=extra)
     elif subs and tool == "afs":
+        if use_sys:
+            fonts_dir = font_sources.build_merged_font_dir(fonts_dir, True, TMP)
         # AFS：每个字幕独立一次调用（AFS 要求多文件同目录，且修正后的 ASS 按输入basename落在输出目录）
         corrected = []
         for i, sub in enumerate(subs):
@@ -297,6 +330,8 @@ def main():
     elif subs:
         if not os.path.isfile(ASSFONTS or ""):
             fail("找不到 assfonts——请确认 bin\\assfonts 存在或已加入 PATH")
+        if use_sys:
+            fonts_dir = font_sources.build_merged_font_dir(fonts_dir, True, TMP)
         print("assfonts: building database and subsetting fonts...", flush=True)
         db_dir = os.path.join(TMP, "db")
         os.makedirs(db_dir, exist_ok=True)

@@ -5,6 +5,7 @@
 #       校验目标目录无 (family,style) 重复 → 复制 → 自动重跑体检。
 import os, re, shutil, time, uuid
 from app import core
+from app.tools.font_sources import build_merged_font_dir, system_font_sources
 
 # ---------------- 体检 ----------------
 
@@ -31,9 +32,12 @@ def _afs_crash_font(txt):
             name = line.split("Start subset", 1)[1].strip()
     return name
 
-def check_fonts_afs(subs, fonts_dir):
+def check_fonts_afs(subs, fonts_dir, use_sys=False):
     ck = os.path.join(core.TMP_DIR, "fontcheck_" + uuid.uuid4().hex[:8])
     os.makedirs(ck)
+    if use_sys:
+        # 合并目录建在 fontcheck_ 会话目录内，随该目录一起被临时区清理
+        fonts_dir = build_merged_font_dir(fonts_dir, True, ck)
     logs = []
     missing = []
     for i, sub in enumerate(subs):
@@ -63,13 +67,15 @@ def check_fonts_afs(subs, fonts_dir):
                     "missing": [], "log": "\n".join(logs)}
     return {"ok": len(missing) == 0, "missing": missing, "log": "\n".join(logs)}
 
-def check_fonts_assfonts(subs, fonts_dir):
+def check_fonts_assfonts(subs, fonts_dir, use_sys=False):
     if not fonts_dir or not os.path.isdir(fonts_dir):
         return {"ok": False, "error": "字体目录不存在"}
     if not subs:
         return {"ok": False, "error": "请先提供字幕文件"}
     ck = os.path.join(core.TMP_DIR, "fontcheck_" + uuid.uuid4().hex[:8])
     os.makedirs(ck)
+    if use_sys:
+        fonts_dir = build_merged_font_dir(fonts_dir, True, ck)
     dbdir = os.path.join(ck, "db")
     os.makedirs(dbdir)
     outdir = os.path.join(ck, "out")
@@ -110,18 +116,20 @@ def check_fonts_assfonts(subs, fonts_dir):
     return {"ok": len(missing) == 0 and rc == 0, "missing": missing, "log": txt}
 
 
-def check_fonts(subs, fonts_dir):
+def check_fonts(subs, fonts_dir, use_sys=False):
     if not fonts_dir or not os.path.isdir(fonts_dir):
         return {"ok": False, "error": "字体目录不存在"}
     if not subs:
         return {"ok": False, "error": "请先提供字幕文件"}
     if core.CONFIG.get("subset_tool") == "afs" and core.AFS:
-        return check_fonts_afs(subs, fonts_dir)
-    return check_fonts_assfonts(subs, fonts_dir)
+        return check_fonts_afs(subs, fonts_dir, use_sys)
+    return check_fonts_assfonts(subs, fonts_dir, use_sys)
 
 
 def handle_check_fonts(body):
-    return check_fonts([s for s in (body.get("subs") or []) if s], (body.get("fonts_dir") or "").strip())
+    use_sys = bool(body.get("use_sys_fonts"))
+    return check_fonts([s for s in (body.get("subs") or []) if s],
+                       (body.get("fonts_dir") or "").strip(), use_sys)
 
 
 # ---------------- 字体补给 ----------------
@@ -205,12 +213,27 @@ def _match_in_source(name, src_by_file):
                 hits_fam.append((fp, fam, sty))
     return hits_exact or hits_famsty or hits_fam
 
-def font_supply(subs, fonts_dir, source_dir):
+def _index_sources(sources):
+    """字体源列表（目录或单文件）-> {file: [(fam,sty,full),...]}；坏文件自动跳过。"""
+    by_file = {}
+    for s in sources:
+        if not s:
+            continue
+        if os.path.isdir(s):
+            for fp, recs in _index_dir(s).items():
+                by_file.setdefault(fp, recs)
+        elif os.path.isfile(s) and s.lower().endswith(FONT_EXTS):
+            recs = _font_records(s)
+            if recs:
+                by_file.setdefault(s, recs)
+    return by_file
+
+def font_supply(subs, fonts_dir, source_dir, use_sys=False):
     if not _HAS_FT:
         return {"error": "服务端缺 fonttools（服务所用 Python 未安装），无法补给；请在服务端 Python 上 pip install fonttools"}
     if not os.path.isdir(source_dir):
         return {"error": "备份字体目录不存在: %s" % source_dir}
-    first = check_fonts(subs, fonts_dir)
+    first = check_fonts(subs, fonts_dir, use_sys)
     if "error" in first and "missing" not in first:
         return first  # 参数/目录级错误直接透传
     missing = first.get("missing") or []
@@ -218,7 +241,8 @@ def font_supply(subs, fonts_dir, source_dir):
         return {"ok": True, "supplied": [], "skipped_dup": [], "not_found": [],
                 "recheck": first, "note": "体检未发现缺字体，无需补给"}
 
-    src_by_file = _index_dir(source_dir)
+    sources = [source_dir] + (system_font_sources() if use_sys else [])
+    src_by_file = _index_sources(sources)
     dst_by_file = _index_dir(fonts_dir)
     dst_keys = {}  # (fam,sty) -> 已存在文件
     for fp, keys in _style_keys(dst_by_file).items():
@@ -248,7 +272,7 @@ def font_supply(subs, fonts_dir, source_dir):
         if not done:
             not_found.append(name)
 
-    recheck = check_fonts(subs, fonts_dir) if supplied else first
+    recheck = check_fonts(subs, fonts_dir, use_sys) if supplied else first
     return {"ok": bool(recheck.get("ok")), "supplied": supplied, "skipped_dup": skipped,
             "not_found": not_found, "recheck": recheck}
 
@@ -256,11 +280,12 @@ def handle_font_supply(body):
     subs = [s for s in (body.get("subs") or []) if s]
     fonts_dir = (body.get("fonts_dir") or "").strip()
     source_dir = (body.get("source_dir") or "").strip()
+    use_sys = bool(body.get("use_sys_fonts"))
     if not fonts_dir or not os.path.isdir(fonts_dir):
         return {"error": "字体目录不存在"}
     if not subs:
         return {"error": "请先提供字幕文件"}
-    return font_supply(subs, fonts_dir, source_dir)
+    return font_supply(subs, fonts_dir, source_dir, use_sys)
 
 
 handlers = {
