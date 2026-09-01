@@ -163,6 +163,18 @@ def expand_postcmd(tmpl, out, src, ep):
     ep_s = "" if (ep is None or ep in (-1, "-1")) else str(ep)
     return (tmpl or "").replace("{out}", out or "").replace("{src}", src or "").replace("{ep}", ep_s)
 
+def _decode_postcmd_output(data):
+    """后处理命令输出探测性解码：cmd 内置报错走系统 ACP(GBK)，Python 等工具可能输出 UTF-8，
+    二选一会乱码。与 core.decode_log 同口径：UTF-8 优先，失败回落 GBK。UTF-16 也兜底。"""
+    if not data:
+        return ""
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        return data.decode("utf-16", errors="replace")
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode("gbk", errors="replace")
+
 def run_postcmd(cmd, out, src, base):
     """安装成功后执行后处理命令（shell 执行，超时上限 600s）。
     绝不抛出：返回 (退出码, stdout+stderr 尾部)；超时/启动失败等异常统一归一为非零退出码 + 错误摘要。"""
@@ -175,9 +187,9 @@ def run_postcmd(cmd, out, src, base):
         ep = ""
     full = expand_postcmd(cmd, out, src, ep)
     try:
-        p = subprocess.run(full, shell=True, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=600)
-        return (p.returncode, ((p.stdout or "") + (p.stderr or ""))[-4000:])
+        p = subprocess.run(full, shell=True, capture_output=True, timeout=600)
+        tail = (_decode_postcmd_output(p.stdout) + _decode_postcmd_output(p.stderr))[-4000:]
+        return (p.returncode, tail)
     except subprocess.TimeoutExpired:
         return (1, "后处理命令超时（上限 600 秒），已终止")
     except Exception as ex:

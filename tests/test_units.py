@@ -427,6 +427,19 @@ class PostcmdTest(unittest.TestCase):
         self.assertEqual(q["status"], "warn")
         self.assertEqual(q["warn"], ["后处理命令失败（退出码 1）"])
 
+    def test_decode_postcmd_output_gbk(self):
+        # cmd.exe 内置报错走系统 ACP(GBK)：不得按 UTF-8 解成乱码
+        raw = "不是内部或外部命令".encode("gbk")
+        self.assertEqual(mc._decode_postcmd_output(raw), "不是内部或外部命令")
+
+    def test_decode_postcmd_output_utf8(self):
+        raw = "后处理完成".encode("utf-8")
+        self.assertEqual(mc._decode_postcmd_output(raw), "后处理完成")
+
+    def test_decode_postcmd_output_empty_and_utf16(self):
+        self.assertEqual(mc._decode_postcmd_output(b""), "")
+        self.assertEqual(mc._decode_postcmd_output("乱码修".encode("utf-16")), "乱码修")
+
 
 class SubsetTest(unittest.TestCase):
     """F3 独立子集化：路由注册 + 参数校验（校验失败不建 job）。"""
