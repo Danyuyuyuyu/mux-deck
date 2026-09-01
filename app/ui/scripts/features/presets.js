@@ -171,6 +171,7 @@ function pmGuardUnsaved() {
   return true;
 }
 function pmSelect(name) {
+  if (pmState.editing && !pmState.editing.isNew && pmState.editing.orig === name) return;   // 点的就是正在编辑的同一预设：无操作，未保存修改原样保留（不弹保护、不重渲染丢改动）
   if (!pmGuardUnsaved()) return;
   pmState.editing = { orig: name, isNew: false };
   $('pmNote').textContent = '';
@@ -315,6 +316,13 @@ function pmRenderEditor() {
  * 已有未保存 → [取消] [保存修改] [保存并应用*]（保存并应用已覆盖"应用"语义，不再显示应用按钮）；
  * 正在查看当前任务预设且未修改 → [取消] + "当前任务正在使用"轻提示（应用无意义，不显示）；
  * 查看其他预设未修改 → [取消] [应用到当前任务*]。左侧恒为删除（Ghost danger，仅已有预设）。 */
+/* 当前任务来源预设是否已落后于服务端最新版本（保存修改/他处更新后任务尚未重新应用）。
+ * 判定 = 应用时刻快照 vs 服务端最新值（presetSnapshotEqual 仅共有键，兼容旧预设历史字段）。 */
+function pmCurrentStale() {
+  const id = presetSession.currentId;
+  if (!id || !PRESETS[id] || !presetSession.snapshot) return false;
+  return !presetSnapshotEqual(PRESETS[id], presetSession.snapshot);
+}
 function pmRenderFooter() {
   const st = pmState.editing;
   const left = $('pmFootLeft'), acts = $('pmFootActions');
@@ -329,6 +337,10 @@ function pmRenderFooter() {
   } else if (pmEditorDirty) {
     h += '<button type="button" class="btn" id="pmSaveBtn">' + ic('check') + '<span>保存修改</span></button>' +
       '<button type="button" class="btn primary" id="pmSaveApplyBtn">' + ic('play') + '<span>保存并应用</span></button>';
+  } else if (presetSession.currentId === st.orig && pmCurrentStale()) {
+    // 当前来源预设已保存新版本、任务尚未应用：给应用按钮 + 左侧未生效提示（不再误显「正在使用」）
+    left.innerHTML += '<span class="pm-cur-hint pm-stale-hint">' + ic('alertTriangle') + '<span>已保存新版本，当前任务尚未应用</span></span>';
+    h += '<button type="button" class="btn primary" id="pmApplyBtn">' + ic('check') + '<span>应用到当前任务</span></button>';
   } else if (presetSession.currentId === st.orig) {
     h += '<span class="pm-cur-hint">' + ic('checkCircle') + '<span>当前任务正在使用</span></span>';
   } else {

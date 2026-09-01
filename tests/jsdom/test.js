@@ -378,6 +378,8 @@ function mockFetch(url, opts) {
   $('pm_f_sc_name').dispatchEvent(new window.Event('input', { bubbles: true }));
   check('Footer 状态B：未保存修改 → 保存修改/保存并应用（无应用按钮）', !!$('pmSaveBtn') && !!$('pmSaveApplyBtn') && !$('pmApplyBtn'));
   check('编辑头部出现未保存指示', $('pmEdHead').textContent.indexOf('未保存') >= 0, $('pmEdHead').textContent);
+  window.document.querySelector('.pm-item[data-name="预设B"]').click();   // 点正在编辑的同一预设：无操作，不弹未保存确认、修改保留
+  check('点击正在编辑的同一预设：不触发保护且未保存修改保留', $('pm_f_sc_name').value === 'B改' && window.eval('pmEditorDirty') === true, 'value=' + $('pm_f_sc_name').value + '/dirty=' + window.eval('pmEditorDirty'));
   const pmSegBtn = window.document.querySelector('#pm_f_sc_default_seg .seg-btn[data-v="1"]');
   pmSegBtn.click();
   check('默认轨 segmented 点选写入隐藏域并高亮', $('pm_f_sc_default').value === '1' && pmSegBtn.classList.contains('active'), $('pm_f_sc_default').value);
@@ -396,7 +398,13 @@ function mockFetch(url, opts) {
   $('pmSaveBtn').click();
   await sleep(60);
   check('保存修改不自动改当前任务参数', $('sc_name').value === '简中', $('sc_name').value);
-  check('保存后回到干净态（状态C）', !$('pmSaveBtn') && $('pmFootActions').textContent.indexOf('当前任务正在使用') >= 0);
+  /* 当前来源预设保存新版本后：Footer 切应用按钮 + 左侧未生效提示（不再误显「正在使用」） */
+  check('保存修改后：Footer 切应用按钮 + 未生效提示', !!$('pmApplyBtn') && !$('pmSaveBtn') && !$('pmSaveApplyBtn') &&
+    $('pmFootLeft').textContent.indexOf('尚未应用') >= 0 && $('pmFootActions').textContent.indexOf('当前任务正在使用') < 0,
+    $('pmFootActions').textContent + ' / ' + $('pmFootLeft').textContent);
+  $('pmApplyBtn').click();
+  check('未生效提示下应用：任务吃到新预设值', $('sc_name').value === '存后新名', $('sc_name').value);
+  check('应用后 Footer 回到正在使用态（未生效消除）', !$('pmApplyBtn') && $('pmFootActions').textContent.indexOf('当前任务正在使用') >= 0 && $('pmFootLeft').textContent.indexOf('尚未应用') < 0, $('pmFootActions').textContent + ' / ' + $('pmFootLeft').textContent);
   $('pm_f_sc_name').value = '存应新名';
   $('pm_f_sc_name').dispatchEvent(new window.Event('input', { bubbles: true }));
   $('pmSaveApplyBtn').click();

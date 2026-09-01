@@ -103,6 +103,7 @@
 .pm-foot-actions { flex: none; display: flex; align-items: center; gap: 8px; }
 .pm-cur-hint { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--success); }
 .pm-cur-hint .ic { font-size: 13px; }
+.pm-stale-hint { color: var(--warning); margin-left: 10px; }   /* 已保存新版本但任务未应用的未生效提示 */
 
 /* ---- 响应式：<860px 单列堆叠（sidebar 变顶部横列表，轨道/输出单列） ---- */
 @media (max-width: 860px) {
