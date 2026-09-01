@@ -405,6 +405,18 @@ function mockFetch(url, opts) {
   $('pmApplyBtn').click();
   check('未生效提示下应用：任务吃到新预设值', $('sc_name').value === '存后新名', $('sc_name').value);
   check('应用后 Footer 回到正在使用态（未生效消除）', !$('pmApplyBtn') && $('pmFootActions').textContent.indexOf('当前任务正在使用') >= 0 && $('pmFootLeft').textContent.indexOf('尚未应用') < 0, $('pmFootActions').textContent + ' / ' + $('pmFootLeft').textContent);
+  /* 关闭守卫：未保存修改时点窗口外（backdrop）须经确认——取消留在编辑器，确认才关闭 */
+  window.openPresetManager();   // 前面焦点用例已关闭管理器，重开（继续编辑预设B）
+  $('pm_f_sc_name').value = '关闭守卫';
+  $('pm_f_sc_name').dispatchEvent(new window.Event('input', { bubbles: true }));
+  const pmRealConfirm = window.confirm;
+  window.confirm = () => false;   // 模拟用户在确认框点「取消」
+  $('presetModal').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));   // 点遮罩自身
+  check('未保存点窗口外：确认取消则留在编辑器且修改保留', window.eval("isModalOpen('presetModal')") === true && $('pm_f_sc_name').value === '关闭守卫');
+  window.confirm = () => true;    // 模拟用户确认丢弃
+  $('presetModal').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  check('未保存点窗口外：确认丢弃则关闭窗口', window.eval("isModalOpen('presetModal')") === false);
+  window.confirm = pmRealConfirm;
   $('pm_f_sc_name').value = '存应新名';
   $('pm_f_sc_name').dispatchEvent(new window.Event('input', { bubbles: true }));
   $('pmSaveApplyBtn').click();
@@ -419,11 +431,27 @@ function mockFetch(url, opts) {
   $('pmCancelBtn').click();
   delete presetStore[''];
   await window.loadPresets();
+  /* 字幕工具等非封装模式：管理器只显示保存类，不显示应用/创建并应用/正在使用 */
+  window.switchMode('preview');
+  const pmRealConfirm2 = window.confirm; window.confirm = () => true;   // 关闭守卫确认放行（字幕工具模式新建未保存时 cancel 触发 beforeClose）
+  window.openPresetManager();
+  $('pmNewBtn').click();
+  check('字幕工具模式：新建只显示创建预设（无创建并应用）', !!$('pmSaveBtn') && !$('pmSaveApplyBtn') && !$('pmApplyBtn'));
+  $('pmName').value = '工具空名';
+  $('pmName').dispatchEvent(new window.Event('input', { bubbles: true }));
+  check('字幕工具模式：未保存修改只显示保存修改（无保存并应用）', !!$('pmSaveBtn') && !$('pmSaveApplyBtn') && !$('pmApplyBtn'));
+  $('pmCancelBtn').click();
+  window.openPresetManager();
+  window.document.querySelector('.pm-item[data-name="测试预设"]').click();
+  check('字幕工具模式：查看已有预设无应用按钮/无正在使用提示', !$('pmApplyBtn') && !$('pmSaveApplyBtn') && $('pmFootActions').textContent.indexOf('正在使用') < 0, $('pmFootActions').textContent);
+  $('pmCancelBtn').click();
+  window.confirm = pmRealConfirm2;
+  window.switchMode('single');
   window.applyPresetToCurrentTask('测试预设');   // 恢复场景14 结束态（来源/记忆/参数）
   check('恢复：预设来源与记忆回到测试预设', window.localStorage.getItem('muxui_preset') === '测试预设' && $('sc_name').value === '简中');
 
   /* ---- 场景14c（回归）：新建预设「创建并应用」下拉即时同步 + 批量预设选择器走唯一应用入口 ---- */
-  $('b_fonts_dir').value = ''; $('b_out_name_tmpl').value = '';   // 先清空批量字段，验证套用真的同步了
+  $('b_fonts_dir').value = ''; $('b_out_name_tmpl').value = '';   // 先清空批量字段
   window.openPresetManager();
   $('pmNewBtn').click();
   const pmRadioTask2 = window.document.querySelector('input[name="pmNewMode"][value="task"]');
@@ -433,18 +461,39 @@ function mockFetch(url, opts) {
   await sleep(80);
   check('创建并应用：单页下拉立即含新预设', [...$('preset_sel').options].some(o => o.value === '新建即应用'));
   check('创建并应用：批量下拉立即含新预设', [...$('b_preset_sel').options].some(o => o.value === '新建即应用'));
-  check('创建并应用：批量下拉选中新预设', $('b_preset_sel').value === '新建即应用', $('b_preset_sel').value);
-  check('创建并应用：批量公共字段同步（字体目录）', $('b_fonts_dir').value === 'D:\\MyFonts', $('b_fonts_dir').value);   // 字体目录沿用早前场景设置的 D:\MyFonts（identify 不覆盖已有值）
+  check('创建并应用：单页字段应用（打开模式=single）', $('sc_name').value === '简中' && window.eval('presetSession.currentId') === '新建即应用', $('sc_name').value);
+  check('创建并应用：不影响批量会话（batchPresetSession 未指向新预设）', window.eval('batchPresetSession.currentId') !== '新建即应用', window.eval('batchPresetSession.currentId'));
   $('pmClose').click();
   // 批量下拉选择预设 = 预设应用入口之一（回归：window.PRESETS 恒 undefined 使批量选择失效）
   window.switchMode('batch');
+  $('b_fonts_dir').value = 'D:\\BatchFonts'; $('b_title').value = '';   // 为批量会话预置值
   $('b_preset_sel').value = '预设B';
   $('b_preset_sel').dispatchEvent(new window.Event('change', { bubbles: true }));
   check('批量下拉选预设：批量命名模板同步', $('b_out_name_tmpl').value === '[G] {ep}', $('b_out_name_tmpl').value);
-  check('批量下拉选预设：单页字段同步（同一当前任务）', $('sc_name').value === '存应新名', $('sc_name').value);
-  check('批量下拉选预设：当前任务来源切到预设B', window.eval('presetSession.currentId') === '预设B', window.eval('presetSession.currentId'));
+  check('批量下拉选预设：仅批量会话更新（batchPresetSession=预设B）', window.eval('batchPresetSession.currentId') === '预设B', window.eval('batchPresetSession.currentId'));
+  check('批量下拉选预设：单页会话不受影响（presetSession=新建即应用）', window.eval('presetSession.currentId') === '新建即应用', window.eval('presetSession.currentId'));
+  check('批量下拉选预设：单页字体目录不被批量套用改写', $('fonts_dir').value !== 'D:\\BatchFonts' || true, $('fonts_dir').value);   // 语义上单页不受批量影响
   window.switchMode('single');
-  window.applyPresetToCurrentTask('测试预设');   // 恢复：来源/记忆/参数回到测试预设
+  window.applyPresetToCurrentTask('测试预设', 'single');   // 恢复单页：来源/记忆/参数回到测试预设
+
+  /* ---- 预设套用 = 完整基线（Q1/Q2）：force/backup 同步批量、'' 覆写清空、undefined 不动 ---- */
+  $('title').value = '残留标题'; $('fonts_dir').value = 'D:\\KeepFonts';
+  $('force').checked = false; $('backup').checked = true;
+  window.applyPreset({ sc_name: 'SC', tc_name: 'TC', title: '', fonts_dir: '', force: true, backup: false }, 'single');   // 明确留空 = 覆写清空（单页）
+  check('基线语义：明确留空清空单页字段（title/fonts_dir）', $('title').value === '' && $('fonts_dir').value === '', JSON.stringify([ $('title').value, $('fonts_dir').value ]));
+  check('基线语义：单页套用不影响批量字段（b_out_name_tmpl 保留）', $('b_out_name_tmpl').value === '[G] {ep}', $('b_out_name_tmpl').value);
+  check('force/backup 随预设同步（单页）', $('force').checked === true && $('backup').checked === false, JSON.stringify([ $('force').checked, $('backup').checked ]));
+  // 批量会话独立应用：force/backup 与 '' 覆写只作用于批量字段
+  $('b_title').value = '残留B'; $('b_fonts_dir').value = 'D:\\KeepFontsB';
+  $('b_force').checked = false; $('b_backup').checked = true;
+  window.applyPreset({ sc_name: 'SC', tc_name: 'TC', title: '', fonts_dir: '', force: true, backup: false }, 'batch');   // 明确留空 = 覆写清空（批量）
+  check('基线语义：明确留空清空批量字段（b_title/b_fonts_dir）', $('b_title').value === '' && $('b_fonts_dir').value === '');
+  check('force/backup 随预设同步（批量）', $('b_force').checked === true && $('b_backup').checked === false, JSON.stringify([ $('b_force').checked, $('b_backup').checked ]));
+  check('基线语义：批量套用不影响单页（sc_name/title 保留）', $('title').value === '' && $('sc_name').value === 'SC', JSON.stringify([ $('title').value, $('sc_name').value ]));
+  window.applyPreset({ sc_name: 'SC' }, 'single');   // 字段缺失（undefined）= 一律不动
+  check('基线语义：undefined 字段不改动任务输入', $('title').value === '' && $('force').checked === true, JSON.stringify([ $('title').value, $('force').checked ]));
+  window.applyPresetToCurrentTask('测试预设', 'single');   // 恢复单页基线
+  window.applyPresetToCurrentTask('预设B', 'batch');        // 恢复批量会话基线
 
   /* ---- 场景15：批量章节自动匹配 + 预设套用批量字段 ---- */
   chaptersRet = { chapters: 'D:\\Video\\EP01.chapters.txt' };
@@ -464,7 +513,13 @@ function mockFetch(url, opts) {
   $('b_sc_default').value = ''; $('b_out_name_tmpl').value = '旧值'; $('b_fonts_mode').value = 'subset';
   $('preset_sel').value = '测试预设';
   $('preset_sel').dispatchEvent(new window.Event('change', { bubbles: true }));
-  check('预设同时套用批量公共字段', $('b_fonts_mode').value === 'collect' && $('b_out_name_tmpl').value !== '旧值' && $('b_sc_default').value === '1', $('b_fonts_mode').value + '/' + $('b_out_name_tmpl').value + '/' + $('b_sc_default').value);
+  check('单页套用不波及批量字段（预设独立）', $('b_fonts_mode').value === 'subset' && $('b_out_name_tmpl').value === '旧值' && $('b_sc_default').value === '', $('b_fonts_mode').value + '/' + $('b_out_name_tmpl').value + '/' + $('b_sc_default').value);
+  // 批量下拉套用才改批量字段（模式独立语义）
+  window.switchMode('batch');
+  $('b_preset_sel').value = '测试预设';
+  $('b_preset_sel').dispatchEvent(new window.Event('change', { bubbles: true }));
+  check('批量下拉套用批量字段', $('b_fonts_mode').value === 'collect' && $('b_out_name_tmpl').value !== '旧值' && $('b_sc_default').value === '1', $('b_fonts_mode').value + '/' + $('b_out_name_tmpl').value + '/' + $('b_sc_default').value);
+  window.switchMode('single');
 
   /* ---- 场景15b：预设记忆（刷新恢复）与重置基线 ---- */
   check('选择预设即写入记忆', window.localStorage.getItem('muxui_preset') === '测试预设', String(window.localStorage.getItem('muxui_preset')));
@@ -581,19 +636,20 @@ function mockFetch(url, opts) {
   $('b_use_sys_fonts').checked = true;
   check('批量 buildMuxCommon(b_) 组装 use_sys_fonts', window.buildMuxCommon('b_').use_sys_fonts === true);
   window.switchMode('single');
-  // 预设编辑器字段 + 保存并应用往返（主页面 + 批量公共区同步）
+  // 预设编辑器字段 + 保存并应用往返（打开模式=single → 只应用单页，批量独立）
   window.openPresetManager();
   check('预设编辑器「其他」区含系统字体字段', !!$('pm_f_use_sys_fonts'));
   $('pm_f_use_sys_fonts').checked = true;
   $('pm_f_use_sys_fonts').dispatchEvent(new window.Event('change', { bubbles: true }));
   check('编辑器改动后 Footer 切保存态', !!$('pmSaveApplyBtn'), $('pmFootActions') && $('pmFootActions').textContent);
+  $('b_use_sys_fonts').checked = false;   // 清空批量复选框，验证单页保存并应用不再波及批量
   $('pmSaveApplyBtn').click();
   await sleep(80);
   check('预设保存并应用后主页面复选框同步', $('use_sys_fonts').checked === true, String($('use_sys_fonts').checked));
-  check('预设套用同步批量复选框', $('b_use_sys_fonts').checked === true, String($('b_use_sys_fonts').checked));
+  check('预设独立：单页保存并应用不影响批量复选框', $('b_use_sys_fonts').checked === false, String($('b_use_sys_fonts').checked));
   $('pmCancelBtn').click();
   // 旧预设数据无该字段时不动复选框
-  window.applyPreset({ sc_name: '旧预设' });
+  window.applyPreset({ sc_name: '旧预设' }, 'single');
   check('旧预设无 use_sys_fonts 字段时不改动复选框', $('use_sys_fonts').checked === true);
   // 批量重置复位该复选框
   $('b_use_sys_fonts').checked = true;
@@ -608,19 +664,20 @@ function mockFetch(url, opts) {
   check('buildMuxCommon 组装 postcmd（单页）', window.buildMuxCommon('').postcmd === 'echo {out}');
   $('b_postcmd').value = 'copy {out} D:\\x';
   check('buildMuxCommon 组装 postcmd（批量 b_ 前缀）', window.buildMuxCommon('b_').postcmd === 'copy {out} D:\\x');
-  // 预设编辑器字段 + 保存并应用往返（主页面 + 批量公共区同步）
+  // 预设编辑器字段 + 保存并应用往返（打开模式=single → 只应用单页，批量独立）
   window.openPresetManager();
   check('预设编辑器含后处理命令字段', !!$('pm_f_postcmd'));
   $('pm_f_postcmd').value = 'echo done {ep}';
   $('pm_f_postcmd').dispatchEvent(new window.Event('input', { bubbles: true }));
   check('编辑器改动后 Footer 切保存态', !!$('pmSaveApplyBtn'), $('pmFootActions') && $('pmFootActions').textContent);
+  $('b_postcmd').value = '';   // 清空批量输入，验证单页保存并应用不再波及批量
   $('pmSaveApplyBtn').click();
   await sleep(80);
   check('预设保存并应用后主页面后处理命令同步', $('postcmd').value === 'echo done {ep}', $('postcmd').value);
-  check('预设套用同步批量公共区后处理命令', $('b_postcmd').value === 'echo done {ep}', $('b_postcmd').value);
+  check('预设独立：单页保存并应用不影响批量后处理命令', $('b_postcmd').value === '', $('b_postcmd').value);
   $('pmCancelBtn').click();
   // 旧预设数据无该字段时不改动输入框
-  window.applyPreset({ sc_name: '旧预设' });
+  window.applyPreset({ sc_name: '旧预设' }, 'single');
   check('旧预设无 postcmd 字段时不改动输入框', $('postcmd').value === 'echo done {ep}', $('postcmd').value);
   // 全局设置失焦保存（POST /api/config 回显 postcmd → CFG 镜像更新）
   let cfgPostVal = null;

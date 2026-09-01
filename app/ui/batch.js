@@ -469,14 +469,21 @@ function renderBatchResults(results, outDir) {
     }).join('') + '</table></div>';
 }
 
-/* 预设套用 → 批量公共字段联动（由 presets.js applyPreset 调用；映射集中在此，batch 域自持） */
+/* 预设套用 → 批量公共字段联动（由 presets.js applyPreset 调用；映射集中在此，batch 域自持）。
+ * 与单页 applyPreset 同一口径：预设 = 完整基线——字段存在（含明确留空 ''）即覆写，
+ * 字段缺失（undefined，旧预设历史形态）不动。 */
 function applyPresetToBatchCommon(d) {
   const bm = { fonts_mode: 'b_fonts_mode', out_name_tmpl: 'b_out_name_tmpl', title: 'b_title',
                sc_default: 'b_sc_default', tc_default: 'b_tc_default', sc_forced: 'b_sc_forced', tc_forced: 'b_tc_forced',
-               use_sys_fonts: 'b_use_sys_fonts', postcmd: 'b_postcmd' };
-  Object.keys(bm).forEach(k => { if (d[k] !== undefined && d[k] !== '' && $(bm[k])) { if (bm[k].endsWith('_forced') || k === 'use_sys_fonts') $(bm[k]).checked = !!d[k]; else $(bm[k]).value = d[k]; } });
-  if (d.fonts_dir && $('b_fonts_dir')) $('b_fonts_dir').value = d.fonts_dir;
-  if (d.out_dir && $('b_out_dir')) $('b_out_dir').value = d.out_dir;
+               use_sys_fonts: 'b_use_sys_fonts', postcmd: 'b_postcmd', force: 'b_force', backup: 'b_backup' };
+  const isBool = k => k === 'sc_forced' || k === 'tc_forced' || k === 'use_sys_fonts' || k === 'force' || k === 'backup';
+  Object.keys(bm).forEach(k => {
+    if (d[k] === undefined || !$(bm[k])) return;
+    if (isBool(k)) $(bm[k]).checked = (k === 'backup') ? d[k] !== false : !!d[k];
+    else $(bm[k]).value = d[k];
+  });
+  if (d.fonts_dir !== undefined && $('b_fonts_dir')) $('b_fonts_dir').value = d.fonts_dir;
+  if (d.out_dir !== undefined && $('b_out_dir')) $('b_out_dir').value = d.out_dir;
 }
 /* 页面加载恢复上次批量队列（断点续跑） */
 /* ===== 底部批量状态条：总体进度 / 当前文件 / 耗时与剩余（纯展示，不改任务逻辑） ===== */
@@ -640,8 +647,9 @@ $('btnBatchAdv').onclick = function () {
 /* 预设选择（批量设置区）：复用唯一应用入口 applyPresetToCurrentTask */
 $('b_preset_sel').onchange = function () {
   // PRESETS 是 presets.js 的 let 词法全局（不是 window 属性，勿写 window.PRESETS——恒 undefined 使选择失效）
-  if (this.value && PRESETS[this.value]) applyPresetToCurrentTask(this.value);
-  else if (this.value === '') { detachCurrentPreset(); }
+  // 应用目标 = 批量会话：只写批量公共字段，不影响单页（单/批量预设应用独立）
+  if (this.value && PRESETS[this.value]) applyPresetToCurrentTask(this.value, 'batch');
+  else if (this.value === '') { detachCurrentPreset('batch'); }
 };
 $('btnBatchPresetManage').onclick = () => { if (window.openPresetManager) window.openPresetManager(); };
 /* 检查问题：定位到第一个缺失字幕/无视频的任务 */

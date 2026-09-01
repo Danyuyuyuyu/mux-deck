@@ -40,7 +40,7 @@ function startup() {
       if (CFG.postcmd && sp && bp && !sp.value.trim() && !bp.value.trim()) { sp.value = CFG.postcmd; bp.value = CFG.postcmd; }
     }
     updateGlobalSummary();
-    if (ps && ps.presets) { PRESETS = ps.presets; refreshPresetSel(); restoreRememberedPreset(); }   // 恢复上次选中的预设并自动套用（名称失效则回落）
+    if (ps && ps.presets) { PRESETS = ps.presets; refreshPresetSel(); restoreRememberedPreset(); restoreBatchRememberedPreset(); }   // 单/批量各自恢复上次选中的预设并自动套用（名称失效则回落）
     const needSetup = c && (!c.configured || !c.valid);
     const envBroken = env && env.overall === 'broken';
     if (envBroken) {

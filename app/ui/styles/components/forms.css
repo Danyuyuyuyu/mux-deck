@@ -21,3 +21,6 @@
     .field > label, .field > .set-label { width:100%; }
     .field input { min-width:0; }
 }
+label.check {
+    width: 410px;
+}

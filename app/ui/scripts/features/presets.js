@@ -17,30 +17,37 @@ function presetData() {
     postcmd: $('postcmd').value.trim(),
   };
 }
-function applyPreset(d) {
+function applyPreset(d, mode) {
   if (!d || typeof d !== 'object') return;
+  /* 预设 = 完整基线：字段存在（含明确留空 ''）即覆写任务输入，切预设不留上一预设残留；
+   * 字段缺失（undefined，旧预设历史形态）不动。单/批量应用相互独立（按 mode 分流），
+   * 批量写入集中在 applyPresetToBatchCommon（batch 域自持）。 */
+  mode = (mode === 'batch') ? 'batch' : 'single';
+  if (mode === 'batch') {
+    applyPresetToBatchCommon(d);
+    if (typeof saveBatchQueue === 'function') saveBatchQueue();   // 批量字段变更落队列持久化
+    return;
+  }
   if (d.sc_name) $('sc_name').value = d.sc_name;
   if (d.tc_name) $('tc_name').value = d.tc_name;
-  $('sc_default').value = d.sc_default || '';
-  $('tc_default').value = d.tc_default || '';
-  $('sc_forced').checked = !!d.sc_forced;
-  $('tc_forced').checked = !!d.tc_forced;
-  if (d.fonts_dir) $('fonts_dir').value = d.fonts_dir;
-  if (d.out_dir) $('out_dir').value = d.out_dir;
-  if (d.chapters) $('chapters').value = d.chapters;
-  if (d.out_name_tmpl) $('out_name_tmpl').value = d.out_name_tmpl;
-  if (d.title) $('title').value = d.title;
+  if (d.sc_default !== undefined) $('sc_default').value = d.sc_default;
+  if (d.tc_default !== undefined) $('tc_default').value = d.tc_default;
+  if (d.sc_forced !== undefined) $('sc_forced').checked = !!d.sc_forced;
+  if (d.tc_forced !== undefined) $('tc_forced').checked = !!d.tc_forced;
+  if (d.fonts_dir !== undefined) $('fonts_dir').value = d.fonts_dir;
+  if (d.out_dir !== undefined) $('out_dir').value = d.out_dir;
+  if (d.chapters !== undefined) $('chapters').value = d.chapters;
+  if (d.out_name_tmpl !== undefined) $('out_name_tmpl').value = d.out_name_tmpl;
+  if (d.title !== undefined) $('title').value = d.title;
   if (d.postcmd !== undefined) $('postcmd').value = d.postcmd;   // 空串也套用（预设明确清空 = 任务级回落全局默认）
-  $('backup').checked = d.backup !== false;
-  $('force').checked = !!d.force;
+  if (d.backup !== undefined) $('backup').checked = d.backup !== false;
+  if (d.force !== undefined) $('force').checked = !!d.force;
   if (d.use_sys_fonts !== undefined) $('use_sys_fonts').checked = !!d.use_sys_fonts;   // 旧预设无此字段不动
   if (d.cfg_tool) { $('cfg_tool').value = d.cfg_tool; fireChange($('cfg_tool')); }
-  if (d.fonts_mode) $('fonts_mode').value = d.fonts_mode;
-  // 同步套用到批量公共字段（映射逻辑在 batch.js，batch 域自持）
-  applyPresetToBatchCommon(d);
+  if (d.fonts_mode !== undefined) $('fonts_mode').value = d.fonts_mode;
   syncSubStatus(); refreshSticky();
   updatePresetHint();
-  setStatus('已套用预设（含批量公共选项）', 'ok');
+  setStatus('已套用预设', 'ok');
 }
 function refreshPresetSel() {
   ['preset_sel', 'b_preset_sel'].forEach(function (id) {
@@ -64,12 +71,14 @@ async function loadPresets() {
 function getPresetList() { return PRESETS; }
 function refreshPresetOptions() { refreshPresetSel(); updatePresetHint(); }
 
-/* ==================== 当前任务的预设来源（presets 域私有会话状态） ====================
- * currentId：当前任务最后一次明确应用的预设名；null = 自定义配置。
- * snapshot：应用时刻的预设数据深拷贝（lastAppliedPresetSnapshot）——任务修改只标脏，
- * 不回写预设；current task 与 preset 之间永远通过 copy 传递，无共享可变引用。
- * 只有「解除预设」或删除来源预设才清空 currentId；普通修改不清空，只置 dirty。 */
-const presetSession = { currentId: null, snapshot: null };
+/* ==================== 各封装模式的预设来源（presets 域私有会话状态） ====================
+ * 单封装与批量的预设应用相互独立：各自记录 currentId（该模式最后一次明确应用的预设）与
+ * snapshot（应用时刻快照，任务修改只标脏不回写预设）。presetSession = 单封装会话
+ * （single.js 的轨道名守卫读它）；batchPresetSession = 批量会话。管理器按打开时所在
+ * 封装模式读写对应会话（字幕工具等非封装模式不提供应用）。 */
+const presetSession = { currentId: null, snapshot: null };        // 单封装会话
+const batchPresetSession = { currentId: null, snapshot: null };   // 批量封装会话
+function pmSess(mode) { return mode === 'batch' ? batchPresetSession : presetSession; }
 
 function isCurrentTaskPresetDirty() {
   if (!presetSession.currentId) return false;
@@ -80,32 +89,37 @@ function getCurrentPresetInfo() {
   const id = presetSession.currentId && PRESETS[presetSession.currentId] ? presetSession.currentId : null;
   return { id: id, dirty: id ? isCurrentTaskPresetDirty() : false };
 }
-/* 唯一应用入口：把已确定的预设配置 copy 进当前任务并登记来源/快照。
- * 列表点击、高级选项下拉之外的任何"应用"都必须经过这里。 */
-function applyPresetToCurrentTask(name) {
+/* 唯一应用入口：把已确定的预设配置 copy 进对应模式的任务并登记来源/快照。
+ * 列表点击、高级选项下拉之外的任何"应用"都必须经过这里。
+ * mode：'single'（默认）写单页字段；'batch' 只写批量公共字段——两模式互不影响。 */
+function applyPresetToCurrentTask(name, mode) {
   if (!name || !PRESETS[name]) return false;
-  $('preset_sel').value = name;
-  if ($('b_preset_sel')) $('b_preset_sel').value = name;
-  applyPreset(PRESETS[name]);
-  presetSession.currentId = name;
-  presetSession.snapshot = pmClone(PRESETS[name]);
+  mode = (mode === 'batch') ? 'batch' : 'single';
+  if (mode === 'batch') { if ($('b_preset_sel')) $('b_preset_sel').value = name; }
+  else $('preset_sel').value = name;
+  applyPreset(PRESETS[name], mode);
+  const sess = pmSess(mode);
+  sess.currentId = name;
+  sess.snapshot = pmClone(PRESETS[name]);
   updatePresetHint();
-  rememberPreset();
+  if (mode === 'batch') rememberBatchPreset(); else rememberPreset();
   return true;
 }
-/* 解除预设：只摘掉来源标记，当前任务参数原样保留（变为自定义配置） */
-function detachCurrentPreset() {
-  presetSession.currentId = null;
-  presetSession.snapshot = null;
-  $('preset_sel').value = '';
-  if ($('b_preset_sel')) $('b_preset_sel').value = '';
+/* 解除预设：只摘掉对应模式的来源标记，该模式任务参数原样保留（变为自定义配置） */
+function detachCurrentPreset(mode) {
+  mode = (mode === 'batch') ? 'batch' : 'single';
+  const sess = pmSess(mode);
+  sess.currentId = null;
+  sess.snapshot = null;
+  if (mode === 'batch') { if ($('b_preset_sel')) $('b_preset_sel').value = ''; }
+  else $('preset_sel').value = '';
   updatePresetHint();
-  rememberPreset();
-  setStatus('已解除预设：当前任务参数保留（自定义配置）', 'ok');
+  if (mode === 'batch') rememberBatchPreset(); else rememberPreset();
+  setStatus('已解除预设：参数保留（自定义配置）', 'ok');
 }
 
-/* ==================== 预设记忆（本机浏览器级工作态） ====================
- * 记住上次选中的预设名，刷新后恢复选择器并自动套用（= 恢复上次工作状态）。
+/* ==================== 预设记忆（本机浏览器级工作态，单/批量各记一份） ====================
+ * 记住各模式上次选中的预设名，刷新后恢复选择器并自动套用（= 恢复上次工作状态）。
  * 只存名字、不存参数——参数永远以服务端 PRESETS 为准；名称失效（被删/改名）时回落到
  * 「选择预设…」并清掉记忆，与删除当前引用预设的既有语义一致。 */
 function rememberPreset() {
@@ -118,7 +132,19 @@ function restoreRememberedPreset() {
     try { localStorage.removeItem('muxui_preset'); } catch (e) {}
     return;
   }
-  applyPresetToCurrentTask(name);   // 走唯一应用入口：登记来源 + 快照
+  applyPresetToCurrentTask(name, 'single');   // 走唯一应用入口：登记来源 + 快照
+}
+function rememberBatchPreset() {
+  try { localStorage.setItem('muxui_preset_batch', ($('b_preset_sel') || {}).value || ''); } catch (e) {}
+}
+function restoreBatchRememberedPreset() {
+  let name = '';
+  try { name = localStorage.getItem('muxui_preset_batch') || ''; } catch (e) {}
+  if (!name || !PRESETS[name]) {
+    try { localStorage.removeItem('muxui_preset_batch'); } catch (e) {}
+    return;
+  }
+  applyPresetToCurrentTask(name, 'batch');
 }
 
 /* 当前任务与所选预设的差异提示（轻量 dirty：仅状态展示，不拦截、不回写预设）。
@@ -142,9 +168,15 @@ function updatePresetHint() {
  * 点击列表项 = 查看/编辑，不会修改当前任务；删除当前任务引用的预设只清引用、不动参数。 */
 const PM_BLANK = { sc_name: 'SC', tc_name: 'TC', sc_default: '', tc_default: '', sc_forced: false, tc_forced: false,
   fonts_mode: 'subset', out_name_tmpl: '', title: '', fonts_dir: '', out_dir: '', chapters: '', backup: true, force: false, use_sys_fonts: false, postcmd: '' };
-const pmState = { editing: null };   // {orig: 已有预设名|null, isNew, mode: 'blank'|'task', base: 建基数据}
+const pmState = { editing: null, mode: 'other' };   // {orig, isNew, mode, base} + mode=打开时所在封装模式（single/batch/other）
 let pmEditorDirty = false;           // 编辑器有未保存修改（切换列表项时提示保护；Footer 按钮组随之切换）
 function pmClone(o) { return JSON.parse(JSON.stringify(o || {})); }
+/* 当前导航模式：single/batch → 应用目标；其余（字幕工具四模式等）= other，不提供应用 */
+function pmNavMode() {
+  const m = document.querySelector('.mode.active');
+  const id = m ? m.id : '';
+  return id === 'mode-batch' ? 'batch' : (id === 'mode-single' ? 'single' : 'other');
+}
 /* 空名预设的 UI fallback 编号（仅显示，不回写持久化名称；对象键唯一故空名至多一条） */
 function pmNameMap() {
   const m = {}; let n = 0;
@@ -153,20 +185,25 @@ function pmNameMap() {
 }
 function pmDisplayName(name) { return pmNameMap()[name] || '未命名预设'; }
 function openPresetManager() {
-  openModal('presetModal', { display: 'block' });
+  openModal('presetModal', {
+    display: 'block',
+    beforeClose: function () { return pmGuardUnsaved('关闭窗口'); }   // Esc/点窗口外/X/取消统一守卫：未保存时确认丢弃
+  });
+  pmState.mode = pmNavMode();   // 应用目标锁定为打开时所在封装模式
   $('pmNote').textContent = '';
   if (!pmState.editing) {
-    // 默认选中：当前任务来源预设 > 第一条；没有预设则进入新建
-    const preferred = presetSession.currentId && PRESETS[presetSession.currentId] ? presetSession.currentId : Object.keys(PRESETS)[0];
+    // 默认选中：当前模式来源预设 > 第一条；没有预设则进入新建
+    const sess = pmSess(pmState.mode);
+    const preferred = (pmState.mode !== 'other' && sess.currentId && PRESETS[sess.currentId]) ? sess.currentId : Object.keys(PRESETS)[0];
     pmState.editing = preferred ? { orig: preferred, isNew: false } : { orig: null, isNew: true, mode: 'blank', base: pmClone(PM_BLANK) };
   }
   pmEditorDirty = false;
   pmRenderList(); pmRenderEditor();
 }
 function closePresetManager() { closeModal('presetModal'); }
-/* 切换保护：编辑器有未保存修改时，切换/新建前确认丢弃 */
-function pmGuardUnsaved() {
-  if (pmState.editing && pmEditorDirty && !confirm('当前预设的修改尚未保存，切换后将丢弃这些修改。继续？')) return false;
+/* 切换/关闭保护：编辑器有未保存修改时，切换或关闭前确认丢弃（action=「切换」/「关闭窗口」） */
+function pmGuardUnsaved(action) {
+  if (pmState.editing && pmEditorDirty && !confirm('当前预设的修改尚未保存，' + (action || '切换') + '后将丢弃这些修改。继续？')) return false;
   pmEditorDirty = false;
   return true;
 }
@@ -187,10 +224,11 @@ function pmMarkDirty() {
 function pmRenderList() {
   const box = $('pmList');
   const names = pmNameMap();
+  const sess = pmSess(pmState.mode);
   box.innerHTML = Object.keys(PRESETS).map(function (n) {
-    // 两个状态不混淆：selected = 正在编辑（accent bar）；current = 当前任务来源（✓ 徽章）
+    // 两个状态不混淆：selected = 正在编辑（accent bar）；current = 打开模式的应用来源（✓ 徽章，仅封装模式显示）
     const selected = pmState.editing && !pmState.editing.isNew && pmState.editing.orig === n;
-    const current = presetSession.currentId === n;
+    const current = pmState.mode !== 'other' && sess.currentId === n;
     return '<button type="button" class="pm-item' + (selected ? ' selected' : '') + '" data-name="' + esc(n) + '">' + ic('fileText') +
       '<span class="pm-item-name">' + esc(names[n]) + '</span>' +
       (current ? '<span class="pm-cur">' + ic('check') + '<span>当前任务</span></span>' : '') + '</button>';
@@ -256,7 +294,7 @@ function pmRenderEditor() {
   h += '<div class="field pm-field"><label for="pm_f_fonts_dir">字体目录</label>' +
     '<input id="pm_f_fonts_dir" type="text" value="' + esc(d.fonts_dir || '') + '" autocomplete="off">' +
     '<button type="button" class="btn icon-btn" id="pm_f_fonts_dir_btn" aria-label="浏览字体目录">' + ic('folderOpen') + '</button></div>';
-  h += '<div class="t-cap pm-hint">留空 = 自动查找视频旁的 Fonts\\ 或 Font\\；应用预设时会覆盖当前任务的对应输入</div>';
+  h += '<div class="t-cap pm-hint">留空 = 自动查找视频旁的 Fonts\\ 或 Font\\；应用预设即以预设为准（留空字段会清空任务对应输入）</div>';
   h += '</div>';
   /* ---- 输出 / 命名（桌面双列） ---- */
   h += '<div class="pm-sec"><div class="pm-sec-title">输出 / 命名</div><div class="pm-out-grid">';
@@ -267,7 +305,7 @@ function pmRenderEditor() {
   h += '<div class="field pm-field"><label for="pm_f_chapters">章节文件</label><input id="pm_f_chapters" type="text" value="' + esc(d.chapters || '') + '" placeholder="可选：导入章节文件" autocomplete="off">' +
     '<button type="button" class="btn icon-btn" id="pm_f_chapters_btn" aria-label="浏览章节文件">' + ic('folderOpen') + '</button></div>';
   h += '<div class="field pm-field"><label for="pm_f_postcmd">后处理命令</label><input id="pm_f_postcmd" type="text" value="' + esc(d.postcmd || '') + '" placeholder="封装成功后执行；{out}={成品路径} {src}={源视频} {ep}={集数}；空 = 用全局默认" autocomplete="off"></div>';
-  h += '</div><div class="t-cap pm-hint">应用预设会覆盖当前任务的输出位置（留空 = 不改变）</div></div>';
+  h += '</div><div class="t-cap pm-hint">应用预设即以预设为准：预设留空的字段会清空任务对应输入</div></div>';
   /* ---- 其他（横向复选） ---- */
   h += '<div class="pm-sec"><div class="pm-sec-title">其他</div><div class="pm-other">' +
     '<label class="check"><input id="pm_f_backup" type="checkbox"' + (d.backup !== false ? ' checked' : '') + '> 备份原件</label>' +
@@ -311,39 +349,43 @@ function pmRenderEditor() {
   pmRenderEdHead();
   pmRenderFooter();
 }
-/* Footer 四态（一次最多一个 Primary）：
- * 新建 → [取消] [创建预设] [创建并应用*]；
- * 已有未保存 → [取消] [保存修改] [保存并应用*]（保存并应用已覆盖"应用"语义，不再显示应用按钮）；
- * 正在查看当前任务预设且未修改 → [取消] + "当前任务正在使用"轻提示（应用无意义，不显示）；
- * 查看其他预设未修改 → [取消] [应用到当前任务*]。左侧恒为删除（Ghost danger，仅已有预设）。 */
-/* 当前任务来源预设是否已落后于服务端最新版本（保存修改/他处更新后任务尚未重新应用）。
+/* Footer 状态（一次最多一个 Primary；muxMode=false 时无应用类按钮）：
+ * 新建 → [取消] [创建预设] (+封装模式 [创建并应用*])；
+ * 已有未保存 → [取消] [保存修改] (+封装模式 [保存并应用*])；
+ * 封装模式查看当前来源预设未修改 → [取消] + "当前任务正在使用"轻提示；
+ * 封装模式查看其他预设未修改 → [取消] [应用到当前任务*]；
+ * 非封装模式（字幕工具等）→ 只保留保存类，不显示任何应用/正在使用。左侧恒为删除（Ghost danger，仅已有预设）。 */
+/* 打开模式来源预设是否已落后于服务端最新版本（保存修改/他处更新后任务尚未重新应用）。
  * 判定 = 应用时刻快照 vs 服务端最新值（presetSnapshotEqual 仅共有键，兼容旧预设历史字段）。 */
 function pmCurrentStale() {
-  const id = presetSession.currentId;
-  if (!id || !PRESETS[id] || !presetSession.snapshot) return false;
-  return !presetSnapshotEqual(PRESETS[id], presetSession.snapshot);
+  if (pmState.mode === 'other') return false;
+  const sess = pmSess(pmState.mode);
+  const id = sess.currentId;
+  if (!id || !PRESETS[id] || !sess.snapshot) return false;
+  return !presetSnapshotEqual(PRESETS[id], sess.snapshot);
 }
 function pmRenderFooter() {
   const st = pmState.editing;
   const left = $('pmFootLeft'), acts = $('pmFootActions');
   if (!left || !acts) return;
   if (!st) { left.innerHTML = ''; acts.innerHTML = ''; return; }
+  const muxMode = pmState.mode !== 'other';   // 是否封装模式（决定是否提供应用类按钮）
   left.innerHTML = st.isNew ? '' :
     '<button type="button" class="btn ghost danger" id="pmDeleteBtn">' + ic('trash') + '<span>删除预设</span></button>';
   let h = '<button type="button" class="btn" id="pmCancelBtn">取消</button>';
   if (st.isNew) {
-    h += '<button type="button" class="btn" id="pmSaveBtn">' + ic('plus') + '<span>创建预设</span></button>' +
-      '<button type="button" class="btn primary" id="pmSaveApplyBtn">' + ic('play') + '<span>创建并应用</span></button>';
+    h += '<button type="button" class="btn" id="pmSaveBtn">' + ic('plus') + '<span>创建预设</span></button>';
+    if (muxMode) h += '<button type="button" class="btn primary" id="pmSaveApplyBtn">' + ic('play') + '<span>创建并应用</span></button>';
   } else if (pmEditorDirty) {
-    h += '<button type="button" class="btn" id="pmSaveBtn">' + ic('check') + '<span>保存修改</span></button>' +
-      '<button type="button" class="btn primary" id="pmSaveApplyBtn">' + ic('play') + '<span>保存并应用</span></button>';
-  } else if (presetSession.currentId === st.orig && pmCurrentStale()) {
-    // 当前来源预设已保存新版本、任务尚未应用：给应用按钮 + 左侧未生效提示（不再误显「正在使用」）
+    h += '<button type="button" class="btn" id="pmSaveBtn">' + ic('check') + '<span>保存修改</span></button>';
+    if (muxMode) h += '<button type="button" class="btn primary" id="pmSaveApplyBtn">' + ic('play') + '<span>保存并应用</span></button>';
+  } else if (muxMode && pmSess(pmState.mode).currentId === st.orig && pmCurrentStale()) {
+    // 打开模式来源预设已保存新版本、任务尚未应用：给应用按钮 + 左侧未生效提示（不再误显「正在使用」）
     left.innerHTML += '<span class="pm-cur-hint pm-stale-hint">' + ic('alertTriangle') + '<span>已保存新版本，当前任务尚未应用</span></span>';
     h += '<button type="button" class="btn primary" id="pmApplyBtn">' + ic('check') + '<span>应用到当前任务</span></button>';
-  } else if (presetSession.currentId === st.orig) {
+  } else if (muxMode && pmSess(pmState.mode).currentId === st.orig) {
     h += '<span class="pm-cur-hint">' + ic('checkCircle') + '<span>当前任务正在使用</span></span>';
-  } else {
+  } else if (muxMode) {
     h += '<button type="button" class="btn primary" id="pmApplyBtn">' + ic('check') + '<span>应用到当前任务</span></button>';
   }
   acts.innerHTML = h;
@@ -352,8 +394,8 @@ function pmRenderFooter() {
   if ($('pmSaveApplyBtn')) $('pmSaveApplyBtn').onclick = () => pmSave(true);
   const apply = $('pmApplyBtn');
   if (apply) apply.onclick = () => {
-    if (applyPresetToCurrentTask(st.orig)) {
-      pmNoteOk('✓ 已应用到当前任务（' + st.orig + '）');
+    if (applyPresetToCurrentTask(st.orig, pmState.mode)) {
+      pmNoteOk('✓ 已应用到' + (pmState.mode === 'batch' ? '批量' : '单页') + '当前任务（' + st.orig + '）');
       pmRenderList(); pmRenderFooter();   // 当前任务徽章移动 + Footer 切到"正在使用"态
     }
   };
@@ -386,20 +428,23 @@ async function pmSave(thenApply) {
       const rd = await api('/api/presets/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: st.orig }) });
       if (!rd.error) PRESETS = rd.presets || PRESETS;
     }
-    // 会话引用跟随重命名（高级选项选择器 + 当前任务来源）
+    // 会话引用跟随重命名（高级选项选择器 + 两模式应用来源）
     if (st.orig !== name) {
       if (presetSession.currentId === st.orig) presetSession.currentId = PRESETS[name] ? name : null;
+      if (batchPresetSession.currentId === st.orig) batchPresetSession.currentId = PRESETS[name] ? name : null;
       if ($('preset_sel').value === st.orig) $('preset_sel').value = PRESETS[name] ? name : '';
+      if (($('b_preset_sel') || {}).value === st.orig) $('b_preset_sel').value = PRESETS[name] ? name : '';
     }
     pmEditorDirty = false;
     pmState.editing = { orig: name, isNew: false };
     if (thenApply) {
       refreshPresetSel();   // 先刷新两个下拉的 option（含批量 b_preset_sel）：新建/重命名的预设此时还没进下拉，先应用的话 .value 赋值会因 option 缺失而静默失败
-      applyPresetToCurrentTask(name);   // 保存 → 用保存后的结果应用 → 刷新 + 快照（显式两步，不隐式覆盖）
+      applyPresetToCurrentTask(name, pmState.mode);   // 保存 → 用保存后的结果应用到打开模式的当前任务 → 刷新 + 快照（显式两步，不隐式覆盖）
       pmRenderList(); pmRenderEditor();
-      pmNoteOk('✓ 已保存并应用到当前任务（' + name + '）');
+      pmNoteOk('✓ 已保存并应用' + (pmState.mode === 'batch' ? '到批量' : '到当前任务') + '（' + name + '）');
     } else {
-      refreshPresetSel(); updatePresetHint(); rememberPreset();
+      refreshPresetSel(); updatePresetHint();
+      if (pmState.mode === 'batch') rememberBatchPreset(); else rememberPreset();
       pmRenderList(); pmRenderEditor();
       pmNoteOk('✓ 已保存（' + name + '）');
     }
@@ -415,11 +460,17 @@ async function pmDelete() {
     if (r.error) { pmNoteErr(r.error); return; }
     PRESETS = r.presets || {};
     if ($('preset_sel').value === name) $('preset_sel').value = '';   // 只清引用；当前任务参数保持不变
-    if (presetSession.currentId === name) {   // 删除的是当前任务来源预设：任务转为自定义配置（参数不动）
+    if (($('b_preset_sel') || {}).value === name) $('b_preset_sel').value = '';
+    if (presetSession.currentId === name) {   // 删除的是单页来源预设：任务转为自定义配置（参数不动）
       presetSession.currentId = null;
       presetSession.snapshot = null;
     }
-    refreshPresetSel(); updatePresetHint(); rememberPreset();
+    if (batchPresetSession.currentId === name) {   // 删除的是批量来源预设：批量转为自定义配置（参数不动）
+      batchPresetSession.currentId = null;
+      batchPresetSession.snapshot = null;
+    }
+    refreshPresetSel(); updatePresetHint();
+    if (pmState.mode === 'batch') rememberBatchPreset(); else rememberPreset();
     pmEditorDirty = false;
     pmState.editing = Object.keys(PRESETS).length ? { orig: Object.keys(PRESETS)[0], isNew: false } : null;
     pmRenderList(); pmRenderEditor();
@@ -432,8 +483,8 @@ function pmNoteErr(t) { const el = $('pmNote'); el.textContent = t; el.style.col
 /* ==================== 初始化（由 init.js bootstrap 统一调用，仅执行一次） ==================== */
 function initPresets() {
 $('preset_sel').onchange = function () {
-  if (this.value && PRESETS[this.value]) applyPresetToCurrentTask(this.value);   // 唯一应用入口
-  else detachCurrentPreset();   // 选回「选择预设…」= 解除预设（参数保留）
+  if (this.value && PRESETS[this.value]) applyPresetToCurrentTask(this.value, 'single');   // 唯一应用入口（单页）
+  else detachCurrentPreset('single');   // 选回「选择预设…」= 解除预设（参数保留）
 };
 ['sc_name', 'tc_name', 'fonts_dir', 'out_dir', 'out_name_tmpl', 'title', 'postcmd'].forEach(id => $(id).addEventListener('input', updatePresetHint));
 ['sc_forced', 'tc_forced', 'backup', 'force', 'fonts_mode', 'use_sys_fonts'].forEach(id => $(id).addEventListener('change', updatePresetHint));

@@ -31,7 +31,11 @@ function closeModal(id) {
   const el = typeof id === 'string' ? document.getElementById(id) : id;
   if (!el) return;
   const idx = MODAL_STACK.findIndex(m => m.el === el);
-  const m = idx >= 0 ? MODAL_STACK.splice(idx, 1)[0] : null;   // 未入栈：m=null，只做隐藏容错
+  const m = idx >= 0 ? MODAL_STACK[idx] : null;
+  /* beforeClose：关闭前守卫（返回 false 中止关闭）——如预设管理器有未保存修改时确认丢弃。
+   * Esc / backdrop / 业务语义关闭函数（closeXxx）统一经过这里，守卫一处生效。 */
+  if (m && typeof m.options.beforeClose === 'function' && m.options.beforeClose() === false) return;
+  if (idx >= 0) MODAL_STACK.splice(idx, 1);   // 未入栈：m=null，只做隐藏容错
   /* 焦点必须先移出弹窗、再标 aria-hidden（反序会触发 Chrome
    * "Blocked aria-hidden … descendant retained focus" 告警）：先恢复触发元素焦点，
    * 恢复目标不可聚焦/断连时焦点仍滞留弹窗内，则 blur 退到 body。 */
