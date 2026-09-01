@@ -414,6 +414,30 @@ function mockFetch(url, opts) {
   window.applyPresetToCurrentTask('测试预设');   // 恢复场景14 结束态（来源/记忆/参数）
   check('恢复：预设来源与记忆回到测试预设', window.localStorage.getItem('muxui_preset') === '测试预设' && $('sc_name').value === '简中');
 
+  /* ---- 场景14c（回归）：新建预设「创建并应用」下拉即时同步 + 批量预设选择器走唯一应用入口 ---- */
+  $('b_fonts_dir').value = ''; $('b_out_name_tmpl').value = '';   // 先清空批量字段，验证套用真的同步了
+  window.openPresetManager();
+  $('pmNewBtn').click();
+  const pmRadioTask2 = window.document.querySelector('input[name="pmNewMode"][value="task"]');
+  pmRadioTask2.checked = true; pmRadioTask2.dispatchEvent(new window.Event('change', { bubbles: true }));
+  $('pmName').value = '新建即应用';
+  $('pmSaveApplyBtn').click();
+  await sleep(80);
+  check('创建并应用：单页下拉立即含新预设', [...$('preset_sel').options].some(o => o.value === '新建即应用'));
+  check('创建并应用：批量下拉立即含新预设', [...$('b_preset_sel').options].some(o => o.value === '新建即应用'));
+  check('创建并应用：批量下拉选中新预设', $('b_preset_sel').value === '新建即应用', $('b_preset_sel').value);
+  check('创建并应用：批量公共字段同步（字体目录）', $('b_fonts_dir').value === 'D:\\MyFonts', $('b_fonts_dir').value);   // 字体目录沿用早前场景设置的 D:\MyFonts（identify 不覆盖已有值）
+  $('pmClose').click();
+  // 批量下拉选择预设 = 预设应用入口之一（回归：window.PRESETS 恒 undefined 使批量选择失效）
+  window.switchMode('batch');
+  $('b_preset_sel').value = '预设B';
+  $('b_preset_sel').dispatchEvent(new window.Event('change', { bubbles: true }));
+  check('批量下拉选预设：批量命名模板同步', $('b_out_name_tmpl').value === '[G] {ep}', $('b_out_name_tmpl').value);
+  check('批量下拉选预设：单页字段同步（同一当前任务）', $('sc_name').value === '存应新名', $('sc_name').value);
+  check('批量下拉选预设：当前任务来源切到预设B', window.eval('presetSession.currentId') === '预设B', window.eval('presetSession.currentId'));
+  window.switchMode('single');
+  window.applyPresetToCurrentTask('测试预设');   // 恢复：来源/记忆/参数回到测试预设
+
   /* ---- 场景15：批量章节自动匹配 + 预设套用批量字段 ---- */
   chaptersRet = { chapters: 'D:\\Video\\EP01.chapters.txt' };
   window.eval('batchItems.length = 0');

@@ -382,6 +382,7 @@ async function pmSave(thenApply) {
     pmEditorDirty = false;
     pmState.editing = { orig: name, isNew: false };
     if (thenApply) {
+      refreshPresetSel();   // 先刷新两个下拉的 option（含批量 b_preset_sel）：新建/重命名的预设此时还没进下拉，先应用的话 .value 赋值会因 option 缺失而静默失败
       applyPresetToCurrentTask(name);   // 保存 → 用保存后的结果应用 → 刷新 + 快照（显式两步，不隐式覆盖）
       pmRenderList(); pmRenderEditor();
       pmNoteOk('✓ 已保存并应用到当前任务（' + name + '）');

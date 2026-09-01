@@ -639,8 +639,9 @@ $('btnBatchAdv').onclick = function () {
 };
 /* 预设选择（批量设置区）：复用唯一应用入口 applyPresetToCurrentTask */
 $('b_preset_sel').onchange = function () {
-  if (this.value && window.PRESETS && window.PRESETS[this.value]) window.applyPresetToCurrentTask(this.value);
-  else if (this.value === '') { /* 选回「选择预设…」= 解除预设 */ if (window.detachCurrentPreset) window.detachCurrentPreset(); }
+  // PRESETS 是 presets.js 的 let 词法全局（不是 window 属性，勿写 window.PRESETS——恒 undefined 使选择失效）
+  if (this.value && PRESETS[this.value]) applyPresetToCurrentTask(this.value);
+  else if (this.value === '') { detachCurrentPreset(); }
 };
 $('btnBatchPresetManage').onclick = () => { if (window.openPresetManager) window.openPresetManager(); };
 /* 检查问题：定位到第一个缺失字幕/无视频的任务 */
