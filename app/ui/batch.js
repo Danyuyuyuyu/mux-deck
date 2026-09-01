@@ -654,6 +654,7 @@ $('btnBatchCheck').onclick = () => {
 $('btnMatchAll').onclick = $('btnBatchRematchAll').onclick;
 $('btnBFonts').onclick = () => openBrowser(v => $('b_fonts_dir').value = v, 'dir', $('b_fonts_dir').value, 'fonts');
 $('btnBOut').onclick = () => openBrowser(v => $('b_out_dir').value = v, 'dir', $('b_out_dir').value, 'out');
+restoreBatchQueue();   // 恢复上次批量列表（须在 initBatch 阶段调用：此时 app.js 已加载，refreshBatchSticky 可用）
 }
 
 /* ---- 批量任务主体（按钮启动逻辑，保留原语义） ---- */
@@ -803,7 +804,7 @@ function setBatchControlsLocked(locked) {
   $('mode-batch').classList.toggle('bq-locked', locked);
 }
 
-(function restoreBatchQueue() {
+function restoreBatchQueue() {
   try {
     const q = JSON.parse(localStorage.getItem('muxui_batch_queue') || 'null');
     if (!q) return;
@@ -826,4 +827,4 @@ function setBatchControlsLocked(locked) {
     renderBatch();
     setStatus('已恢复上次的批量列表（' + batchItems.length + ' 项）与选项，可续跑', 'ok');
   } catch (e) {}
-})();
+}

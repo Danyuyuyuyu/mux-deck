@@ -183,7 +183,14 @@ def start_batch(body):
                 cmd = build_cmd(it, common)
                 state["last_cmd"] = display_cmd(cmd)   # 实际执行的封装命令（可复现/进流水线）
                 od = (common.get("out_dir") or "").strip()
-                out_path = os.path.join(od, os.path.basename(it.get("video", ""))) if od else it.get("video", "")
+                # 输出名须与 mux_cli 实际落地一致：应用 out_name 模板（复用 resolve_out_name），否则 skip_existing 会判断到错误路径
+                video_path = it.get("video", "")
+                base = os.path.splitext(os.path.basename(video_path))[0]
+                ext = os.path.splitext(video_path)[1] or ".mkv"
+                tmpl = (common.get("out_name") or "").strip()
+                title = (common.get("title") or "").strip()
+                out_base = mux_cli.resolve_out_name(tmpl, base, _video_height(video_path), title) if tmpl else base
+                out_path = os.path.join(od, out_base + ext) if od else video_path
                 # 跳过已存在输出（仅输出目录模式；替换模式的目标即源文件，恒存在无意义）
                 if od and common.get("skip_existing") and os.path.isfile(out_path):
                     state["results"].append({"video": it.get("video", ""), "output": out_path,

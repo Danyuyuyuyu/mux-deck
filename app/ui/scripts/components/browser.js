@@ -36,13 +36,13 @@ async function showBrowser() {
     b.onclick = () => { BR.path = dr; showBrowser(); };
     body.appendChild(b);
   });
-  d.dirs.forEach(n => {
+  (d.dirs || []).forEach(n => {
     const b = document.createElement('button'); b.className = 'mb-item dir';
     b.innerHTML = itemCls(n, true);
     b.onclick = () => { BR.path = (d.path ? d.path.replace(/\\+$/, '') + '\\' : '') + n; showBrowser(); };
     body.appendChild(b);
   });
-  d.files.forEach(f => {
+  (d.files || []).forEach(f => {
     const [name, sz] = f;
     if (ext && !ext.includes(name.slice(name.lastIndexOf('.')).toLowerCase())) return;
     const b = document.createElement('button'); b.className = 'mb-item';

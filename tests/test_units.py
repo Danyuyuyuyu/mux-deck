@@ -221,6 +221,56 @@ class QcFromLogTest(unittest.TestCase):
         self.assertIsNone(_qc_from_log("nothing"))
 
 
+class SubIntegrityTest(unittest.TestCase):
+    """Phase 1 QC 完整性校验：ASS 时间解析 + 字幕首/末行时间提取（漏翻片尾/片头检测用）。"""
+
+    def test_parse_ass_time(self):
+        self.assertEqual(mc._parse_ass_time("0:01:02.50"), 62.5)
+        self.assertEqual(mc._parse_ass_time("1:00:00.00"), 3600.0)
+        self.assertEqual(mc._parse_ass_time("0:00:00.00"), 0.0)
+        self.assertEqual(mc._parse_ass_time("1:02:03.40"), 3723.4)
+        # 逗号分隔厘秒同样接受（部分 ASS 用逗号）
+        self.assertEqual(mc._parse_ass_time("0:00:01,50"), 1.5)
+
+    def test_parse_ass_time_invalid(self):
+        self.assertIsNone(mc._parse_ass_time("bad"))
+        self.assertIsNone(mc._parse_ass_time(""))
+        self.assertIsNone(mc._parse_ass_time("00:00"))
+
+    def test_sub_last_end_and_first_start(self):
+        import tempfile
+        ass = (
+            "[Script Info]\n"
+            "[Events]\n"
+            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+            "Dialogue: 0,0:00:05.00,0:00:08.00,Def,,0,0,0,,开场\n"
+            "Dialogue: 0,0:10:00.00,0:10:03.50,Def,,0,0,0,,结尾\n"
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".ass", encoding="utf-8", delete=False) as f:
+            f.write(ass)
+            path = f.name
+        try:
+            self.assertEqual(mc.sub_first_start(path), 5.0)
+            self.assertEqual(mc.sub_last_end(path), 603.5)
+        finally:
+            os.remove(path)
+
+    def test_sub_empty_returns_none(self):
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".ass", encoding="utf-8", delete=False) as f:
+            f.write("[Script Info]\n[Events]\n")
+            path = f.name
+        try:
+            self.assertIsNone(mc.sub_first_start(path))
+            self.assertIsNone(mc.sub_last_end(path))
+        finally:
+            os.remove(path)
+
+    def test_sub_missing_file_returns_none(self):
+        self.assertIsNone(mc.sub_last_end(os.path.join(ROOT, "no_such.ass")))
+        self.assertIsNone(mc.sub_first_start(os.path.join(ROOT, "no_such.ass")))
+
+
 class FontSourcesTest(unittest.TestCase):
     """F2：Windows 系统已装字体作为可选额外字体源（font_sources + mux_cli 组装）。"""
 

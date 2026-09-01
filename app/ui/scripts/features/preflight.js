@@ -40,7 +40,7 @@ async function getPreflightResult() {
     if (st) {
       if (st.cls === 'warn') add('warning', 'subcheck_' + kind, label + '字幕内容体检有预警', st.text + '（校对参考，不影响封装）', 'subtitle_' + kind, 'view_subcheck');
       else if (st.cls === 'err') add('warning', 'subcheck_err_' + kind, label + '字幕内容体检失败', '未能完成内容分析，可重新运行体检。', 'subtitle_' + kind, '');
-      else if (!subCheckFresh(kind)) add('info', 'subcheck_stale_' + kind, label + '字幕内容已变更', '先前的体检结果已过期，可在字幕区重新运行。', 'subtitle_' + kind, '');
+      else if (st.fresh === false) add('info', 'subcheck_stale_' + kind, label + '字幕内容已变更', '先前的体检结果已过期，可在字幕区重新运行。', 'subtitle_' + kind, '');
     } else add('info', 'subcheck_none_' + kind, label + '字幕尚未内容体检', '可在字幕区运行「内容体检」。', 'subtitle_' + kind, '');
   });
   /* 字体 */

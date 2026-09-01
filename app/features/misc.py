@@ -80,7 +80,7 @@ def handle_presets_delete(body):
 
 # ---------------- 备份目录（替换模式产生的 __mux_tmp_manual，列出/清理） ----------------
 
-BACKUPS_LOG = os.path.join(core.APP_DIR, "data", "backups.log")
+BACKUPS_LOG = os.path.join(core.DATA_DIR, "backups.log")
 
 def _backup_log_paths():
     seen, out = set(), []

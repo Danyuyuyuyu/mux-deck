@@ -184,7 +184,7 @@ window.addEventListener('drop', async e => {
       else { if (!isScName(base)) plainSub = true; $('sc_sub').value = s; autoTrackName('sc_sub', 'sc_name', 'sc'); }
     }
     syncSubStatus();
-    lastResult = null; refreshSticky();
+    clearSingleResult(); refreshSticky();
     setStatus('已填充字幕' + (plainSub ? ' · 无简/繁标识的字幕已按简体处理' : ''), 'ok');
   }
 });

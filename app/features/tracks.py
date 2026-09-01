@@ -29,8 +29,8 @@ def probe(path):
                 "name": pr.get("track_name") or "", "default": bool(pr.get("default_track")),
             })
             if t.get("type") == "video" and not vh:
-                # 视频分辨率高度（与 mux_cli 同口径：height 优先，回退 display_dimensions），供输出名 {res} 预览
-                vh = int(pr.get("height") or 0)
+                # 视频分辨率高度（与 mux_cli 同口径：pixel_height 优先，回退 display_dimensions），供输出名 {res} 预览
+                vh = int(pr.get("pixel_height") or pr.get("height") or 0)
                 if not vh:
                     dd = str(pr.get("display_dimensions") or "")
                     if "x" in dd:

@@ -92,7 +92,7 @@ function wireVideo() {
     if (replaced) {
       // 新视频自动识别（与批量添加文件同一入口，见 identify.js）；识别期间视频又被更换则丢弃结果
       const id = await identify(v);
-      if (inp.value.trim() !== v) return;
+      if ($('video').value.trim() !== v) return;   // 读当前 DOM（renderVideoCard 已重建节点，闭包里的 inp 已失效）
       applyIdentify($('sc_sub'), $('tc_sub'), $('fonts_dir'), id, $('chapters'));   // 已有值不覆盖
       autoTrackName('sc_sub', 'sc_name', 'sc');
       autoTrackName('tc_sub', 'tc_name', 'tc');
@@ -184,7 +184,7 @@ function renderSubCard(kind) {
     if (pick) { pick.className = 'btn small primary'; pick.innerHTML = ic('fileText') + '<span>选择字幕</span>'; }
   }
   // 空卡与刚填充/刚移除的卡保持展开（提供操作入口），其余尊重用户折叠状态
-  if (wasFilled !== (sub ? '1' : '0')) setSubCardOpen(kind, true);
+  if (wasFilled !== !!sub) setSubCardOpen(kind, true);
   card.dataset.filled = sub ? '1' : '0';
 }
 /* 内容体检摘要行（btnSubCheck 写入 subCheckUi 后经此渲染） */

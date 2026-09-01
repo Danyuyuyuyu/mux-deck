@@ -116,11 +116,14 @@ def probe_json(path):
         fail("视频信息解析失败: %s" % ex)
 
 def detect_ep(base):
-    """从文件名识别集数字符串（与 resolve_out_name 同一套优先级；识别不出返回空串）。"""
+    """从文件名识别集数字符串（与 batch_cli/tracks 同一套优先级；识别不出返回空串）。"""
+    m = re.search(r'S(\d{1,2})E(\d{1,3})', base, re.I)
+    if m:
+        return m.group(2)   # SxxEyy 命名取集数（E 后面的数字）
     m = (re.search(r'EP\s*(\d{1,4})', base, re.I) or re.search(r'第\s*(\d{1,4})\s*[话話集]', base)
          or re.search(r'\[\s*(\d{1,4})\s*\]', base)
          or re.search(r'(?:^|[\s_\-\.])(\d{1,4})(?=[\s_\-\.]|$)', base))
-    return m.group(1) if m else ((re.findall(r'\d+', base) or [''])[-1])
+    return m.group(1) if m else ""
 
 def resolve_out_name(tmpl, base, height, title=""):
     """命名模板 -> 实际文件名（无扩展名）。占位符：{src} 源文件名 {ep} 集数 {res} 分辨率(1080P) {title} MKV标题（留空回退 {src}）。"""
@@ -179,6 +182,47 @@ def run_postcmd(cmd, out, src, base):
         return (1, "后处理命令超时（上限 600 秒），已终止")
     except Exception as ex:
         return (1, "后处理命令启动失败: %s" % ex)
+
+def _parse_ass_time(ts):
+    """ASS 时间戳 -> 秒（float）；无法解析返回 None。格式 H:MM:SS.cc（分/秒两位，厘秒）。"""
+    ts = (ts or "").strip()
+    m = re.match(r"^(\d+):(\d{1,2}):(\d{1,2})(?:[.,](\d{1,2}))?$", ts)
+    if not m:
+        return None
+    h, mi, s = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    cs = m.group(4) or "0"
+    return h * 3600 + mi * 60 + s + int(cs.ljust(2, "0")[:2]) / 100.0
+
+def sub_last_end(sub):
+    """字幕末行 Dialogue 的结束时间（秒）；无有效 Dialogue 返回 None。"""
+    last = None
+    try:
+        with open(sub, encoding="utf-8-sig", errors="replace") as f:
+            for line in f:
+                if line.startswith("Dialogue:"):
+                    parts = line.split(",", 9)
+                    if len(parts) >= 3:
+                        t = _parse_ass_time(parts[2].strip())
+                        if t is not None:
+                            last = t
+    except OSError:
+        return None
+    return last
+
+def sub_first_start(sub):
+    """字幕首行有效 Dialogue 的开始时间（秒）；无有效 Dialogue 返回 None。"""
+    try:
+        with open(sub, encoding="utf-8-sig", errors="replace") as f:
+            for line in f:
+                if line.startswith("Dialogue:"):
+                    parts = line.split(",", 9)
+                    if len(parts) >= 2:
+                        t = _parse_ass_time(parts[1].strip())
+                        if t is not None:
+                            return t
+    except OSError:
+        return None
+    return None
 
 def collect_fonts(subs, fonts_dir, out_dir, extra_dirs=None):
     """仅收集模式：解析字幕引用的字体名（Style + \\fn），从字体目录匹配并全量复制（不裁字形）。
@@ -506,6 +550,17 @@ def main():
 
     # ---------- 发布前 QC（封装后校验：轨道语言/旗标硬校验，附件/章节软提醒） ----------
     vtracks = vo.get("tracks") or []
+    # 视频时长（毫秒 -> 秒）：完整性校验（字幕末行 vs 视频时长）用
+    video_dur = None
+    for tr in vtracks:
+        if tr.get("type") == "video":
+            try:
+                dur_ms = (tr.get("properties") or {}).get("duration")
+                if dur_ms:
+                    video_dur = float(dur_ms) / 1000.0
+            except (TypeError, ValueError):
+                pass
+            break
     # mkvmerge -J 的 language 是 ISO 639-2 老码（中文=chi），BCP47 标签在 language_ietf
     lang_of = lambda tr: str((tr.get("properties") or {}).get("language_ietf")
                              or (tr.get("properties") or {}).get("language") or "").lower()
@@ -530,6 +585,46 @@ def main():
         qc_soft.append("附件 %d 个少于待嵌字体 %d 个" % (att_got, len(fonts)))
     if a.chapters and not (vo.get("chapters") or []):
         qc_soft.append("提供了章节文件但成品无章节")
+    # ---- 视频轨信息校验：成品视频轨分辨率/帧率 vs 源视频（二次压制/错源检测） ----
+    def _vid_meta(track_list):
+        for tr in (track_list or []):
+            if tr.get("type") == "video":
+                pr = tr.get("properties") or {}
+                return {
+                    "width": pr.get("pixel_width") or pr.get("width"),
+                    "height": pr.get("pixel_height") or pr.get("height"),
+                    "fps": None,
+                }
+        return {}
+    src_v = _vid_meta(j.get("tracks"))
+    out_v = _vid_meta(vtracks)
+    if src_v and out_v:
+        if (src_v.get("width") and out_v.get("width") and
+                int(src_v["width"]) != int(out_v["width"])) or \
+           (src_v.get("height") and out_v.get("height") and
+                int(src_v["height"]) != int(out_v["height"])):
+            qc_soft.append("成品视频分辨率 %sx%s 与源 %sx%s 不一致——疑似二次压制或错源"
+                           % (out_v.get("width"), out_v.get("height"),
+                              src_v.get("width"), src_v.get("height")))
+    # ---- 完整性校验：字幕末行时间 vs 视频时长（漏翻片尾/字幕早于或晚于正片） ----
+    for sub in subs:
+        span = sub_last_end(sub)
+        if span is not None and video_dur is not None:
+            gap = video_dur - span
+            # 正片结束前字幕已提前结束超过 90s：疑似漏翻片尾（仅软预警，可能是无片尾字幕的片源）
+            if gap > 90:
+                qc_soft.append("字幕 %s 末行结束于 %.1fs，距视频结束(%.1fs)还差 %.1fs——疑似漏翻片尾"
+                               % (os.path.basename(sub), span, video_dur, gap))
+            # 字幕末行超过视频结束：正片比字幕短，可能片源不完整或字幕多翻
+            elif gap < -30:
+                qc_soft.append("字幕 %s 末行结束于 %.1fs，超出视频时长(%.1fs) %.1fs——疑似片源不完整或字幕多翻"
+                               % (os.path.basename(sub), span, video_dur, -gap))
+        if span is not None:
+            lead = sub_first_start(sub)
+            # 正片开始后字幕迟迟不出现（>120s）：可能是无字幕 OP 或首行错位，仅提示
+            if lead is not None and lead > 120:
+                qc_soft.append("字幕 %s 首行开始于 %.1fs，正片开始后 %.1fs 才出现——请确认是否漏翻片头或无字幕 OP"
+                               % (os.path.basename(sub), lead, lead))
     for w in qc_soft:
         print("QC-WARN: " + w, flush=True)
     if qc_hard:
@@ -552,7 +647,7 @@ def main():
         for tr in (j.get("tracks") or []):
             if tr.get("type") == "video":
                 pr = tr.get("properties") or {}
-                vh = int(pr.get("height") or 0)
+                vh = int(pr.get("pixel_height") or pr.get("height") or 0)
                 if not vh:
                     dd = str(pr.get("display_dimensions") or "")
                     if "x" in dd:

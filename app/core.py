@@ -249,6 +249,9 @@ def _clean_one_dir(d, cutoff):
             if d == TMP_DIR and os.path.isfile(fp) and re.match(r'^(?:sc|tc)_.*.ass$', fn, re.I) and os.path.getmtime(fp) < cutoff:
                 os.remove(fp)
                 continue
+            if d == TMP_DIR and os.path.isfile(fp) and re.match(r'^chapters_.*\.(?:txt|xml)$', fn, re.I) and os.path.getmtime(fp) < cutoff:
+                os.remove(fp)   # 章节编辑器保存的临时章节文件（chapters_<uuid>.txt/xml）
+                continue
             if d != TMP_DIR and os.path.isfile(fp) and os.path.getmtime(fp) < cutoff:
                 os.remove(fp)
             elif d in (PREVIEW_DIR, LEGACY_PREVIEW_DIR) and os.path.isdir(fp) and os.path.getmtime(fp) < cutoff:

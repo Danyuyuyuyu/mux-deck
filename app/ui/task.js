@@ -73,7 +73,7 @@ function buildMuxCommon(prefix) {
     fonts_mode: v('fonts_mode') || 'subset',
     force: c('force'),
     no_backup: !c('backup'),
-    skip_existing: c('b_skip'),
+    skip_existing: c('skip'),
     use_sys_fonts: c('use_sys_fonts'),
     sc_default: v('sc_default') || '',
     tc_default: v('tc_default') || '',
