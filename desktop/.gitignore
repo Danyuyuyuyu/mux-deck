@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+artifacts/
+
+# v2 规范独立纳入 Git，覆盖外层对所有 docs/ 目录的忽略。
+!/docs/
+!/docs/**

@@ -1,0 +1,111 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MuxDeck.Desktop.ViewModels"
+        xmlns:core="using:MuxDeck.Core"
+        x:Class="MuxDeck.Desktop.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Mux Deck · 桌面版" Width="1180" Height="820"
+        MinWidth="900" MinHeight="700" Background="#0E1623"
+        FontFamily="Microsoft YaHei UI, Segoe UI, sans-serif" FontSize="14">
+  <Grid ColumnDefinitions="210,*" RowDefinitions="*,36">
+    <Border Background="#111C2C" BorderBrush="#263449" BorderThickness="0,0,1,0">
+      <Grid RowDefinitions="Auto,*,Auto" Margin="18,30,18,22">
+        <StackPanel Spacing="8" Margin="12,0,0,28">
+          <TextBlock Text="MUX DECK" FontSize="22" FontWeight="Bold" />
+          <TextBlock Text="字幕封装工作区" Classes="muted" FontSize="12" />
+        </StackPanel>
+        <StackPanel Grid.Row="1" Spacing="6">
+          <Button Classes="nav" Classes.active="{Binding IsSingle}" Content="单个封装" Command="{Binding ShowSingleCommand}" />
+          <Button Classes="nav" Classes.active="{Binding IsBatch}" Content="批量队列" Command="{Binding ShowBatchCommand}" />
+          <Button Classes="nav" Classes.active="{Binding IsSubtitle}" Content="字幕工具" Command="{Binding ShowSubtitleCommand}" />
+          <Button Classes="nav" Classes.active="{Binding IsEnvironment}" Content="环境检测" Command="{Binding ShowEnvironmentCommand}" />
+        </StackPanel>
+        <StackPanel Grid.Row="2" Spacing="6" Margin="12,0,0,0">
+          <TextBlock Text="桌面版 · 开发中" Foreground="#5EEAD4" FontSize="12" />
+          <TextBlock Text="封装功能尚未迁移" Classes="muted" FontSize="12" />
+        </StackPanel>
+      </Grid>
+    </Border>
+    <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto" Margin="32,28,32,24">
+      <StackPanel Spacing="8" Margin="0,0,0,24">
+        <TextBlock Text="{Binding PageTitle}" Classes="heading" />
+        <TextBlock Text="{Binding PageDescription}" Classes="muted" TextWrapping="Wrap" />
+      </StackPanel>
+      <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <Grid>
+          <StackPanel IsVisible="{Binding IsSingle}" Spacing="18">
+            <Border Classes="card">
+              <StackPanel Spacing="10">
+                <TextBlock Text="源视频" FontSize="18" FontWeight="SemiBold" />
+                <TextBlock Text="选择 MKV、MP4 或其他视频文件。" Classes="muted" />
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBox x:Name="VideoInput" Text="{Binding VideoPath}" PlaceholderText="视频文件路径" AutomationProperties.Name="源视频路径" />
+                  <Button Grid.Column="1" Content="选择文件" Click="PickVideo" Margin="12,0,0,0" />
+                </Grid>
+              </StackPanel>
+            </Border>
+            <Border Classes="card">
+              <StackPanel Spacing="8">
+                <TextBlock Text="字幕与输出" FontSize="18" FontWeight="SemiBold" />
+                <TextBlock Text="简体字幕" Classes="label" />
+                <TextBox Text="{Binding ScSubtitle}" PlaceholderText="ASS / SRT 字幕路径" AutomationProperties.Name="简体字幕路径" />
+                <TextBlock Text="繁体字幕" Classes="label" />
+                <TextBox Text="{Binding TcSubtitle}" PlaceholderText="可选：繁体字幕路径" AutomationProperties.Name="繁体字幕路径" />
+                <TextBlock Text="输出目录" Classes="label" />
+                <TextBox Text="{Binding OutputDirectory}" PlaceholderText="输出目录路径" AutomationProperties.Name="输出目录" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+          <Border Classes="card" IsVisible="{Binding IsBatch}" VerticalAlignment="Top">
+            <StackPanel Spacing="16">
+              <TextBlock Text="批量工作区待接入" FontSize="20" FontWeight="SemiBold" />
+              <TextBlock Text="后续迁移：视频列表、简繁字幕匹配、逐集设置、队列恢复与 QC 汇总。"
+                         Classes="muted" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+          <Border Classes="card" IsVisible="{Binding IsSubtitle}" VerticalAlignment="Top">
+            <StackPanel Spacing="16">
+              <TextBlock Text="字幕工具待接入" FontSize="20" FontWeight="SemiBold" />
+              <TextBlock Text="后续迁移：字体体检、独立子集化、字幕提取、预览与快速修补。"
+                         Classes="muted" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+          <StackPanel IsVisible="{Binding IsEnvironment}" Spacing="16">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="{Binding EnvironmentSummary}" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Classes="primary" Content="重新检测" Command="{Binding RefreshEnvironmentCommand}" />
+            </Grid>
+            <ItemsControl ItemsSource="{Binding Tools}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="core:ToolStatus">
+                  <Border Classes="card" Margin="0,0,0,10" Padding="18">
+                    <StackPanel Spacing="6">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="16" />
+                        <TextBlock Grid.Column="1" Text="{Binding Status}" />
+                      </Grid>
+                      <TextBlock Text="{Binding Purpose}" Classes="muted" />
+                      <TextBlock Text="{Binding Location}" TextWrapping="Wrap" FontSize="12" Classes="muted" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="路径检测不验证工具版本或可执行性；AFS 的 fonttools 后端和自动安装将在后续接入。"
+                       Classes="muted" TextWrapping="Wrap" />
+          </StackPanel>
+        </Grid>
+      </ScrollViewer>
+      <Border Grid.Row="2" Classes="card" Padding="16" Margin="0,20,0,0">
+        <StackPanel Spacing="8">
+          <TextBlock Text="工作区日志" FontWeight="SemiBold" />
+          <TextBox Text="{Binding Log, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" Height="80"
+                   TextWrapping="Wrap" Background="Transparent" BorderThickness="0" AutomationProperties.Name="工作区日志" />
+        </StackPanel>
+      </Border>
+    </Grid>
+    <Border Grid.Row="1" Grid.ColumnSpan="2" Background="#111C2C" Padding="20,8">
+      <TextBlock Text="{Binding WorkspaceRoot}" FontSize="11" Classes="muted" TextTrimming="CharacterEllipsis" />
+    </Border>
+  </Grid>
+</Window>

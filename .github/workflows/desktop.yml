@@ -1,0 +1,26 @@
+name: Desktop
+
+on:
+  push:
+    branches: [main, 'v2/avalonia-rewrite']
+    paths: ['desktop/**', '.github/workflows/desktop.yml', 'start_mux_desktop.bat']
+  pull_request:
+    paths: ['desktop/**', '.github/workflows/desktop.yml', 'start_mux_desktop.bat']
+
+jobs:
+  desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore locked packages
+        working-directory: desktop
+        run: dotnet restore MuxDeck.sln --locked-mode
+      - name: Build desktop
+        working-directory: desktop
+        run: dotnet build MuxDeck.sln --no-restore -c Release
+      - name: Core and headless UI smoke
+        working-directory: desktop
+        run: dotnet run --project tests/MuxDeck.Smoke --no-build -c Release

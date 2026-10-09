@@ -1,5 +1,7 @@
 # Mux Deck · 字幕封装助手
 
+> `v2/avalonia-rewrite` 分支已开始 C# + .NET 10 + Avalonia 桌面重写。可运行骨架位于 [`desktop/`](desktop/README.md)，双击 `start_mux_desktop.bat` 启动；当前已实现界面骨架和工具路径检测，封装业务尚未迁移。以下说明对应现有 Python/Web 版本。
+
 用 mkvmerge 把 视频 + ASS 字幕 + 字体附件 合成 MKV 的本地工具：字体子集化（AssFontSubset 主用 / assfonts 回退）、字体体检、编码转换、预览帧、批量队列、内封轨道预览与提取，全部在浏览器界面完成。首次启动自动检测环境，缺失组件可直接在网页内一键下载安装。
 
 ## 界面预览
