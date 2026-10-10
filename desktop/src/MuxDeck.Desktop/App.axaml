@@ -1,41 +1,48 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="MuxDeck.Desktop.App" RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <SolidColorBrush x:Key="WorkspaceBackground" Color="#151B23" />
+    <SolidColorBrush x:Key="SidebarBackground" Color="#1B232D" />
+    <SolidColorBrush x:Key="PanelBackground" Color="#242D39" />
+    <SolidColorBrush x:Key="PanelBorder" Color="#3B495B" />
+    <SolidColorBrush x:Key="TableHeader" Color="#1D2631" />
+    <SolidColorBrush x:Key="MutedText" Color="#B4C0CF" />
+    <SolidColorBrush x:Key="PrimaryBackground" Color="#315E98" />
+    <SolidColorBrush x:Key="ActiveNavigation" Color="#29415F" />
+    <SolidColorBrush x:Key="AccentText" Color="#BDD9FF" />
+  </Application.Resources>
   <Application.Styles>
     <FluentTheme />
-    <Style Selector="TextBlock.heading">
-      <Setter Property="FontSize" Value="28" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
     <Style Selector="TextBlock.muted">
-      <Setter Property="Foreground" Value="#A6B4C8" />
+      <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
     </Style>
     <Style Selector="TextBlock.label">
       <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Margin" Value="0,8,0,2" />
+      <Setter Property="Margin" Value="0,6,0,2" />
     </Style>
-    <Style Selector="Border.card">
-      <Setter Property="Background" Value="#172233" />
-      <Setter Property="BorderBrush" Value="#2A3A50" />
+    <Style Selector="Border.panel">
+      <Setter Property="Background" Value="{DynamicResource PanelBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="12" />
-      <Setter Property="Padding" Value="24" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="12" />
     </Style>
     <Style Selector="Button.nav">
       <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="HorizontalContentAlignment" Value="Left" />
-      <Setter Property="Padding" Value="16,12" />
+      <Setter Property="Padding" Value="10,12" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
     </Style>
     <Style Selector="Button.primary">
-      <Setter Property="Background" Value="#0F766E" />
+      <Setter Property="Background" Value="{DynamicResource PrimaryBackground}" />
       <Setter Property="Foreground" Value="White" />
-      <Setter Property="Padding" Value="20,10" />
+      <Setter Property="Padding" Value="18,8" />
     </Style>
     <Style Selector="Button.nav.active">
-      <Setter Property="Background" Value="#203B43" />
-      <Setter Property="Foreground" Value="#5EEAD4" />
+      <Setter Property="Background" Value="{DynamicResource ActiveNavigation}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentText}" />
     </Style>
   </Application.Styles>
 </Application>
