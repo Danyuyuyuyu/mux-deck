@@ -1,0 +1,232 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- 保留 Fluent 模板与键盘反馈，统一应用需要的颜色和紧凑尺寸。 -->
+  <!-- Fluent 的按钮状态在呈现器上设置，因此状态覆盖也落在实际模板部件。 -->
+  <Style Selector="Window">
+    <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontBody}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    <Setter Property="Background" Value="{DynamicResource WorkspaceBackground}" />
+  </Style>
+  <Style Selector="Window.dialog">
+    <Setter Property="Background" Value="{DynamicResource PanelBackground}" />
+    <Setter Property="Padding" Value="20" />
+  </Style>
+  <Style Selector="TextBlock.muted">
+    <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
+  </Style>
+  <Style Selector="TextBlock.caption">
+    <Setter Property="FontSize" Value="{DynamicResource FontCaption}" />
+  </Style>
+  <Style Selector="TextBlock.label">
+    <Setter Property="FontSize" Value="{DynamicResource FontCaption}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Margin" Value="0,6,0,2" />
+  </Style>
+  <Style Selector="TextBlock.group-title">
+    <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontCaption}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Margin" Value="0,6,0,3" />
+  </Style>
+  <Style Selector="TextBlock.error">
+    <Setter Property="Foreground" Value="{DynamicResource DangerText}" />
+  </Style>
+  <Style Selector="TextBlock.warning">
+    <Setter Property="Foreground" Value="{DynamicResource WarningText}" />
+  </Style>
+  <Style Selector="Border.panel">
+    <Setter Property="Background" Value="{DynamicResource PanelBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource PanelRadius}" />
+    <Setter Property="Padding" Value="{DynamicResource PanelPadding}" />
+  </Style>
+  <Style Selector="Border.readonly-field">
+    <Setter Property="Background" Value="{DynamicResource ReadonlyBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource SoftBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+    <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
+    <Setter Property="Padding" Value="{DynamicResource ControlPadding}" />
+  </Style>
+  <Style Selector="Button">
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Background" Value="{DynamicResource PanelBackground}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource SoftBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+    <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
+    <Setter Property="Padding" Value="{DynamicResource ControlPadding}" />
+  </Style>
+  <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverBackground}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource InspectorBorder}" />
+  </Style>
+  <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource PressedBackground}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+  </Style>
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{DynamicResource PrimaryBackground}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnPrimaryText}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBackground}" />
+    <Setter Property="Padding" Value="18,7" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource PrimaryHover}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHover}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnPrimaryText}" />
+  </Style>
+  <Style Selector="Button.primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource PrimaryPressed}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PrimaryPressed}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnPrimaryText}" />
+  </Style>
+  <Style Selector="Button.nav">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Padding" Value="10,12" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.nav.active">
+    <Setter Property="Background" Value="{DynamicResource ActiveNavigation}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentText}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button.nav.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource ActiveNavigation}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentText}" />
+  </Style>
+  <Style Selector="Button.quiet">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
+    <Setter Property="Padding" Value="{DynamicResource CompactControlPadding}" />
+  </Style>
+  <Style Selector="Button.tiny">
+    <Setter Property="Padding" Value="{DynamicResource CompactControlPadding}" />
+    <Setter Property="MinHeight" Value="{DynamicResource CompactControlHeight}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontCaption}" />
+  </Style>
+  <Style Selector="Button.icon">
+    <Setter Property="Width" Value="28" />
+    <Setter Property="MinHeight" Value="{DynamicResource CompactControlHeight}" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontSize" Value="{DynamicResource FontInspector}" />
+  </Style>
+  <Style Selector="Button.danger">
+    <Setter Property="Foreground" Value="{DynamicResource DangerText}" />
+    <Setter Property="Background" Value="{DynamicResource PanelBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DangerBorder}" />
+  </Style>
+  <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource DangerText}" />
+    <Setter Property="Background" Value="{DynamicResource DangerBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DangerBorder}" />
+  </Style>
+  <Style Selector="Button.danger:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource DangerText}" />
+    <Setter Property="Background" Value="{DynamicResource DangerBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DangerBorder}" />
+  </Style>
+  <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource DisabledBackground}" />
+    <Setter Property="Foreground" Value="{DynamicResource DisabledText}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+  </Style>
+  <Style Selector="Button.quiet:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="TextBox">
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Background" Value="{DynamicResource InputBackground}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource SoftBorder}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+    <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
+    <Setter Property="Padding" Value="{DynamicResource ControlPadding}" />
+  </Style>
+  <!-- 多行错误、日志和完整路径从顶部阅读；仅单行字段采用垂直居中。 -->
+  <Style Selector="TextBox[AcceptsReturn=True], TextBox[TextWrapping=Wrap]">
+    <Setter Property="VerticalContentAlignment" Value="Top" />
+  </Style>
+  <Style Selector="TextBox[IsReadOnly=True]">
+    <Setter Property="Background" Value="{DynamicResource ReadonlyBackground}" />
+    <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
+  </Style>
+  <Style Selector="TextBox:disabled">
+    <Setter Property="Background" Value="{DynamicResource DisabledBackground}" />
+    <Setter Property="Foreground" Value="{DynamicResource DisabledText}" />
+  </Style>
+  <Style Selector="TextBox:focus">
+    <Setter Property="BorderBrush" Value="{DynamicResource FocusBorder}" />
+  </Style>
+  <!-- 输入模板自带状态背景；只读在悬停/聚焦时仍保留浅灰，禁用不叠加黑色蒙层。 -->
+  <Style Selector="TextBox[IsReadOnly=True] /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource ReadonlyBackground}" />
+  </Style>
+  <Style Selector="TextBox[IsReadOnly=True]:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource ReadonlyBackground}" />
+  </Style>
+  <Style Selector="TextBox[IsReadOnly=True]:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource ReadonlyBackground}" />
+  </Style>
+  <Style Selector="TextBox:disabled /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource DisabledBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+  </Style>
+  <Style Selector="TextBox[IsReadOnly=True]:disabled /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource DisabledBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+  </Style>
+  <Style Selector="ComboBox">
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Background" Value="{DynamicResource InputBackground}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource SoftBorder}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+    <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
+    <Setter Property="Padding" Value="{DynamicResource ControlPadding}" />
+  </Style>
+  <Style Selector="ComboBox:disabled">
+    <Setter Property="Foreground" Value="{DynamicResource DisabledText}" />
+  </Style>
+  <Style Selector="ComboBox:disabled /template/ Border#Background">
+    <Setter Property="Background" Value="{DynamicResource DisabledBackground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+  </Style>
+  <Style Selector="TabItem">
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="FontSize" Value="{DynamicResource FontSection}" />
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="MinHeight" Value="34" />
+  </Style>
+  <Style Selector="TabItem:selected">
+    <Setter Property="Foreground" Value="{DynamicResource AccentText}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="MenuFlyoutPresenter, ContextMenu">
+    <Setter Property="Background" Value="{DynamicResource PanelBackground}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource SoftBorder}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+  </Style>
+  <Style Selector="MenuItem:selected /template/ Border#PART_LayoutRoot, MenuItem:pointerover /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource HoverBackground}" />
+  </Style>
+  <Style Selector="ToolTip">
+    <Setter Property="Background" Value="{DynamicResource PanelBackground}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource SoftBorder}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource ControlRadius}" />
+    <Setter Property="FontSize" Value="{DynamicResource FontCaption}" />
+  </Style>
+</Styles>

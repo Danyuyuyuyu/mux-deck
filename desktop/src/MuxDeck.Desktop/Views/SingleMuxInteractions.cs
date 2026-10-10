@@ -67,12 +67,17 @@ public sealed class SingleMuxInteractions : ISingleMuxInteractions
         start.ArgumentList.Add(Path.GetFullPath(path));
         using var process = Process.Start(start) ?? throw new IOException("无法打开资源管理器。");
     }
-    internal static Window CreateDialog(string title, double width) => new()
+    internal static Window CreateDialog(string title, double width)
     {
-        Title = title, Width = width, MaxHeight = 650, SizeToContent = SizeToContent.Height, CanResize = false,
-        WindowStartupLocation = WindowStartupLocation.CenterOwner, Padding = new Avalonia.Thickness(20),
-        FontFamily = new Avalonia.Media.FontFamily("Microsoft YaHei UI, Segoe UI"), FontSize = 13
-    };
+        var dialog = new Window
+        {
+            Title = title, Width = width, MaxHeight = 650, SizeToContent = SizeToContent.Height, CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner
+        };
+        // 弹窗使用应用级字体、背景和控件规范，不在代码里复制主题数值。
+        dialog.Classes.Add("dialog");
+        return dialog;
+    }
     internal static Control PathDisplay(string label, string path)
     {
         var panel = new StackPanel { Spacing = 4 };
@@ -92,8 +97,8 @@ public sealed class SubtitleAssignmentWindow : Window
     {
         this.model = model; this.candidates = candidates;
         Title = "分配 ASS 字幕"; Width = 620; MaxHeight = 680; SizeToContent = SizeToContent.Height;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner; Padding = new Avalonia.Thickness(20);
-        FontFamily = new Avalonia.Media.FontFamily("Microsoft YaHei UI, Segoe UI"); FontSize = 13;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Classes.Add("dialog"); error.Classes.Add("error");
         var body = new StackPanel { Spacing = 12 };
         body.Children.Add(new TextBlock { Text = "明确选择 SC 简体 / TC 繁体；不从文件名推断语言。", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
         var preferred = string.IsNullOrWhiteSpace(model.ScSubtitle) ? 0 : string.IsNullOrWhiteSpace(model.TcSubtitle) ? 1 : 0;
@@ -101,7 +106,8 @@ public sealed class SubtitleAssignmentWindow : Window
         {
             body.Children.Add(SingleMuxInteractions.PathDisplay("候选 " + (i + 1), candidates[i].Path));
             var slot = new ComboBox { ItemsSource = new[] { "SC · 简体 · zh-Hans", "TC · 繁体 · zh-Hant" }, SelectedIndex = fixedSlot is { } fixedValue ? (int)fixedValue : (preferred + i) % 2, HorizontalAlignment = HorizontalAlignment.Stretch, IsEnabled = fixedSlot is null };
-            var replacement = new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap, FontSize = 12 };
+            var replacement = new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+            replacement.Classes.Add("muted");
             var candidate = candidates[i];
             void RefreshReplacement()
             {

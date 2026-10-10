@@ -3,9 +3,9 @@
         xmlns:vm="using:MuxDeck.Desktop.ViewModels"
         xmlns:core="using:MuxDeck.Core"
         xmlns:views="using:MuxDeck.Desktop.Views"
-        x:Class="MuxDeck.Desktop.Views.MainWindow" x:DataType="vm:MainWindowViewModel"
+        x:Class="MuxDeck.Desktop.Views.MainWindow" x:Name="WindowRoot" x:DataType="vm:MainWindowViewModel"
         Title="Mux Deck · 桌面版" Width="1280" Height="900" MinWidth="1040" MinHeight="760"
-        Background="{DynamicResource WorkspaceBackground}" FontFamily="Microsoft YaHei UI, Segoe UI, sans-serif" FontSize="13">
+        Background="{DynamicResource WorkspaceBackground}" FontFamily="{DynamicResource UiFontFamily}" FontSize="{DynamicResource FontBody}">
   <Window.Styles>
     <Style Selector="ListBoxItem">
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -15,8 +15,8 @@
     <Border Background="{DynamicResource SidebarBackground}" BorderBrush="{DynamicResource PanelBorder}" BorderThickness="0,0,1,0">
       <Grid RowDefinitions="Auto,*,Auto" Margin="12,24,12,20">
         <StackPanel Spacing="6" Margin="10,0,0,24">
-          <TextBlock Text="MUX DECK" FontSize="20" FontWeight="Bold" />
-          <TextBlock Text="字幕封装工作区" Classes="muted" FontSize="11" />
+          <TextBlock Text="MUX DECK" FontSize="{DynamicResource FontBrand}" FontWeight="Bold" />
+          <TextBlock Text="字幕封装工作区" Classes="muted" FontSize="{DynamicResource FontCaption}" />
         </StackPanel>
         <StackPanel Grid.Row="1" Spacing="6">
           <Button Classes="nav" Classes.active="{Binding IsSingle}" Content="单个封装" Command="{Binding ShowSingleCommand}" />
@@ -24,20 +24,19 @@
           <Button Classes="nav" Classes.active="{Binding IsEnvironment}" Content="环境检测" Command="{Binding ShowEnvironmentCommand}" />
         </StackPanel>
         <StackPanel Grid.Row="2" Spacing="6" Margin="10,0,0,0">
-          <TextBlock Text="桌面版 · 单个封装" FontSize="11" />
-          <TextBlock Text="ASS + 字体子集" Classes="muted" FontSize="11" />
+          <TextBlock Text="桌面版 · 单个封装" FontSize="{DynamicResource FontCaption}" />
+          <TextBlock Text="ASS + 字体子集" Classes="muted" FontSize="{DynamicResource FontCaption}" />
         </StackPanel>
       </Grid>
     </Border>
-    <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="20,20,20,16">
+    <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="20,20,20,16" IsVisible="{Binding !IsSingle}">
       <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,8">
-        <TextBlock Text="{Binding PageTitle}" FontSize="22" FontWeight="SemiBold" LineHeight="30" />
-        <TextBlock Grid.Column="1" Text="{Binding PageDescription}" Classes="muted" FontSize="11" VerticalAlignment="Center" Margin="18,0,0,0" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding PageTitle}" FontSize="{DynamicResource FontPageTitle}" FontWeight="SemiBold" LineHeight="30" />
+        <TextBlock Grid.Column="1" Text="{Binding PageDescription}" Classes="muted" FontSize="{DynamicResource FontCaption}" VerticalAlignment="Center" Margin="18,0,0,0" TextWrapping="Wrap" />
       </Grid>
-      <Grid Grid.Row="1" IsVisible="{Binding IsSingle}"><views:SingleMuxView x:Name="SingleView" DataContext="{Binding Single}" /></Grid>
       <Border Grid.Row="1" Classes="panel" IsVisible="{Binding IsBatch}" VerticalAlignment="Top">
         <StackPanel Spacing="12">
-          <TextBlock Text="批量队列尚未实现" FontSize="18" FontWeight="SemiBold" />
+          <TextBlock Text="批量队列尚未实现" FontSize="{DynamicResource FontCardTitle}" FontWeight="SemiBold" />
           <TextBlock Text="当前可以在单个封装中处理一个视频和简繁 ASS。" Classes="muted" TextWrapping="Wrap" />
         </StackPanel>
       </Border>
@@ -60,7 +59,7 @@
                       <TextBlock Grid.Column="1" Text="{Binding Status}" />
                     </Grid>
                     <TextBlock Text="{Binding Purpose}" Classes="muted" />
-                    <TextBlock Text="{Binding Location}" TextWrapping="Wrap" FontSize="11" Classes="muted" />
+                    <TextBlock Text="{Binding Location}" TextWrapping="Wrap" FontSize="{DynamicResource FontCaption}" Classes="muted" />
                   </StackPanel>
                 </Border>
               </DataTemplate>
@@ -72,7 +71,13 @@
       </ScrollViewer>
     </Grid>
     <Border Grid.Row="1" Grid.ColumnSpan="2" Background="{DynamicResource SidebarBackground}" Padding="12,5">
-      <TextBlock Text="{Binding WorkspaceRoot}" FontSize="10" Classes="muted" TextTrimming="CharacterEllipsis" />
+      <TextBlock Text="{Binding WorkspaceRoot}" FontSize="{DynamicResource FontCaption}" Classes="muted" TextTrimming="CharacterEllipsis" />
     </Border>
+    <!-- 单任务视图拥有整块客户区，属性栏可贴右边并覆盖到底部路径条。 -->
+    <views:SingleMuxView x:Name="SingleView" Grid.Column="1" Grid.RowSpan="2"
+                         IsVisible="{Binding #WindowRoot.((vm:MainWindowViewModel)DataContext).IsSingle}"
+                         DataContext="{Binding Single}"
+                         PageTitle="{Binding #WindowRoot.((vm:MainWindowViewModel)DataContext).PageTitle}"
+                         PageDescription="{Binding #WindowRoot.((vm:MainWindowViewModel)DataContext).PageDescription}" />
   </Grid>
 </Window>

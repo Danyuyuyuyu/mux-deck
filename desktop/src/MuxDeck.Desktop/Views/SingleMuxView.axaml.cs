@@ -14,6 +14,11 @@ namespace MuxDeck.Desktop.Views;
 
 public partial class SingleMuxView : UserControl
 {
+    // 单任务视图拥有完整客户区；标题由窗口传入，避免为全高属性栏跨视图重挂控件。
+    public static readonly StyledProperty<string> PageTitleProperty = AvaloniaProperty.Register<SingleMuxView, string>(nameof(PageTitle), "单个封装");
+    public static readonly StyledProperty<string> PageDescriptionProperty = AvaloniaProperty.Register<SingleMuxView, string>(nameof(PageDescription), "一个视频 · 字幕与字体 · MKV 成品");
+    public string PageTitle { get => GetValue(PageTitleProperty); set => SetValue(PageTitleProperty, value); }
+    public string PageDescription { get => GetValue(PageDescriptionProperty); set => SetValue(PageDescriptionProperty, value); }
     public static readonly StyledProperty<bool> ShowDeveloperLogProperty = AvaloniaProperty.Register<SingleMuxView, bool>(nameof(ShowDeveloperLog), DefaultDeveloperMode);
     private static bool DefaultDeveloperMode => Environment.GetEnvironmentVariable("MUX_DECK_DEV_LOG") == "1" ||
 #if DEBUG
@@ -349,7 +354,11 @@ public partial class SingleMuxView : UserControl
             var body = new StackPanel { Spacing = 8 };
             body.Children.Add(new TextBlock { Text = $"源附件（{model.SourceAttachmentCount}）· 本次不保留；成品只包含本次子集字体。", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
             foreach (var attachment in model.SourceAttachments)
-                body.Children.Add(new TextBlock { Text = $"{attachment.FileName} · {attachment.ContentType} · {attachment.Size:N0} 字节", TextWrapping = Avalonia.Media.TextWrapping.Wrap, FontSize = 12 });
+            {
+                var text = new TextBlock { Text = $"{attachment.FileName} · {attachment.ContentType} · {attachment.Size:N0} 字节", TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+                text.Classes.Add("caption");
+                body.Children.Add(text);
+            }
             dialog.Content = new ScrollViewer { Content = body, MaxHeight = 460 };
             if (TopLevel.GetTopLevel(this) is Window owner) await dialog.ShowDialog(owner);
         }

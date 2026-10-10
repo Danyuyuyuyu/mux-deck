@@ -1,95 +1,19 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="MuxDeck.Desktop.App" RequestedThemeVariant="Dark">
+             x:Class="MuxDeck.Desktop.App" RequestedThemeVariant="Light">
   <Application.Resources>
-    <SolidColorBrush x:Key="WorkspaceBackground" Color="#151B23" />
-    <SolidColorBrush x:Key="SidebarBackground" Color="#1B232D" />
-    <SolidColorBrush x:Key="PanelBackground" Color="#242D39" />
-    <SolidColorBrush x:Key="PanelBorder" Color="#3B495B" />
-    <SolidColorBrush x:Key="TableHeader" Color="#1D2631" />
-    <SolidColorBrush x:Key="SoftBorder" Color="#334152" />
-    <SolidColorBrush x:Key="MutedText" Color="#B4C0CF" />
-    <SolidColorBrush x:Key="PrimaryBackground" Color="#315E98" />
-    <SolidColorBrush x:Key="ActiveNavigation" Color="#29415F" />
-    <SolidColorBrush x:Key="AccentText" Color="#BDD9FF" />
-    <SolidColorBrush x:Key="SuccessText" Color="#8ED2B1" />
-    <SolidColorBrush x:Key="InputBackground" Color="#19212B" />
-    <SolidColorBrush x:Key="InspectorBackground" Color="#263241" />
-    <SolidColorBrush x:Key="InspectorBorder" Color="#536377" />
-    <SolidColorBrush x:Key="InspectorDivider" Color="#47576B" />
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="/Styles/Resources.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
   </Application.Resources>
   <Application.Styles>
-    <FluentTheme />
-    <Style Selector="TextBlock.muted">
-      <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
-    </Style>
-    <Style Selector="TextBlock.label">
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Margin" Value="0,6,0,2" />
-    </Style>
-    <Style Selector="Border.panel">
-      <Setter Property="Background" Value="{DynamicResource PanelBackground}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="4" />
-      <Setter Property="Padding" Value="12" />
-    </Style>
-    <Style Selector="Button.nav">
-      <Setter Property="HorizontalAlignment" Value="Stretch" />
-      <Setter Property="HorizontalContentAlignment" Value="Left" />
-      <Setter Property="Padding" Value="10,12" />
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-    </Style>
-    <Style Selector="Button.primary">
-      <Setter Property="Background" Value="{DynamicResource PrimaryBackground}" />
-      <Setter Property="Foreground" Value="White" />
-      <Setter Property="Padding" Value="18,8" />
-    </Style>
-    <Style Selector="Button.nav.active">
-      <Setter Property="Background" Value="{DynamicResource ActiveNavigation}" />
-      <Setter Property="Foreground" Value="{DynamicResource AccentText}" />
-    </Style>
-    <!-- 紧凑次级入口：目录“打开”“···”、面板关闭和行内动作共用。 -->
-    <Style Selector="Button.quiet">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
-      <Setter Property="Padding" Value="8,4" />
-    </Style>
-    <Style Selector="Button.icon">
-      <Setter Property="Width" Value="28" />
-      <Setter Property="Padding" Value="0" />
-      <Setter Property="FontSize" Value="16" />
-    </Style>
-    <Style Selector="Button.tiny">
-      <Setter Property="Padding" Value="8,4" />
-      <Setter Property="MinHeight" Value="28" />
-      <Setter Property="FontSize" Value="12" />
-    </Style>
-    <Style Selector="Button.danger">
-      <Setter Property="Foreground" Value="#F0B2B2" />
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="#5B4B58" />
-    </Style>
-    <!-- 只读字段外观，用于 Inspector 中的固定语言等。 -->
-    <Style Selector="Border.readonly-field">
-      <Setter Property="Background" Value="{DynamicResource InputBackground}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource SoftBorder}" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="3" />
-      <Setter Property="Padding" Value="7,4" />
-    </Style>
-    <Style Selector="TextBlock.group-title">
-      <Setter Property="Foreground" Value="#A8BED6" />
-      <Setter Property="FontSize" Value="11" />
-      <Setter Property="Margin" Value="0,4,0,2" />
-    </Style>
-    <!-- 顶部页签采用图稿的紧凑密度。 -->
-    <Style Selector="TabItem">
-      <Setter Property="FontSize" Value="14" />
-      <Setter Property="Padding" Value="10,6" />
-      <Setter Property="MinHeight" Value="34" />
-    </Style>
+    <FluentTheme>
+      <FluentTheme.Palettes>
+        <ColorPaletteResources x:Key="Light" Accent="{StaticResource BrandAccentColor}" />
+      </FluentTheme.Palettes>
+    </FluentTheme>
+    <StyleInclude Source="/Styles/Controls.axaml" />
   </Application.Styles>
 </Application>

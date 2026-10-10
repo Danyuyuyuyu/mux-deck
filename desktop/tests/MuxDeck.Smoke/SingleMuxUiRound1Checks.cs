@@ -61,6 +61,29 @@ internal static class SingleMuxUiRound1Checks
             foreach (var size in new[] { (1280, 900), (1040, 760) })
             {
                 window.Width = size.Item1; window.Height = size.Item2; Dispatcher.UIThread.RunJobs();
+                // 鼠标命中依赖渲染场景；改尺寸后先提交新帧，避免拿上一尺寸的缓存比较新几何。
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                if (trackInspector.IsEffectivelyVisible)
+                {
+                    var sidebarPoint = trackInspector.TranslatePoint(default, window)!.Value;
+                    check(Math.Abs(sidebarPoint.Y) < 0.5 && Math.Abs(sidebarPoint.X + trackInspector.Bounds.Width - window.Bounds.Width) < 0.5 &&
+                        Math.Abs(sidebarPoint.Y + trackInspector.Bounds.Height - window.Bounds.Height) < 0.5 && Math.Abs(trackInspector.Bounds.Width - 300) < 0.5,
+                        $"{name} {size.Item1}×{size.Item2} 轨道属性栏贴右边且覆盖完整客户区高度");
+                    var sidebarScroll = view.FindControl<ScrollViewer>("TrackInspectorScroll")!;
+                    var scrollPoint = sidebarScroll.TranslatePoint(default, window)!.Value;
+                    var closeControl = view.FindControl<Button>("TrackInspectorCloseButton")!;
+                    var closePoint = closeControl.TranslatePoint(default, window)!.Value;
+                    var actions = view.FindControl<StackPanel>("ExternalActions")!;
+                    var actionsPoint = actions.TranslatePoint(default, window)!.Value;
+                    check(closePoint.Y + closeControl.Bounds.Height <= scrollPoint.Y + 0.5 && (!actions.IsEffectivelyVisible ||
+                        (scrollPoint.Y + sidebarScroll.Bounds.Height <= actionsPoint.Y + 0.5 && actionsPoint.Y + actions.Bounds.Height <= window.Bounds.Height + 0.5)),
+                        $"{name} {size.Item1}×{size.Item2} 关闭与外加操作固定在属性栏滚动区之外");
+                    var primaryUnderSidebar = view.FindControl<Button>(vm.IsRunning ? "CancelButton" : "StartButton")!;
+                    var primaryCenter = primaryUnderSidebar.TranslatePoint(new Point(primaryUnderSidebar.Bounds.Width / 2, primaryUnderSidebar.Bounds.Height / 2), window)!.Value;
+                    var hit = window.InputHitTest(primaryCenter) as Visual;
+                    check(hit is not null && (ReferenceEquals(hit, trackInspector) || hit.GetVisualAncestors().Contains(trackInspector)),
+                        $"{name} {size.Item1}×{size.Item2} 全高属性栏拦截被遮主操作的鼠标命中（实际：{(hit as Control)?.Name ?? hit?.GetType().Name}）");
+                }
                 if (normal && size.Item1 == 1040)
                 {
                     // 普通 3+2 场景在最小窗口不得整体滚动：设置与固定状态同时可见，轨道清单不出现滚动。
@@ -79,14 +102,14 @@ internal static class SingleMuxUiRound1Checks
                 var bounds = primary.Bounds; var point = primary.TranslatePoint(new Point(0, 0), window)!.Value;
                 var panelPoint = panel.TranslatePoint(new Point(0, 0), window)!.Value;
                 check(bounds.Width > 0 && point.Y >= panelPoint.Y && point.Y + bounds.Height <= window.Bounds.Height && point.X + bounds.Width <= window.Bounds.Width,
-                    $"{name} {size.Item1}×{size.Item2} 固定主操作位于窗口内");
+                    $"{name} {size.Item1}×{size.Item2} 主操作布局保持窗口内");
             }
             window.Width = 1280; window.Height = 900; Dispatcher.UIThread.RunJobs();
         }
         try
         {
             check(view.FindControl<TabControl>("MuxTabs")!.Items.Count == 3 && !view.FindControl<TabItem>("DeveloperLogTab")!.IsVisible && view.FindControl<TextBlock>("CurrentState")!.Text == "请选择源视频", "Release 封装/字体页可见，日志默认隐藏，空态绑定真实");
-            check(!trackInspector.IsVisible && !resultInspector.IsVisible && Math.Abs(trackInspector.Width - 320) < 0.5 && Math.Abs(resultInspector.Height - 300) < 0.5, "两个 Overlay 初始隐藏且为 320 宽 / 300 高");
+            check(!trackInspector.IsVisible && !resultInspector.IsVisible && Math.Abs(trackInspector.Width - 300) < 0.5 && Math.Abs(resultInspector.Height - 300) < 0.5, "两个 Overlay 初始隐藏，轨道属性栏 300 宽 / 结果详情 300 高");
             view.ShowDeveloperLog = true; Dispatcher.UIThread.RunJobs(); check(view.FindControl<TabItem>("DeveloperLogTab")!.IsVisible, "明确开发开关可显示日志页"); view.ShowDeveloperLog = false;
             check(DragDrop.GetAllowDrop(videoZone) && DragDrop.GetAllowDrop(assZone) && DragDrop.GetAllowDrop(fontZone), "三个实际接收区均注册 AllowDrop");
             var addTrackMenu = ((MenuFlyout)view.FindControl<Button>("AddTrackButton")!.Flyout!).Items.OfType<MenuItem>().ToArray();
@@ -156,6 +179,53 @@ internal static class SingleMuxUiRound1Checks
             check(scPeerName.Contains("SC") && scPeerName.Contains("查看") && !scPeerName.StartsWith("Avalonia.", StringComparison.Ordinal), $"SC 行控件真实 peer 名称辨认动作与轨道（实际：{scPeerName}）");
             check(tcPeerName.Contains("TC") && !tcPeerName.StartsWith("Avalonia.", StringComparison.Ordinal) && scPeerName != tcPeerName, $"TC 行控件真实 peer 名称与 SC 可区分（实际：{tcPeerName}）");
             check(sourcePeerName.Length > 0 && !sourcePeerName.StartsWith("Avalonia.", StringComparison.Ordinal), $"源行控件 peer 名称不是控件类型文本（实际：{sourcePeerName}）");
+            // 用真实鼠标事件覆盖文字以外的整行命中；按下与释放之间不改变文字几何。
+            Border RowArea(TrackRowViewModel row) => RowSelect(row).GetVisualAncestors().OfType<Border>().First(b => b.Classes.Contains("track-row"));
+            void PointerClick(Point point)
+            {
+                window.MouseMove(point); window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+            }
+            vm.CloseInspectors(); Dispatcher.UIThread.RunJobs();
+            var area = RowArea(vm.ScTrack);
+            var topEdge = area.TranslatePoint(new Point(140, 2), window)!.Value;
+            var inclusionBeforePointer = vm.ScTrack.IsIncluded; var revisionBeforePointer = vm.DraftRevision;
+            window.MouseMove(topEdge); Dispatcher.UIThread.RunJobs();
+            var textBeforePress = scButton.GetVisualDescendants().OfType<TextBlock>().Select(t => t.TranslatePoint(default, window)!.Value).ToArray();
+            var transformBeforePress = scButton.TransformToVisual(window);
+            window.MouseDown(topEdge, MouseButton.Left); Dispatcher.UIThread.RunJobs();
+            var textDuringPress = scButton.GetVisualDescendants().OfType<TextBlock>().Select(t => t.TranslatePoint(default, window)!.Value).ToArray();
+            check(textBeforePress.SequenceEqual(textDuringPress) && scButton.TransformToVisual(window) == transformBeforePress,
+                "轨道行鼠标按下时文字位置与变换保持稳定，无下压或缩放");
+            Save(window, Path.Combine(root, "track-row-pressed-1280x900.png"));
+            window.MouseUp(topEdge, MouseButton.Left); Dispatcher.UIThread.RunJobs();
+            check(vm.IsTrackInspectorOpen && ReferenceEquals(vm.SelectedTrack, vm.ScTrack) && vm.ScTrack.IsIncluded == inclusionBeforePointer && vm.DraftRevision == revisionBeforePointer,
+                "点击行上缘空白打开正确属性，不改变包含或草稿");
+            foreach (var (label, point) in new[]
+            {
+                ("下缘空白", new Point(160, 30)),
+                ("名称列空白", new Point(area.Bounds.Width / 2, 16)),
+                ("右侧边缘", new Point(area.Bounds.Width - 1, 16)),
+                ("左侧标记", new Point(1, 16)),
+                ("包含列空白", new Point(5, 16))
+            })
+            {
+                vm.CloseInspectors(); vm.SelectedTrack = vm.TcTrack; Dispatcher.UIThread.RunJobs();
+                PointerClick(area.TranslatePoint(point, window)!.Value);
+                check(vm.IsTrackInspectorOpen && ReferenceEquals(vm.SelectedTrack, vm.ScTrack) && vm.DraftRevision == revisionBeforePointer,
+                    "整条轨道行命中：" + label);
+            }
+            vm.CloseInspectors(); vm.SelectedTrack = vm.ScTrack; Dispatcher.UIThread.RunJobs();
+            var tcCheckboxPoint = tcCheck.TranslatePoint(new Point(tcCheck.Bounds.Width / 2, tcCheck.Bounds.Height / 2), window)!.Value;
+            PointerClick(tcCheckboxPoint);
+            check(!vm.TcTrack.IsIncluded && ReferenceEquals(vm.SelectedTrack, vm.ScTrack) && !vm.IsTrackInspectorOpen,
+                "鼠标点击上层复选框只切换包含，不选择轨道或打开属性");
+            PointerClick(tcCheckboxPoint);
+            check(vm.TcTrack.IsIncluded && !vm.IsTrackInspectorOpen, "复选框鼠标恢复包含且仍独立于行按钮");
+            var readonlyCheck = RowCheck(videoRow);
+            PointerClick(readonlyCheck.TranslatePoint(new Point(readonlyCheck.Bounds.Width / 2, readonlyCheck.Bounds.Height / 2), window)!.Value);
+            check(vm.IsTrackInspectorOpen && ReferenceEquals(vm.SelectedTrack, videoRow) && videoRow.InclusionBox,
+                "源轨只读复选框区域可打开行属性，包含策略保持");
             var scroll = view.FindControl<ScrollViewer>("TrackListScroll")!; var scrollBefore = scroll.Offset;
             Click(window, scButton);
             check(trackInspector.IsVisible && !resultInspector.IsVisible && ReferenceEquals(vm.SelectedTrack, vm.ScTrack) && scroll.Offset == scrollBefore, "点击行主要区域打开右侧轨道属性，不改动清单滚动位置");
@@ -178,8 +248,21 @@ internal static class SingleMuxUiRound1Checks
             // 普通 3 源轨 + SC/TC：先记录与三图对应的普通、轨道属性、多轨状态（此时尚无结果，状态为“输入已齐全”）。
             view.FindControl<ScrollViewer>("TrackListScroll")!.Offset = default; vm.CloseInspectors(); Dispatcher.UIThread.RunJobs();
             Snapshot("normal", normal: true);
+            var normalVideoBounds = videoZone.Bounds; var normalSettingsBounds = fontZone.Bounds;
+            var normalStatusPosition = view.FindControl<Border>("StatusPanel")!.TranslatePoint(default, window);
             Click(window, RowSelect(vm.ScTrack));
             Snapshot("track-inspector");
+            check(videoZone.Bounds == normalVideoBounds && fontZone.Bounds == normalSettingsBounds && view.FindControl<Border>("StatusPanel")!.TranslatePoint(default, window) == normalStatusPosition,
+                "全高属性栏展开不重排视频摘要、设置或固定状态区");
+            view.FindControl<TabControl>("MuxTabs")!.SelectedIndex = 1; Dispatcher.UIThread.RunJobs();
+            check(!trackInspector.IsEffectivelyVisible && vm.IsTrackInspectorOpen && ReferenceEquals(vm.SelectedTrack, vm.ScTrack), "切换字体页隐藏全高属性栏并保留选择");
+            view.FindControl<TabControl>("MuxTabs")!.SelectedIndex = 0; Dispatcher.UIThread.RunJobs();
+            check(trackInspector.IsEffectivelyVisible, "返回封装页恢复全高属性栏");
+            main.ShowEnvironmentCommand.Execute(null); Dispatcher.UIThread.RunJobs();
+            check(!trackInspector.IsEffectivelyVisible && !view.IsEffectivelyVisible, "切换环境页不残留窗口级属性栏");
+            main.ShowSingleCommand.Execute(null); Dispatcher.UIThread.RunJobs();
+            check(trackInspector.IsEffectivelyVisible && view.PageTitle == main.PageTitle && view.PageDescription == main.PageDescription,
+                "返回单个封装恢复属性栏与真实页面标题绑定");
             vm.CloseInspectors(); Dispatcher.UIThread.RunJobs();
             var videoYBefore = videoZone.TranslatePoint(default, window)!.Value.Y; var statusYBefore = view.FindControl<Border>("StatusPanel")!.TranslatePoint(default, window)!.Value.Y;
             runner.SourceTrackCount = 8; Pump(vm.ProbeVideoAsync());
@@ -353,7 +436,10 @@ internal static class SingleMuxUiRound1Checks
                 var stops = WalkTabs(backward);
                 var direction = backward ? "反向" : "正向";
                 check(sidebar.All(stops.Contains), $"{scene} {direction} Tab 可到达全部可见侧栏导航");
-                check(stops.Contains(view.FindControl<Button>("StartButton")!) && stops.Contains(view.FindControl<Button>("ShowResultButton")!), $"{scene} {direction} Tab 保留固定状态操作");
+                check(resultPanel
+                    ? stops.Contains(view.FindControl<Button>("StartButton")!) && stops.Contains(view.FindControl<Button>("ShowResultButton")!)
+                    : !stops.Contains(view.FindControl<Button>("StartButton")!) && !stops.Contains(view.FindControl<Button>("ShowResultButton")!),
+                    $"{scene} {direction} Tab 按实际遮挡处理状态操作");
                 check(!stops.Any(c => Within(c, fontZone)) && (resultPanel || !stops.Any(c => Within(c, videoZone))), $"{scene} {direction} Tab 排除被遮复合设置/摘要");
                 if (resultPanel)
                 {
