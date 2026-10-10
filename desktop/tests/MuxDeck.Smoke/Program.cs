@@ -32,6 +32,8 @@ if (args.FirstOrDefault() == "--tree-parent") return await RunTreeParent(exitAft
 if (args.FirstOrDefault() == "--tree-parent-exit") return await RunTreeParent(exitAfterLaunch: true);
 if (args.FirstOrDefault() == "--wait") { await Task.Delay(TimeSpan.FromSeconds(30)); return 0; }
 if (args.FirstOrDefault() == "--integration") return await Phase1Integration.RunAsync();
+if (args.FirstOrDefault() == "--single-mux-round1") return SingleMuxRound1Checks.Run();
+if (args.FirstOrDefault() == "--single-mux-ui-round1") return SingleMuxUiRound1Checks.Run();
 if (args.FirstOrDefault() == "--warning-policy") return await WarningPolicyChecks.RunAsync();
 if (args.FirstOrDefault() == "--warning-real")
 {
@@ -113,11 +115,14 @@ var uiThread = new Thread(() =>
         var window = new MainWindow { DataContext = model };
         window.Show();
         Dispatcher.UIThread.RunJobs();
-        var video = window.FindControl<TextBox>("VideoInput")!;
-        video.Text = "E:\\Video\\测试片源.mkv";
-        Dispatcher.UIThread.RunJobs();
-        Check(model.VideoPath == video.Text, "编译绑定：输入回写 ViewModel");
-        video.Text = "";
+        var view = window.FindControl<SingleMuxView>("SingleView")!;
+        var interactions = new ScriptedInteractions();
+        view.Interactions = interactions;
+        var smokeVideo = Path.Combine(smokeRun, "测试 片源.MKV");
+        File.WriteAllText(smokeVideo, "smoke fixture");
+        UiInputTestSupport.Pick(window, view, interactions, "PickVideoButton", UiInputTestSupport.File(window, smokeVideo));
+        Check(model.VideoPath == smokeVideo && view.FindControl<TextBlock>("VideoName")!.Text == "测试 片源.MKV", "新视频按钮接纳并通过编译绑定展示文件名");
+        model.Single.VideoPath = "";
         Dispatcher.UIThread.RunJobs();
         var single = model.Single;
         single.TcSubtitle = Path.Combine(smokeRun, "tc-first.ass");
@@ -148,17 +153,17 @@ var uiThread = new Thread(() =>
             single.TcSubtitle.EndsWith("tc-replaced.ass", StringComparison.Ordinal), "切页保留单任务表单状态");
         UiSingleMuxContractChecks.VerifyRunningSingleVm(smokeRun, Check);
         WarningPolicyChecks.VerifyUiWarningPresentation(smokeRun, (condition, name) => Check(condition, name));
-        video.Text = "E:\\Video\\测试片源.mkv";
+        UiInputTestSupport.Pick(window, view, interactions, "PickVideoButton", UiInputTestSupport.File(window, smokeVideo));
         Dispatcher.UIThread.RunJobs();
-        Check(model.VideoPath == video.Text && single.CanStart && single.StartCommand.CanExecute(null),
-            "输入齐全时视频绑定生效且开始命令可执行");
+        Check(model.VideoPath == smokeVideo && single.CanStart && view.FindControl<Button>("StartButton")!.IsEffectivelyEnabled,
+            "新视频入口完成接纳，开始按钮绑定可执行");
         model.ShowEnvironmentCommand.Execute(null);
         Dispatcher.UIThread.RunJobs();
         model.ShowSingleCommand.Execute(null);
         Dispatcher.UIThread.RunJobs();
-        Check(model.IsSingle && video.Text == "E:\\Video\\测试片源.mkv" && single.ScSubtitle.EndsWith("sc-replaced.ass", StringComparison.Ordinal),
-            "切页保留完整单任务输入");
-        video.Text = "";
+        Check(model.IsSingle && view.FindControl<TextBlock>("VideoName")!.Text == "测试 片源.MKV" && single.ScSubtitle.EndsWith("sc-replaced.ass", StringComparison.Ordinal),
+            "切页保留真实新摘要与完整单任务输入");
+        single.VideoPath = "";
         Dispatcher.UIThread.RunJobs();
         Check(window.Bounds.Width >= 900 && window.Bounds.Height >= 700, "窗口布局与最小尺寸");
         if (args.FirstOrDefault() == "--screenshot")

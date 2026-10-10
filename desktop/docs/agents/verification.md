@@ -20,7 +20,7 @@
 
 截至 2026-10-10，Release 构建为 0 warnings / 0 errors，`tests/MuxDeck.Smoke` 为 26/26；`--warning-policy` 为 57/57，报告见[告警策略回归](../../artifacts/warning-policy/20261010-020043-2d4a39abbdd94856927596db2dd90bc3/report.json)。其 fake runner 走公开 `SingleMuxService.RunAsync`，覆盖颜色告警、字体提示、失败阻断、UI 多 message 展示，以及 ASS transport Comment 重排通过、Dialogue 文本/时序/Style/字体/顺序和文本末尾空格变化拒绝。合成粗体真实 Regular-only fixture 的历史报告为[8/8](../../artifacts/warning-policy/real-2f43ddd6a3d744d081850c7a3fcf08ca/report.json)。
 
-独立 `--integration` 使用真实 ffmpeg、mkvmerge、mkvextract、AssFontSubset/PyFontTools 与隔离素材。最新真实工具链报告 121/121 通过，包含 MKV/MP4、单/双/TC-only、逐轨旗标、字体附件/字形、冲突、安装竞态、提交后取消、源哈希、IETF QC、进程取消、渲染日志和 ASS transport 参考比较，见[2026-10-10 集成报告](../../artifacts/phase1/20261010-015647-daefe8254a624279bdb71f726b161b95/report.json)。`--ui-integration` 历史验收通过真实 MainWindow、ViewModel 和 Core 执行，10/10；截图为[真实 UI 成功](../../artifacts/phase1/20261009-113607-f1ca9f2ec2694a72aa06fbdc0a31deb3/real-ui-success.png)。
+独立 `--integration` 使用真实 ffmpeg、mkvmerge、mkvextract、AssFontSubset/PyFontTools 与隔离素材。最新真实工具链报告 121/121 通过，包含 MKV/MP4、单/双/TC-only、逐轨旗标、字体附件/字形、冲突、安装竞态、提交后取消、源哈希、IETF QC、进程取消、渲染日志和 ASS transport 参考比较，见[2026-10-10 集成报告](../../artifacts/phase1/20261010-015647-daefe8254a624279bdb71f726b161b95/report.json)。`--ui-integration` 通过真实 MainWindow、ViewModel 与 Core 执行单 ASS、SC+TC、禁用 SC 的 TC-only，并核对结果详情成品概览、目标冲突与输入哈希；`--single-mux-ui-round1` 以新布局真实控件、生产分配窗口和模拟 DragDrop 核验面板开关/互斥/焦点/几何与真实可访问名称。两者当前运行的实际计数以上次执行输出为准；headless 不替代原生桌面与 DPI 验收。
 
 进程树证据只覆盖已归属到 Windows Job Object 的工具及受控父/子进程、取消和管道收尾。`Process.Start()` 与后续 Assign Job 非原子，未验证极快 launcher 在归属前创建后代或退出；该边界列为阶段二 P2，不据此宣称通用进程树保证。
 

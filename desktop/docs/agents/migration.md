@@ -8,6 +8,7 @@ v2 重新实现主程序，按单个封装、可靠性、批量、扩展能力�
 - 真实工具链 121/121 的最新报告于 2026-10-10 通过，已包含严格 ASS transport 参考比较，见[阶段一集成报告](../../artifacts/phase1/20261010-015647-daefe8254a624279bdb71f726b161b95/report.json)。真实 UI 10/10 的[历史截图](../../artifacts/phase1/20261009-113607-f1ca9f2ec2694a72aa06fbdc0a31deb3/real-ui-success.png)来自 2026-10-09；最新自动验收数字见[验证要求](verification.md#当前自动化能力)。
 - 完整电影重放在更换为同一 MKVToolNix transport 参考后，于 2026-10-10 通过 9/9，见[真实电影报告](../../artifacts/warning-policy/real-e223f0011b774942bf40123b7b1c76a3/report.json)。旧[失败报告](../../artifacts/warning-policy/real-52d8443120a74073b2438784789bc798/report.json)定位到四条 Comment 移至 `[Events]` 的 `Format` 行后；Dialogue 顺序/内容、Script Info、AFS 映射和 Styles 相同。新机制用每条修正 ASS 的同工具封装/提取参考全文比较修复了该 transport 差异。原生文件选择器与真实播放器播放仍待人工检查。批量队列尚未开始，仍为占位。
 - 已发现阶段二 P2 可靠性待处理：`Process.Start()` 到 Windows Job Object 归属之间不是原子操作。当前测试覆盖已归属后的同步 AFS 取消和父进程退出管道收尾，但未覆盖极快 launcher 在赋 Job 前创建后代/退出；因此不能宣称任意 launcher 都具有进程树终止保证。
+- 第一轮单个封装 UI 于 2026-10-10 完成代码与自动化收尾：按三张已确认布局落地，视频/ASS/字体拖入与选择共用接纳合同；窗口级 Overlay 导航、可访问名称、源选择及路径刷新已验证，UI 151/151、A 88/88、Smoke 26/26、warning-policy 57/57。见 [UI 验收记录](../tasks/single-mux-ui-approved-layout-acceptance.md)。既有新布局真实 Core 小 fixture 39/39 作为链路证据，收尾不涉及 Core，未重复重放。原生选择器/Explorer/剪贴板/DPI/辅助技术/播放器仍待人工；不据此宣称阶段一完整人工验收通过，也未启动后续功能轮。
 
 下一阶段先处理进程启动归属竞态与剩余可靠性；之后再规划批量复用。阶段进度记录自动验收、人工未覆盖项与上述限制，不把它们合并宣称为完整阶段通过。
 

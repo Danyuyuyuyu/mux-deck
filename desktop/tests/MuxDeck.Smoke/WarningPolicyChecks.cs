@@ -641,7 +641,7 @@ internal static class WarningPolicyChecks
         }
     }
 
-    public static void VerifyUiWarningPresentation(string artifactRoot, Action<bool, string> check)
+    public static void VerifyUiWarningPresentation(string artifactRoot, Action<bool, string> check, Action<SingleMuxViewModel>? verifyView = null)
     {
         var fixture = Path.Combine(artifactRoot, "warning-ui-fixture");
         var workspaceRoot = Path.Combine(fixture, "workspace");
@@ -695,6 +695,7 @@ internal static class WarningPolicyChecks
             !resultChecks.Any(item => item.Contains("AFS 颜色标签", StringComparison.Ordinal)) &&
             warnings.All(warning => model.ResultSummary.Contains(warning.Message, StringComparison.Ordinal)),
             "UI 保留三条提示 message，并将 AFS/Core warning 与成品 QC Checks 分区展示");
+        verifyView?.Invoke(model);
     }
 
     private static IReadOnlyList<ProcessLine> SplitColorLine()

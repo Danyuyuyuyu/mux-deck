@@ -10,11 +10,11 @@ public sealed class MainWindowViewModel : ObservableObject
     private int selectedPage;
     private string log = "桌面工作区已就绪。选择视频或检查本机工具环境。";
 
-    public MainWindowViewModel(Workspace workspace)
+    public MainWindowViewModel(Workspace workspace, SingleMuxService? singleService = null)
     {
         WorkspaceRoot = workspace.Root;
         tools = new ToolLocator(workspace);
-        Single = new SingleMuxViewModel(new SingleMuxService(workspace));
+        Single = new SingleMuxViewModel(singleService ?? new SingleMuxService(workspace));
         ShowSingleCommand = new(() => SelectedPage = 0);
         ShowBatchCommand = new(() => SelectedPage = 1);
         ShowSubtitleCommand = new(() => SelectedPage = 2);
@@ -45,9 +45,9 @@ public sealed class MainWindowViewModel : ObservableObject
         1 => "批量封装尚未实现。",
         2 => "字幕工具尚未实现。",
         3 => "检查工作目录内的工具，以及系统 PATH 中的可用组件。",
-        _ => "一个视频 · 简繁 ASS · 字体子集化 · MKV 成品校验"
+        _ => "一个视频 · 字幕与字体 · MKV 成品"
     };
-    // 旧冒烟入口继续转发，实际单任务状态由独立 ViewModel 持有。
+    // 保留已有转发属性；新视图直接绑定独立的单任务状态。
     public string VideoPath { get => Single.VideoPath; set => Single.VideoPath = value; }
     public string ScSubtitle { get => Single.ScSubtitle; set => Single.ScSubtitle = value; }
     public string TcSubtitle { get => Single.TcSubtitle; set => Single.TcSubtitle = value; }
