@@ -13,6 +13,7 @@ public interface ISingleMuxInteractions
 {
     Task<IReadOnlyList<IStorageItem>> PickAsync(TopLevel owner, InputOperation operation);
     Task<bool> ConfirmVideoAsync(Window owner, string currentPath, string candidatePath);
+    Task<bool> ConfirmTrackAsync(Window owner, string currentPath, string candidatePath) => ConfirmVideoAsync(owner, currentPath, candidatePath);
     Task<IReadOnlyList<SubtitleAssignment>?> AssignSubtitlesAsync(Window owner, SingleMuxViewModel model,
         IReadOnlyList<InputCandidate> candidates, SubtitleSlot? fixedSlot);
     Task CopyAsync(TopLevel owner, string text);
@@ -26,12 +27,24 @@ public sealed class SingleMuxInteractions : ISingleMuxInteractions
         if (operation is InputOperation.FontsDirectory or InputOperation.OutputDirectory)
             return await owner.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
                 { Title = operation == InputOperation.FontsDirectory ? "选择字体目录" : "选择独立输出目录", AllowMultiple = false });
-        var video = operation == InputOperation.Video;
+        var video = operation == InputOperation.Video; var audio = operation == InputOperation.Audio;
         return await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = video ? "选择 MKV / MP4 视频" : "选择 1–2 个 UTF-8 ASS 字幕", AllowMultiple = !video,
-            FileTypeFilter = [new FilePickerFileType(video ? "MKV / MP4 视频" : "ASS 字幕") { Patterns = video ? ["*.mkv", "*.mp4"] : ["*.ass"] }]
+            Title = video ? "选择 MKV / MP4 视频" : audio ? "选择外加音频" : "选择 UTF-8 ASS / SRT 字幕", AllowMultiple = !video,
+            FileTypeFilter = [new FilePickerFileType(video ? "MKV / MP4 视频" : audio ? "音频" : "ASS / SRT 字幕") { Patterns = video ? ["*.mkv", "*.mp4"] : audio ? ["*.flac", "*.aac", "*.m4a", "*.wav", "*.opus", "*.ogg", "*.mp3", "*.ac3", "*.eac3", "*.dts", "*.mka"] : ["*.ass", "*.srt"] }]
         });
+    }
+    public async Task<bool> ConfirmTrackAsync(Window owner, string currentPath, string candidatePath)
+    {
+        var dialog = CreateDialog("确认更换轨道文件", 600);
+        var body = new StackPanel { Spacing = 12 };
+        body.Children.Add(PathDisplay("当前文件", currentPath)); body.Children.Add(PathDisplay("新文件", candidatePath));
+        body.Children.Add(new TextBlock { Text = "名称、语言、纳入状态与旗标保持。", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
+        var cancel = new Button { Content = "取消", IsCancel = true }; var accept = new Button { Content = "确认更换", IsDefault = true }; accept.Classes.Add("primary");
+        cancel.Click += (_, _) => dialog.Close(false); accept.Click += (_, _) => dialog.Close(true);
+        buttons.Children.Add(cancel); buttons.Children.Add(accept); body.Children.Add(buttons); dialog.Content = body;
+        return await dialog.ShowDialog<bool>(owner);
     }
     public async Task<bool> ConfirmVideoAsync(Window owner, string currentPath, string candidatePath)
     {

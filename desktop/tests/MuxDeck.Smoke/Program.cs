@@ -34,6 +34,10 @@ if (args.FirstOrDefault() == "--wait") { await Task.Delay(TimeSpan.FromSeconds(3
 if (args.FirstOrDefault() == "--integration") return await Phase1Integration.RunAsync();
 if (args.FirstOrDefault() == "--single-mux-round1") return SingleMuxRound1Checks.Run();
 if (args.FirstOrDefault() == "--single-mux-ui-round1") return SingleMuxUiRound1Checks.Run();
+if (args.FirstOrDefault() == "--workbench-ui") return WorkbenchUiChecks.Run();
+if (args.FirstOrDefault() == "--media-drop") return AutomaticMediaDropChecks.Run();
+if (args.FirstOrDefault() == "--input-feedback") return InputFeedbackChecks.Run();
+if (args.FirstOrDefault() == "--media-drop-real") return AutomaticMediaDropChecks.Run(real: true);
 if (args.FirstOrDefault() == "--warning-policy") return await WarningPolicyChecks.RunAsync();
 if (args.FirstOrDefault() == "--warning-real")
 {

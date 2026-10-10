@@ -113,25 +113,27 @@ internal static class SingleMuxUiRound1Checks
             view.ShowDeveloperLog = true; Dispatcher.UIThread.RunJobs(); check(view.FindControl<TabItem>("DeveloperLogTab")!.IsVisible, "明确开发开关可显示日志页"); view.ShowDeveloperLog = false;
             check(DragDrop.GetAllowDrop(videoZone) && DragDrop.GetAllowDrop(assZone) && DragDrop.GetAllowDrop(fontZone), "三个实际接收区均注册 AllowDrop");
             var addTrackMenu = ((MenuFlyout)view.FindControl<Button>("AddTrackButton")!.Flyout!).Items.OfType<MenuItem>().ToArray();
-            check(addTrackMenu.Length == 2 && addTrackMenu[0].Header!.ToString() == "字幕（ASS）" && addTrackMenu[0].IsEnabled && addTrackMenu[1].Header!.ToString() == "音频（尚未支持）" && !addTrackMenu[1].IsEnabled, "添加轨道菜单：字幕(ASS) 可用、音频(尚未支持) 禁用");
+            check(addTrackMenu.Length == 2 && addTrackMenu[0].Header!.ToString() == "字幕（ASS/SRT）" && addTrackMenu[0].IsEnabled && addTrackMenu[1].Header!.ToString() == "音频" && addTrackMenu[1].IsEnabled, "添加菜单支持 ASS/SRT 和外加音频");
             check(!DragDrop.GetAllowDrop(trackInspector) && !DragDrop.GetAllowDrop(resultInspector), "Overlay 本身不是接收区，拖入不会穿透到底下轨道清单");
             Snapshot("empty");
             var videoItem = File(window, video); var video2Item = File(window, video2); var scItem = File(window, sc); var tcItem = File(window, tc); var otherItem = File(window, other);
             using var videoData = Files(videoItem);
             var revision = vm.DraftRevision;
             var over = Drag(videoZone, DragDrop.DragOverEvent, videoData);
-            var videoHint = view.FindControl<TextBlock>("VideoDropHint")!;
-            check(over.DragEffects == DragDropEffects.Copy && videoZone.Classes.Contains("accepting") && videoHint.IsVisible && videoHint.Text!.Contains("释放") && vm.DraftRevision == revision, "有效视频悬停有动作说明和高亮，草稿未写入");
+            var dropOverlay = window.FindControl<Grid>("MediaDropOverlay")!;
+            check(over.DragEffects == DragDropEffects.Copy && dropOverlay.IsVisible && vm.DropFeedback.Title.Contains("释放") && !videoZone.Classes.Contains("accepting") && vm.DraftRevision == revision, "有效视频悬停显示全窗口遮罩，区域不高亮且草稿未写入");
             Drag(videoZone, DragDrop.DragLeaveEvent, videoData);
-            check(!videoZone.Classes.Contains("accepting") && !videoHint.IsVisible, "离开清理高亮并隐藏提示");
+            UntilWithTimers(() => !dropOverlay.IsVisible);
+            check(!videoZone.Classes.Contains("accepting") && !dropOverlay.IsVisible, "离开清理遮罩");
             Drag(videoZone, DragDrop.DropEvent, videoData); Pump(view.InputTask); Pump(vm.ProbeVideoAsync());
             check(vm.VideoPath == video && vm.SourceTracks.Count == 3 && vm.SourceAttachmentCount == 3 && vm.DisplayDuration == "01:02:03" && view.FindControl<TextBlock>("VideoName")!.Text == Path.GetFileName(video), "模拟视频 Drop 走新接纳入口，摘要含可靠时分秒");
             check(vm.SourceTracks.Any(t => t.Type == "视频") && vm.SourceTracks.Any(t => t.Type == "音频") && vm.SourceTracks.Any(t => t.Type == "字幕") && vm.SourceGroupTitle.Contains("3 条"), "源分组标题使用真实轨道数量");
             Snapshot("long-path");
             using var mixed = Files(videoItem, scItem);
             var before = Draft();
-            var rejected = Drag(videoZone, DragDrop.DragOverEvent, mixed); Drag(videoZone, DragDrop.DropEvent, mixed); Pump(view.InputTask);
-            check(rejected.DragEffects == DragDropEffects.None && !videoZone.Classes.Contains("accepting") && before == Draft() && vm.InteractionMessage.Contains("单个"), "混合数据整组拒绝，无接纳高亮，原草稿保持");
+            var accepted = Drag(videoZone, DragDrop.DragOverEvent, mixed); Drag(videoZone, DragDrop.DropEvent, mixed); Pump(view.InputTask);
+            check(accepted.DragEffects == DragDropEffects.Copy && vm.ExternalTracks.Count == 1 && vm.VideoPath == video, "视频区混合视频/ASS 自动落位");
+            foreach (var row in vm.ExternalTracks.ToArray()) vm.RemoveExternalTrack(row); before = Draft();
             using var text = new DataTransfer(); text.Add(DataTransferItem.CreateText(video));
             Drag(videoZone, DragDrop.DropEvent, text); Pump(view.InputTask);
             check(Draft() == before && vm.InteractionMessage.Contains("文本"), "纯文本绝对路径不能升级为文件数据");
@@ -139,7 +141,7 @@ internal static class SingleMuxUiRound1Checks
             Drag(videoZone, DragDrop.DropEvent, url); Pump(view.InputTask);
             check(Draft() == before && vm.InteractionMessage.Contains("URL"), "URL 拖入拒绝");
             using var wrongAss = Files(videoItem); Drag(assZone, DragDrop.DropEvent, wrongAss); Pump(view.InputTask);
-            check(Draft() == before && vm.InteractionMessage.Contains("ASS"), "视频拖到字幕区整体拒绝");
+            check(Draft() == before && vm.VideoPath == video, "视频拖到轨道区识别为同一视频，不重复修改草稿");
             interactions.Confirm = false; Pick(window, view, interactions, "PickVideoButton", video2Item);
             check(Draft() == before && interactions.ConfirmCount == 1, "实际视频按钮选择后取消替换不改状态");
             interactions.Confirm = true; Pick(window, view, interactions, "PickVideoButton", video2Item); Pump(vm.ProbeVideoAsync());
@@ -147,23 +149,28 @@ internal static class SingleMuxUiRound1Checks
             var pickRevision = vm.DraftRevision; Pick(window, view, interactions, "PickVideoButton");
             check(vm.DraftRevision == pickRevision && vm.VideoPath == video2, "选择器取消不改原输入");
             using var fontsData = Files(Folder(window, fonts)); Drag(fontZone, DragDrop.DropEvent, fontsData); Pump(view.InputTask);
-            check(vm.FontsDirectory == fonts && vm.InteractionMessage.Contains("封装时检查"), "字体目录 Drop 仅设置目录，未预检");
+            check(vm.FontsDirectory == fonts && vm.Notification.IsSuccess && vm.InteractionMessage == "已设置字体目录。", "字体目录 Drop 仅设置目录，未预检");
             Pick(window, view, interactions, "PickOutputButton", Folder(window, output));
             check(vm.OutputDirectory == output, "输出目录只通过真实选择按钮接纳");
-            interactions.CancelAssignment = true;
-            using var assData = Files(scItem, tcItem); var assBefore = Draft(); Drag(assZone, DragDrop.DropEvent, assData); Pump(view.InputTask);
-            check(Draft() == assBefore && interactions.AssignmentCount == 1, "两 ASS 模拟 Drop 取消分配整体保持");
-            interactions.CancelAssignment = false; Drag(assZone, DragDrop.DropEvent, assData); Pump(view.InputTask);
-            check(vm.ScSubtitle == sc && vm.TcSubtitle == tc && vm.ScTrack.IsDefault && !vm.TcTrack.IsDefault && !assZone.Classes.Contains("accepting"), "双 ASS 经显式 SC/TC 分配一次提交");
-            using var duplicate = Files(scItem, scItem); before = Draft(); AddAss(view, interactions, scItem, scItem); interactions.NextPick = [];
-            check(Draft() == before && vm.InteractionMessage.Contains("重复"), "重复 ASS 经添加轨道菜单不部分写入");
+            using var assData = Files(scItem, tcItem); var assBefore = vm.DraftRevision; Drag(assZone, DragDrop.DropEvent, assData); Pump(view.InputTask);
+            check(vm.ExternalTracks.Count == 2 && interactions.AssignmentCount == 0 && vm.DraftRevision == assBefore + 1, "两 ASS 无分配弹窗，整批自动落位");
+            check(vm.ExternalTracks.Select(t => t.Language).SequenceEqual(new[] { "zh-Hans", "zh-Hant" }), "SC/TC 文件名提示自动生成语言，不将它们作为 Track ID");
+            before = Draft(); AddAss(view, interactions, scItem, scItem); interactions.NextPick = [];
+            check(Draft() == before && vm.InteractionMessage.Contains("重复"), "重复 ASS 经添加菜单不部分写入");
+            foreach (var row in vm.ExternalTracks.ToArray()) vm.RemoveExternalTrack(row);
             interactions.NextPick = [scItem, tcItem, otherItem]; InvokeMenu(view, "AddTrackButton", i => i.Header?.ToString()!.Contains("ASS") == true); Pump(view.InputTask);
-            check(Draft() == before && vm.InteractionMessage.Contains("1–2"), "ASS 超量整体拒绝");
+            check(vm.ExternalTracks.Count == 3, "三条 ASS 经同一添加入口自动接纳，不再限两槽");
+            foreach (var row in vm.ExternalTracks.ToArray()) vm.RemoveExternalTrack(row);
+            // 后续场景继续验证旧草稿槽位、元数据编辑、遮挡和焦点；多轨新入口由独立用例覆盖。
+            vm.ScSubtitle = sc; vm.TcSubtitle = tc; Dispatcher.UIThread.RunJobs(); before = Draft();
             var disappears = Path.Combine(fixture, "已删除.ass"); System.IO.File.WriteAllText(disappears, Ass); var disappearsItem = File(window, disappears); System.IO.File.Delete(disappears);
             interactions.NextPick = [scItem, disappearsItem]; InvokeMenu(view, "AddTrackButton", i => i.Header?.ToString()!.Contains("ASS") == true); Pump(view.InputTask);
             check(Draft() == before && vm.InteractionMessage.Contains("不存在"), "无效第二候选整体保持");
             var sourceRows = view.FindControl<ItemsControl>("SourceRows")!;
             check(sourceRows.ItemCount == 3 && !vm.SourceTracks.Any(t => t.Type == "附件"), "源分组正确投影，不铺开附件行");
+            vm.TrackColumns.Resize(3, 170); Dispatcher.UIThread.RunJobs();
+            check(view.GetVisualDescendants().OfType<TrackColumnsGrid>().All(g => g.ColumnDefinitions.Count == 8 && g.ColumnDefinitions[3].Width.Value == 170), "源轨、外加轨和表头同时响应语言列宽调整");
+            vm.TrackColumns.Reset(); Dispatcher.UIThread.RunJobs();
             var videoRow = vm.SourceTracks.First(t => t.Type == "视频"); var audioRow = vm.SourceTracks.First(t => t.Type == "音频"); var sourceSubRow = vm.SourceTracks.First(t => t.Type == "字幕");
             check(RowCheck(videoRow).IsChecked == true && !RowCheck(videoRow).IsEffectivelyEnabled && RowCheck(audioRow).IsChecked == true && !RowCheck(audioRow).IsEffectivelyEnabled, "源视频/音频包含状态勾选且只读");
             check(RowCheck(sourceSubRow).IsChecked == false && !RowCheck(sourceSubRow).IsEffectivelyEnabled, "源字幕包含状态未勾选且只读");
@@ -244,7 +251,7 @@ internal static class SingleMuxUiRound1Checks
             var removeButton = view.FindControl<Button>("RemoveExternalButton")!;
             Click(window, removeButton); Pump(view.InputTask);
             check(vm.ScSubtitle == "", "Inspector 移除轨道清空对应槽位");
-            interactions.NextPick = [scItem]; InvokeMenu(view, "AddTrackButton", i => i.Header?.ToString()!.Contains("ASS") == true); Pump(view.InputTask);
+            vm.ScSubtitle = sc; Dispatcher.UIThread.RunJobs();
             // 普通 3 源轨 + SC/TC：先记录与三图对应的普通、轨道属性、多轨状态（此时尚无结果，状态为“输入已齐全”）。
             view.FindControl<ScrollViewer>("TrackListScroll")!.Offset = default; vm.CloseInspectors(); Dispatcher.UIThread.RunJobs();
             Snapshot("normal", normal: true);
@@ -261,8 +268,8 @@ internal static class SingleMuxUiRound1Checks
             main.ShowEnvironmentCommand.Execute(null); Dispatcher.UIThread.RunJobs();
             check(!trackInspector.IsEffectivelyVisible && !view.IsEffectivelyVisible, "切换环境页不残留窗口级属性栏");
             main.ShowSingleCommand.Execute(null); Dispatcher.UIThread.RunJobs();
-            check(trackInspector.IsEffectivelyVisible && view.PageTitle == main.PageTitle && view.PageDescription == main.PageDescription,
-                "返回单个封装恢复属性栏与真实页面标题绑定");
+            check(trackInspector.IsEffectivelyVisible && main.IsSingle && view.GetVisualDescendants().OfType<TextBlock>().All(t => t.Text != main.PageTitle && t.Text != main.PageDescription),
+                "返回单个封装恢复属性栏，工作区不重复显示导航标题");
             vm.CloseInspectors(); Dispatcher.UIThread.RunJobs();
             var videoYBefore = videoZone.TranslatePoint(default, window)!.Value.Y; var statusYBefore = view.FindControl<Border>("StatusPanel")!.TranslatePoint(default, window)!.Value.Y;
             runner.SourceTrackCount = 8; Pump(vm.ProbeVideoAsync());
@@ -274,7 +281,7 @@ internal static class SingleMuxUiRound1Checks
             // ---- F1/F2：目录派生状态与 Inspector 路径刷新（真实按钮/菜单/绑定文本） ----
             bool Within(Visual? child, Visual ancestor) { for (Visual? v = child; v is not null; v = v.GetVisualParent()) if (ReferenceEquals(v, ancestor)) return true; return false; }
             Button ByAutomation(string name) => view.GetVisualDescendants().OfType<Button>().First(b => Avalonia.Automation.AutomationProperties.GetName(b) == name);
-            var fontOpen = ByAutomation("打开字体目录"); var outputOpen = ByAutomation("打开输出目录");
+            var fontOpen = FindMenuItem(view, "FontsMenuButton", item => Equals(item.Header, "打开目录")); var outputOpen = FindMenuItem(view, "OutputMenuButton", item => Equals(item.Header, "打开目录"));
             var outputName = view.FindControl<TextBox>("OutputNameInput")!; var fm = TopLevel.GetTopLevel(view)!.FocusManager!;
             vm.FontsDirectory = ""; vm.OutputDirectory = ""; Dispatcher.UIThread.RunJobs();
             check(!vm.HasFontsDirectory && !vm.HasOutputDirectory && !fontOpen.IsEffectivelyEnabled && !outputOpen.IsEffectivelyEnabled, "清空字体/输出目录后派生状态与打开入口立即禁用");
@@ -301,7 +308,7 @@ internal static class SingleMuxUiRound1Checks
             check(vm.TcSubtitle == tc2 && inspectorPath.Text == pathBeforeTc && ReferenceEquals(vm.SelectedTrack, vm.ScTrack), "未选槽位替换不改所选 SC 的 Inspector 路径");
             vm.RemoveSubtitle(SubtitleSlot.Sc); Dispatcher.UIThread.RunJobs();
             check(inspectorPath.Text == vm.SelectedTrackFilePath, "移除后 Inspector 路径与新的所选轨道保持一致");
-            interactions.NextPick = [scItem]; InvokeMenu(view, "AddTrackButton", i => i.Header?.ToString()!.Contains("ASS") == true); Pump(view.InputTask);
+            vm.ScSubtitle = sc; Dispatcher.UIThread.RunJobs();
             // ---- F3：面板打开后真实 Tab/Shift+Tab 避让被遮区域 ----
             Click(window, RowSelect(vm.ScTrack)); Dispatcher.UIThread.RunJobs();
             check(trackInspector.IsVisible && Within(fm.GetFocusedElement() as Visual, trackInspector), "打开轨道属性后焦点落在可用面板入口");
@@ -333,8 +340,7 @@ internal static class SingleMuxUiRound1Checks
             var restoredAfterRemove = fm.GetFocusedElement() as Control;
             check(!trackInspector.IsVisible && restoredAfterRemove is not null && TopLevel.GetTopLevel(restoredAfterRemove) == window && restoredAfterRemove.IsEffectivelyVisible,
                 $"移除所选轨道后关闭仍有有效可见焦点（实际：{restoredAfterRemove?.Name}）");
-            interactions.Slots = [SubtitleSlot.Tc]; interactions.NextPick = [tcItem];
-            InvokeMenu(view, "AddTrackButton", i => i.Header?.ToString()!.Contains("ASS") == true); Pump(view.InputTask);
+            vm.TcSubtitle = tc; Dispatcher.UIThread.RunJobs();
             interactions.Slots = null;
             // ---- F5：轨道清单方向键导航与 Enter 打开 ----
             Click(window, RowSelect(vm.ScTrack)); Dispatcher.UIThread.RunJobs();
@@ -369,6 +375,10 @@ internal static class SingleMuxUiRound1Checks
             check(ReferenceEquals(pendingTask, view.InputTask) && interactions.PickCount == pickCount && vm.InteractionMessage.Contains("正在处理"), "未完成选择期间防止重叠拖入流程");
             Click(window, view, "StartButton"); Until(() => runner.AfsStarted.Task.IsCompleted);
             check(vm.IsRunning && !view.FindControl<Button>("PickVideoButton")!.IsEffectivelyEnabled && !RowCheck(vm.TcTrack).IsEffectivelyEnabled && !trackNameInput.IsEffectivelyEnabled, "真实开始按钮提交后路径/加入/Inspector 控件锁定");
+            var runningFonts = vm.FontsDirectory; var runningOutput = vm.OutputDirectory; var runningRevision = vm.DraftRevision;
+            check(!FindMenuItem(view, "FontsMenuButton", i => Equals(i.Header, "清空")).IsEnabled && !FindMenuItem(view, "OutputMenuButton", i => Equals(i.Header, "清空")).IsEnabled, "运行中目录清空菜单禁用");
+            InvokeMenu(view, "FontsMenuButton", i => Equals(i.Header, "清空")); InvokeMenu(view, "OutputMenuButton", i => Equals(i.Header, "清空"));
+            check(vm.FontsDirectory == runningFonts && vm.OutputDirectory == runningOutput && vm.DraftRevision == runningRevision, "即使强制触发禁用菜单事件也不能清空运行任务目录");
             var runningDraft = Draft(); pendingPick.TrySetResult([videoItem]); Pump(pendingTask); interactions.PickOverride = null;
             check(Draft() == runningDraft && vm.InteractionMessage.Contains("已锁定"), "选择器迟到返回不能更改运行任务");
             Snapshot("running");
@@ -552,6 +562,8 @@ internal static class SingleMuxUiRound1Checks
         public TaskCompletionSource<bool> CleanupRelease { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public async Task<ProcessResult> RunAsync(ProcessRequest request, IProgress<ProcessLine>? progress, CancellationToken cancellationToken)
         {
+            if (request.Arguments.Contains("-J") && MediaFileTypes.IsSubtitle(request.Arguments.Last()))
+                return new(0, JsonSerializer.Serialize(new { tracks = new[] { new { id = 0, type = "subtitles", codec = MediaFileTypes.IsAss(request.Arguments.Last()) ? "ASS" : "SubRip/SRT", properties = new { codec_id = MediaFileTypes.IsAss(request.Arguments.Last()) ? "S_TEXT/ASS" : "S_TEXT/UTF8", language = "und", track_name = "" } } } }), "");
             if (request.Arguments.Contains("-J"))
                 return FailProbe ? new(7, "", "受控同路径探测失败") : new(0, JsonSerializer.Serialize(new
                 {

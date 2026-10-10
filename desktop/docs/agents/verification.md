@@ -24,6 +24,26 @@
 
 进程树证据只覆盖已归属到 Windows Job Object 的工具及受控父/子进程、取消和管道收尾。`Process.Start()` 与后续 Assign Job 非原子，未验证极快 launcher 在归属前创建后代或退出；该边界列为阶段二 P2，不据此宣称通用进程树保证。
 
+## 工作台重构验证（2026-10-10）
+
+本轮 Release 构建 0 warnings / 0 errors，Smoke 26/26，输入接纳 88/88；UI 回归已扩展为 [174/174](../../artifacts/single-mux-round1-b/ui-628726c3b7b648788736da8e1c4cbc50/report.json)，新增源/外加共享列宽与运行中目录清空守卫检查。[工作台检查 38/38](../../artifacts/workbench-ui/0bf62a0b2f5349549d0b5ae1f169c341/report.json)覆盖数字显示 ID、添加顺序、空名称、标记更新、真实指针拖动、键盘调整、最小列宽、水平滚动与头行对齐、偏好独立读取/损坏回退/失败、菜单打开/清空和关闭时保存未结束的调整。
+
+`--workbench-ui` 使用 artifacts 内注入配置，不写真实用户偏好；新窗口读取配置模拟重启，关闭钩子在保存完成后关闭。两尺寸截图已检查。Core、工具参数和包版本未改动，本轮未重放真实工具链；上述为 headless 与受控交互证据，原生选择器、Explorer、DPI、辅助技术与播放器仍需人工验证。
+
+## 自动拖放与多轨封装（2026-10-10）
+
+本次范围见[自动拖放任务](../tasks/automatic-media-drop.md)。Release 构建 0 warnings / 0 errors；自动识别 UI [25/25](../../artifacts/automatic-drop/ui-51fcba9c564d4efb8d02b66e8f59bfd5/report.json)，覆盖文件附带文本/URL、混合与跨区拖入、全批次拒绝、视频替换取消、真实输入 Track ID、多音轨、字体归位、关闭/迟到取消，以及更换音轨时保持编辑属性和选择。现有 UI [174/174](../../artifacts/single-mux-round1-b/ui-21d83e44c80f4a4db19963b21ef5eadf/report.json)、工作台 [38/38](../../artifacts/workbench-ui/f32c1eb79e4748c684f42516443e2f8b/report.json)、旧接纳 [88/88](../../artifacts/single-mux-round1-a/20261010-135849-5a103263eeec4f5ea82afc16c536462c/report.json)、告警策略 [57/57](../../artifacts/warning-policy/20261010-135849-d37555cda70741348718a6358494056b/report.json)、Smoke 26/26 通过。
+
+真实新能力 [37/37](../../artifacts/automatic-drop/real-44b11257e18b44d787668cd75072a302/report.json) 覆盖 SRT-only、audio-only、多音轨 MKA、多 SRT、三份 ASS、ASS+SRT+audio；核验输出旗标、字幕全文、音频 fullraw 哈希、字体条件、目标冲突与源文件完整性，篡改新增音频语言或数据均阻止发布。既有完整真实工具链 [121/121](../../artifacts/phase1/20261010-141429-b8705af996324afcb8da8c733702cb1f/report.json) 和真实 UI [39/39](../../artifacts/single-mux-round1-b/real-f8c333122b954573a888ae6911cb7020/report.json) 亦重放通过。MP4 未声明时长时不使用字幕尾时间补值，避免新轨 QC 错误拒绝。
+
+本轮改动包含 Core 参数和 QC，不适用上方工作台纯视觉轮的“无 Core 变更”说明。字幕扩展范围为 UTF-8 ASS/SRT；原生 Explorer 拖放、系统选择器、DPI、辅助技术和播放器仍需人工验收，模拟事件与真实封装证据不替代这些检查。
+
+## 全窗口输入反馈（2026-10-10）
+
+本次仅改 Desktop 反馈与窗口拖放宿主，Core/工具参数及依赖未改；任务见[窗口输入反馈](../tasks/window-input-feedback.md)。Release 构建 0 warnings / 0 errors；[新增反馈检查 24/24](../../artifacts/input-feedback/6029c2c3e07c4257a5a79efcf4b79e04/report.json) 覆盖侧栏拖放、全客户区尺寸/无指针拦截、跨控件无闪烁、离开/Drop/Esc/隐藏/关闭清理、真实 owned modal 遮挡、显式通知类型、成功五秒和普通四秒计时、错误按钮关闭、相同通知去重、实际旧计时不影响新错误、两尺寸长文本/属性栏避让及底部任务状态。计时用完整 Dispatcher 循环验证，不能只用 RunJobs 将“未计时”误报为通过。
+
+现有 [UI 174/174](../../artifacts/single-mux-round1-b/ui-90d1ac91cc3f4e9fb8f974b6813995fb/report.json)、[自动导入 25/25](../../artifacts/automatic-drop/ui-94dd300517d948dab48084ee75819a90/report.json)、[工作台 38/38](../../artifacts/workbench-ui/9caec66d6fd14a8eb3f084139c086682/report.json)、[旧接纳 88/88](../../artifacts/single-mux-round1-a/20261010-150629-4f83f9b25d1542dca99ba15c48f650b8/report.json) 及 Smoke 26/26 通过。检查并保留[遮罩](../../artifacts/input-feedback/6029c2c3e07c4257a5a79efcf4b79e04/overlay-1280.png)、[成功通知](../../artifacts/input-feedback/6029c2c3e07c4257a5a79efcf4b79e04/success-1280.png) 与两尺寸属性栏/长通知截图。此轮未重放 Core 工具链，原生 Explorer、系统标题栏、DPI 及辅助技术仍需人工验收。
+
 ## 单个封装验收矩阵
 
 | 场景 | 预期 |

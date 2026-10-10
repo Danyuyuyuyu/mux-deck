@@ -21,8 +21,8 @@ dotnet run --project src/MuxDeck.Desktop -- --root E:\Video\mux-deck
 ## 已实现
 
 - 原生窗口、浅色 Fluent 主题、侧栏导航、最小窗口尺寸、可滚动内容区。颜色/字号/通用尺寸集中在 `Styles/Resources.axaml`，共享控件样式位于 `Styles/Controls.axaml`；页面与弹窗遵循[浅色视觉规范](docs/design/visual-language.md)。
-- 单个封装页按三张已确认布局稿实现：紧凑视频摘要、统一轨道表（包含/类型/名称/格式/语言/默认，源/外加分组）、并排字体/输出设置与固定状态区；右侧 300 宽全高轨道属性栏贴窗口客户区右边与上下边缘，底部 300 高结果详情止于状态栏上缘，两者覆盖主内容并互斥，主布局不重排，普通 3 源轨 + SC/TC 在 1040×760 无整体滚动。源轨包含状态按策略只读投影，外加字幕可切换，字幕更换/移除在轨道属性面板完成；结果详情的成品计数来自成功结果配套的只读成品探测。面板打开时 Tab/Shift+Tab 跳过被遮挡区域、关闭后焦点回到当前行/入口，轨道清单支持 ↑/↓ 切轨与 Enter/Space 打开属性。视频、ASS 和字体目录分别支持拖入，选择器与拖入统一接纳和确认。
-- Core 单任务封装：一个 MKV/MP4 视频与一或两条 ASS，固定 AFS/PyFontTools 子集路径，显式字体目录，逐轨元数据和源 A/V QC，源字幕/附件替换、失败/取消不发布成品。
+- 单个封装页按三张已确认布局稿实现：平面视频摘要、统一八列轨道表（纳入/ID/类型/语言/名称/默认/强制/编码，源/外加分组）、并排输出设置与固定 Action Bar；右侧 300 宽全高轨道属性栏贴窗口客户区右边与上下边缘，底部 300 高结果详情止于状态栏上缘，两者覆盖主内容并互斥，主布局不重排，默认列宽下普通 3 源轨 + SC/TC 在 1040×760 无整体滚动。列宽支持拖动、键盘调整和恢复默认，自动存于 v2 用户偏好，关闭再打开保留；加宽后仅表格内部横向滚动。外加行按首次添加顺序从 0 编号，旧草稿 SC/TC 业务身份不变，新导入使用独立轨道身份，空名称留空。目录菜单提供打开和清空，不恢复复制路径。源轨包含状态按策略只读投影，外加字幕可切换，字幕更换/移除在轨道属性面板完成；结果详情的成品计数来自成功结果配套的只读成品探测。面板打开时 Tab/Shift+Tab 跳过被遮挡区域、关闭后焦点回到当前行/入口，轨道清单支持 ↑/↓ 切轨与 Enter/Space 打开属性。工作区自动识别混合视频、音频、多 ASS/SRT 和字体目录；伴随文本不再误拒绝，视频替换保留确认，重复或无效批次整组不提交。
+- Core 单任务封装：源视频加多条 ASS/SRT 和音频；ASS 保留 AFS/PyFontTools 子集路径及显式字体目录，SRT/音频无需字体；逐轨元数据、字幕参考全文、音频 raw 数据和源 A/V QC，源字幕/附件替换、失败/取消不发布成品。
 - AFS 诊断按精确策略分类：仅已验证的 ASS 颜色高字节工具告警可继续，其他未知告警和致命诊断阻止发布。Core 另可在唯一 Regular face 满足合成条件时报告 `FONT_SYNTHETIC_BOLD`；也可在 ASS 明确引用完整/PostScript face、AFS 映射和源/子集元数据证明为同一唯一 native-bold face 时报告 `FONT_INTRINSIC_WEIGHT`。这两类 Core 提示都不扩大 AFS 告警白名单。规则见[工具诊断分类](docs/agents/diagnostics.md)。
 - 六项工具路径检测：便携 `bin/` 优先，随后 PATH，再回退 MKVToolNix 默认安装位置。
 - 工作区日志、重新检测环境。
@@ -61,9 +61,16 @@ dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --screenshot
 dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --integration
 # AFS 告警策略的公共 SingleMuxService 回归（fake runner，不启动媒体工具）：
 dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-policy
-# 单个封装第一轮：A 接纳/状态行为及 B 控件/模拟拖入/分配框/布局检查：
+# 单个封装第一轮：A 接纳/状态行为及 B 控件/模拟拖入/布局检查：
 dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-round1
 dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-ui-round1
+# 自动识别拖放受控回归与真实混合封装：
+dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop
+dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop-real
+# 全窗口拖放遮罩、右上角通知、真实计时与浮层遮挡：
+dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --input-feedback
+# 工作台列宽、数字显示 ID、语言与目录菜单：
+dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --workbench-ui
 # 低成本真实 ffmpeg/AFS/MKVToolNix 颜色告警 fixture：
 dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-real
 # 真实 Regular-only 字体粗体请求 fixture，或附 task.log 对只读原始请求重放：
@@ -76,9 +83,9 @@ $fixture = 'artifacts/phase1/<run-id>'
 dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --ui-integration $fixture (Join-Path $fixture 'real-ui.png')
 ```
 
-第一轮 UI 使用“封装 / 字体附件”页签，Debug 默认额外显示“日志”，Release 默认隐藏；可在启动进程前设置 `$env:MUX_DECK_DEV_LOG = '1'` 明确开启开发日志。Release 的结果详情仍保留原始错误、所有校验与提示，并可复制诊断、打开成品位置和定位任务日志。字体页不预检或列出未经检查的字体。视频支持 MKV/MP4，ASS 一次 1–2 个并明确分配 SC/TC，已有视频/槽位异路径替换需确认；无效候选整体拒绝，取消不改变原配置。输出目录通过选择按钮设置。
+第一轮 UI 使用“封装 / 字体附件”页签，Debug 默认额外显示“日志”，Release 默认隐藏；可在启动进程前设置 `$env:MUX_DECK_DEV_LOG = '1'` 明确开启开发日志。Release 的结果详情仍保留原始错误、所有校验与提示，并可复制诊断、打开成品位置和定位任务日志。字体页不预检或列出未经检查的字体。视频支持 MKV/MP4，ASS/SRT 与音频可多条自动追加，已有视频或所选外加轨道更换仍需确认；无效候选整体拒绝，取消不改变原配置。输出目录通过选择按钮设置。
 
-`--single-mux-ui-round1` 的报告与 1280×900 / 1040×760 多状态截图（空态、普通、长路径、轨道属性、多轨、运行、取消、失败、成功附提示）写入 `artifacts/single-mux-round1-b/ui-<id>/`；模拟 DragDrop 和原生交互替身会明确标注，并读取新行控件的真实 `AutomationPeer.GetName()`。更新后的 `--ui-integration` 从指定 phase1 fixture 复制视频、ASS、字体到独立 `artifacts/single-mux-round1-b/real-<id>/`，经更换视频按钮、添加轨道菜单与生产 ASS 分配窗口、字幕加入开关和输出选择按钮提交真实 Core。输出、逐场景请求快照、探测数据、日志副本、截图和 JSON 报告保留在该目录，并检查结果详情成品概览、再次封装的目标冲突和输入哈希。选择器返回由 StorageProvider 本地项目替代，因此这些证据证明新控件与真实封装，不证明原生选择器或 Explorer 拖入。
+`--single-mux-ui-round1` 的报告与 1280×900 / 1040×760 多状态截图（空态、普通、长路径、轨道属性、多轨、运行、取消、失败、成功附提示）写入 `artifacts/single-mux-round1-b/ui-<id>/`；模拟 DragDrop 和原生交互替身会明确标注，并读取新行控件的真实 `AutomationPeer.GetName()`。更新后的 `--ui-integration` 从指定 phase1 fixture 复制视频、ASS、字体到独立 `artifacts/single-mux-round1-b/real-<id>/`，经更换视频按钮、自动添加轨道菜单、字幕加入开关和输出选择按钮提交真实 Core。输出、逐场景请求快照、探测数据、日志副本、截图和 JSON 报告保留在该目录，并检查结果详情成品概览、再次封装的目标冲突和输入哈希。选择器返回由 StorageProvider 本地项目替代，因此这些证据证明新控件与真实封装，不证明原生选择器或 Explorer 拖入。
 
 第一轮 UI 代码与自动化收尾已通过负责人验收（UI 151/151），详见[验收记录](docs/tasks/single-mux-ui-approved-layout-acceptance.md)。窗口级双向 Tab 保留面板操作与侧栏，跳过遮挡控件；方向键支持清单跨视口滚动，未选字幕变更保持源轨选择。Windows 原生选择器、Explorer 拖入、系统剪贴板/资源管理器、125%/150% DPI、原生键盘/辅助技术与播放器播放须在交互桌面记录；headless 截图不能代替这些项目。当前窗口最小逻辑尺寸为 1040×760，封装页主区不整体滚动（多轨仅在轨道清单内部滚动），状态区与主操作固定。
 

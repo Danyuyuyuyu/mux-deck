@@ -2,16 +2,39 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:MuxDeck.Desktop.ViewModels"
              xmlns:mux="using:MuxDeck.Core.Muxing"
+             xmlns:views="using:MuxDeck.Desktop.Views"
              xmlns:converters="using:Avalonia.Data.Converters"
              x:Class="MuxDeck.Desktop.Views.SingleMuxView" x:Name="Root" x:DataType="vm:SingleMuxViewModel">
+  <UserControl.Resources>
+    <DataTemplate x:Key="TrackRowTemplate" x:DataType="vm:TrackRowViewModel">
+      <Border Classes="track-row" Classes.selected="{Binding IsSelected}" Width="{Binding #Root.ColumnLayout.ContentWidth}" HorizontalAlignment="Left">
+        <Grid>
+          <Button Classes="row-select" Click="ShowTrack" AutomationProperties.Name="{Binding AccessibleName}">
+            <views:TrackColumnsGrid Layout="{Binding #Root.ColumnLayout}">
+              <TextBlock Grid.Column="1" Text="{Binding DisplayId}" Classes="cell" HorizontalAlignment="Center" Margin="0" ToolTip.Tip="{Binding IdTip}" />
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="7" Margin="8,0" VerticalAlignment="Center">
+                <Ellipse Width="7" Height="7" Classes="type-dot" Classes.video="{Binding IsVideo}" Classes.audio="{Binding IsAudio}" Classes.subtitle="{Binding IsSubtitle}" />
+                <TextBlock Text="{Binding Type}" Classes="cell" Margin="0" />
+              </StackPanel>
+              <TextBlock Grid.Column="3" Text="{Binding LanguageName}" Classes="cell-muted" ToolTip.Tip="{Binding LanguageTip}" />
+              <TextBlock Grid.Column="4" Text="{Binding DisplayName}" Classes="cell" ToolTip.Tip="{Binding Name}" />
+              <TextBlock Grid.Column="5" Text="{Binding DefaultMark}" Classes="cell" HorizontalAlignment="Center" Margin="0" ToolTip.Tip="{Binding DefaultTip}" AutomationProperties.Name="{Binding DefaultTip}" />
+              <TextBlock Grid.Column="6" Text="{Binding ForcedMark}" Classes="cell" HorizontalAlignment="Center" Margin="0" ToolTip.Tip="{Binding ForcedTip}" AutomationProperties.Name="{Binding ForcedTip}" />
+              <TextBlock Grid.Column="7" Text="{Binding Codec}" Classes="cell-muted" ToolTip.Tip="{Binding Codec}" />
+            </views:TrackColumnsGrid>
+          </Button>
+          <views:TrackColumnsGrid Layout="{Binding #Root.ColumnLayout}">
+            <CheckBox Grid.Column="0" HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="0" IsChecked="{Binding InclusionBox, Mode=TwoWay}" IsEnabled="{Binding InclusionBoxEnabled}" IsHitTestVisible="{Binding InclusionBoxEnabled}" ToolTip.Tip="{Binding InclusionTip}" AutomationProperties.Name="{Binding InclusionAccessibleName}" />
+          </views:TrackColumnsGrid>
+          <Border VerticalAlignment="Bottom" Height="1" Background="{DynamicResource TrackDivider}" IsHitTestVisible="False" />
+        </Grid>
+      </Border>
+    </DataTemplate>
+  </UserControl.Resources>
   <UserControl.Styles>
-    <Style Selector="Border.drop-target">
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
-    </Style>
-    <Style Selector="Border.drop-target.accepting">
-      <Setter Property="BorderBrush" Value="{DynamicResource FocusBorder}" />
-      <Setter Property="Background" Value="{DynamicResource DropBackground}" />
+    <Style Selector="Border.work-section">
+      <Setter Property="BorderThickness" Value="0,1,0,0" />
+      <Setter Property="BorderBrush" Value="{DynamicResource TrackDivider}" />
     </Style>
     <Style Selector="Border.track-row">
       <Setter Property="Height" Value="32" />
@@ -33,9 +56,9 @@
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="CornerRadius" Value="0" />
-      <!-- 跨越包含列与左侧标记，文字仍按原表头列对齐；复选框作为上层独立控件。 -->
+      <!-- 整行命中与首列复选框分离，所有文字和表头共享列宽。 -->
       <Setter Property="Margin" Value="-2,0,0,0" />
-      <Setter Property="Padding" Value="42,0,0,0" />
+      <Setter Property="Padding" Value="2,0,0,0" />
       <Setter Property="MinHeight" Value="0" />
       <Setter Property="RenderTransform" Value="{x:Null}" />
       <Setter Property="Transitions" Value="{x:Null}" />
@@ -56,15 +79,20 @@
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="FontSize" Value="{DynamicResource FontCaption}" />
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-      <Setter Property="Margin" Value="0,0,6,0" />
+      <Setter Property="Margin" Value="8,0,8,0" />
     </Style>
     <Style Selector="TextBlock.cell-muted">
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="FontSize" Value="{DynamicResource FontCaption}" />
       <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-      <Setter Property="Margin" Value="0,0,6,0" />
+      <Setter Property="Margin" Value="8,0,8,0" />
     </Style>
+    <Style Selector="Ellipse.type-dot"><Setter Property="Fill" Value="{DynamicResource MediaTypeOther}" /></Style>
+    <Style Selector="Ellipse.type-dot.video"><Setter Property="Fill" Value="{DynamicResource MediaTypeVideo}" /></Style>
+    <Style Selector="Ellipse.type-dot.audio"><Setter Property="Fill" Value="{DynamicResource MediaTypeAudio}" /></Style>
+    <Style Selector="Ellipse.type-dot.subtitle"><Setter Property="Fill" Value="{DynamicResource MediaTypeSubtitle}" /></Style>
+    <Style Selector="Border.resize-grip.dragging Border"><Setter Property="Background" Value="{DynamicResource FocusBorder}" /></Style>
     <Style Selector="TextBlock.hint">
       <Setter Property="FontSize" Value="{DynamicResource FontCaption}" />
       <Setter Property="Foreground" Value="{DynamicResource AccentText}" />
@@ -82,23 +110,18 @@
     </Style>
   </UserControl.Styles>
   <Grid>
-    <Grid x:Name="PageContent" RowDefinitions="Auto,*" Margin="20,20,20,40">
-      <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,8">
-        <TextBlock Text="{Binding #Root.PageTitle}" FontSize="{DynamicResource FontPageTitle}" FontWeight="SemiBold" LineHeight="30" />
-        <TextBlock Grid.Column="1" Text="{Binding #Root.PageDescription}" Classes="muted" FontSize="{DynamicResource FontCaption}" VerticalAlignment="Center" Margin="18,0,0,0" TextWrapping="Wrap" />
-      </Grid>
-      <TabControl x:Name="MuxTabs" Grid.Row="1">
+    <Grid x:Name="PageContent" Margin="20,12,20,40">
+      <TabControl x:Name="MuxTabs">
         <TabItem x:Name="PackagingTab" Header="封装">
           <!-- 主区不整体滚动；结果面板止于状态栏上缘，全高轨道属性栏在外层覆盖客户区右侧。 -->
           <Grid x:Name="Workspace" RowDefinitions="*,Auto" RowSpacing="12" Margin="0,4,0,0">
             <Grid x:Name="MainBodyArea" Grid.Row="0">
               <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
-                <Border x:Name="VideoDropZone" Grid.Row="0" Classes="panel drop-target" MinHeight="72" Padding="12,10" DragDrop.AllowDrop="True">
+                <Border x:Name="VideoDropZone" Grid.Row="0" Classes="work-section" MinHeight="72" Padding="0,10" BorderThickness="0,0,0,1">
                   <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                     <StackPanel VerticalAlignment="Center" Spacing="2">
-                      <TextBlock x:Name="VideoName" Text="{Binding VideoDisplayName}" FontSize="{DynamicResource FontCardTitle}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding VideoFullPath}" />
+                      <TextBlock x:Name="VideoName" Text="{Binding VideoDisplayName}" FontSize="{DynamicResource FontInspector}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding VideoFullPath}" />
                       <TextBlock x:Name="VideoMeta" Text="{Binding VideoSummaryLine}" Classes="muted" FontSize="{DynamicResource FontCaption}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding VideoSummaryLine}" />
-                      <TextBlock x:Name="VideoDropHint" Classes="hint" IsVisible="False" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                       <Button x:Name="PickVideoButton" Content="更换视频" Classes="tiny" Click="PickVideo" IsEnabled="{Binding CanEdit}" AutomationProperties.Name="选择或更换 MKV MP4 视频" />
@@ -112,75 +135,48 @@
                     </StackPanel>
                   </Grid>
                 </Border>
-                <Border x:Name="AssDropZone" Grid.Row="1" Classes="panel drop-target" MinHeight="312" Padding="12,10" DragDrop.AllowDrop="True">
+                <Border x:Name="AssDropZone" Grid.Row="1" Classes="work-section" MinHeight="312" Padding="0,10,0,0" BorderThickness="0">
                   <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" RowSpacing="0">
                     <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Height="28">
                       <TextBlock Text="轨道与内容" FontSize="{DynamicResource FontSection}" FontWeight="SemiBold" VerticalAlignment="Center" />
                       <Button x:Name="AddTrackButton" Grid.Column="1" Content="＋ 添加轨道" Classes="tiny" IsEnabled="{Binding CanEdit}" AutomationProperties.Name="添加轨道">
                         <Button.Flyout>
                           <MenuFlyout>
-                            <MenuItem x:Name="AddAssMenuItem" Header="字幕（ASS）" Click="PickAss" IsEnabled="{Binding CanEdit}" />
-                            <MenuItem x:Name="AddAudioMenuItem" Header="音频（尚未支持）" IsEnabled="False" />
+                            <MenuItem x:Name="AddAssMenuItem" Header="字幕（ASS/SRT）" Click="PickAss" IsEnabled="{Binding CanEdit}" />
+                            <MenuItem x:Name="AddAudioMenuItem" Header="音频" Click="PickAudio" IsEnabled="{Binding CanEdit}" />
                           </MenuFlyout>
                         </Button.Flyout>
                       </Button>
                     </Grid>
-                    <Grid Grid.Row="1" ColumnDefinitions="40,48,*,82,92,44" Background="{DynamicResource TableHeader}" Height="26">
-                      <TextBlock Text="包含" Classes="cell-muted" HorizontalAlignment="Center" Margin="0" />
-                      <TextBlock Grid.Column="1" Text="类型" Classes="cell-muted" />
-                      <TextBlock Grid.Column="2" Text="名称" Classes="cell-muted" Margin="4,0,6,0" />
-                      <TextBlock Grid.Column="3" Text="格式" Classes="cell-muted" />
-                      <TextBlock Grid.Column="4" Text="语言" Classes="cell-muted" />
-                      <TextBlock Grid.Column="5" Text="默认" Classes="cell-muted" Margin="0" />
-                    </Grid>
-                    <ScrollViewer x:Name="TrackListScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                      <StackPanel>
-                        <TextBlock Classes="group-title" Text="{Binding SourceGroupTitle}" />
-                        <ItemsControl x:Name="SourceRows" ItemsSource="{Binding SourceTracks}">
-                          <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:TrackRowViewModel">
-                              <Border Classes="track-row" Classes.selected="{Binding IsSelected}">
-                                <Grid ColumnDefinitions="40,48,*,82,92,44">
-                                  <Button Grid.Column="0" Grid.ColumnSpan="6" Classes="row-select" Click="ShowTrack" AutomationProperties.Name="{Binding AccessibleName}" ToolTip.Tip="{Binding AccessibleName}">
-                                    <Grid ColumnDefinitions="48,*,82,92,44">
-                                      <TextBlock Grid.Column="0" Text="{Binding Type}" Classes="cell" />
-                                      <TextBlock Grid.Column="1" Text="{Binding DisplayName}" Classes="cell" ToolTip.Tip="{Binding DisplayName}" />
-                                      <TextBlock Grid.Column="2" Text="{Binding Codec}" Classes="cell-muted" />
-                                      <TextBlock Grid.Column="3" Text="{Binding Language}" Classes="cell-muted" />
-                                      <TextBlock Grid.Column="4" Text="{Binding DefaultText}" Classes="cell-muted" />
-                                    </Grid>
-                                  </Button>
-                                  <CheckBox Grid.Column="0" HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="0" IsChecked="{Binding InclusionBox, Mode=TwoWay}" IsEnabled="{Binding InclusionBoxEnabled}" IsHitTestVisible="{Binding InclusionBoxEnabled}" AutomationProperties.Name="{Binding Id, StringFormat='包含在本次输出 · {0}'}" />
-                                </Grid>
-                              </Border>
-                            </DataTemplate>
-                          </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <TextBlock Classes="group-title" Text="外加内容" IsVisible="{Binding HasExternalTracks}" />
-                        <ItemsControl x:Name="ExternalRows" ItemsSource="{Binding ExternalTracks}">
-                          <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:TrackRowViewModel">
-                              <Border Classes="track-row" Classes.selected="{Binding IsSelected}">
-                                <Grid ColumnDefinitions="40,48,*,82,92,44">
-                                  <Button Grid.Column="0" Grid.ColumnSpan="6" Classes="row-select" Click="ShowTrack" AutomationProperties.Name="{Binding AccessibleName}" ToolTip.Tip="{Binding InputPath}">
-                                    <Grid ColumnDefinitions="48,*,82,92,44">
-                                      <TextBlock Grid.Column="0" Text="{Binding Type}" Classes="cell" />
-                                      <TextBlock Grid.Column="1" Text="{Binding DisplayName}" Classes="cell" ToolTip.Tip="{Binding DisplayName}" />
-                                      <TextBlock Grid.Column="2" Text="{Binding Codec}" Classes="cell-muted" />
-                                      <TextBlock Grid.Column="3" Text="{Binding Language}" Classes="cell-muted" />
-                                      <TextBlock Grid.Column="4" Text="{Binding DefaultText}" Classes="cell-muted" />
-                                    </Grid>
-                                  </Button>
-                                  <CheckBox Grid.Column="0" HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="0" IsChecked="{Binding InclusionBox, Mode=TwoWay}" IsEnabled="{Binding InclusionBoxEnabled}" IsHitTestVisible="{Binding InclusionBoxEnabled}" AutomationProperties.Name="{Binding Id, StringFormat='包含在本次输出 · {0}'}" />
-                                </Grid>
-                              </Border>
-                            </DataTemplate>
-                          </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                    <ScrollViewer x:Name="TrackHeaderScroll" Grid.Row="1" Height="30" HorizontalAlignment="Left" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+                      <Border Background="{DynamicResource TableHeader}" BorderBrush="Transparent" BorderThickness="2,0,0,0" Width="{Binding #Root.ColumnLayout.ContentWidth}">
+                        <views:TrackColumnsGrid x:Name="TrackHeaderGrid" Layout="{Binding #Root.ColumnLayout}">
+                        <views:TrackColumnHeader Grid.Column="0" Index="0" Layout="{Binding #Root.ColumnLayout}" ResizeCompleted="ColumnsResized" />
+                        <views:TrackColumnHeader Grid.Column="1" Index="1" Layout="{Binding #Root.ColumnLayout}" ResizeCompleted="ColumnsResized" />
+                        <views:TrackColumnHeader Grid.Column="2" Index="2" Layout="{Binding #Root.ColumnLayout}" ResizeCompleted="ColumnsResized" />
+                        <views:TrackColumnHeader Grid.Column="3" Index="3" Layout="{Binding #Root.ColumnLayout}" ResizeCompleted="ColumnsResized" />
+                        <views:TrackColumnHeader Grid.Column="4" Index="4" Layout="{Binding #Root.ColumnLayout}" ResizeCompleted="ColumnsResized" />
+                        <views:TrackColumnHeader Grid.Column="5" Index="5" Layout="{Binding #Root.ColumnLayout}" ResizeCompleted="ColumnsResized" />
+                        <views:TrackColumnHeader Grid.Column="6" Index="6" Layout="{Binding #Root.ColumnLayout}" ResizeCompleted="ColumnsResized" />
+                        <views:TrackColumnHeader Grid.Column="7" Index="7" Layout="{Binding #Root.ColumnLayout}" ResizeCompleted="ColumnsResized" />
+                        </views:TrackColumnsGrid>
+                        <Border.ContextMenu><ContextMenu><MenuItem Header="恢复默认列宽" Click="ResetColumns" /></ContextMenu></Border.ContextMenu>
+                      </Border>
+                    </ScrollViewer>
+                    <ScrollViewer x:Name="TrackListScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                      <StackPanel Width="{Binding #Root.ColumnLayout.ContentWidth}">
+                        <StackPanel Orientation="Horizontal" Spacing="6" Margin="4,9,0,5">
+                          <TextBlock Text="{Binding SourceGroupTitle}" Classes="muted caption" />
+                          <TextBlock Text="🔒" Classes="muted caption" ToolTip.Tip="源视频轨道当前为只读；视频和音频保留，字幕与附件不保留" AutomationProperties.Name="源视频轨道只读" />
+                        </StackPanel>
+                        <ItemsControl x:Name="SourceRows" ItemsSource="{Binding SourceTracks}" ItemTemplate="{StaticResource TrackRowTemplate}" />
+                        <Border BorderBrush="{DynamicResource TrackDivider}" BorderThickness="0,1,0,0" Margin="0,10,0,0" IsVisible="{Binding HasExternalTracks}">
+                          <TextBlock Classes="muted caption" Text="{Binding ExternalGroupTitle}" Margin="4,8,0,5" />
+                        </Border>
+                        <ItemsControl x:Name="ExternalRows" ItemsSource="{Binding ExternalTracks}" ItemTemplate="{StaticResource TrackRowTemplate}" />
                         <Border x:Name="ResultScrollSpace" Height="0" IsHitTestVisible="False" />
                       </StackPanel>
                     </ScrollViewer>
-                    <TextBlock x:Name="AssDropHint" Grid.Row="3" Classes="hint" IsVisible="False" Margin="0,6,0,0" />
                     <Grid Grid.Row="4" ColumnDefinitions="*,Auto" IsVisible="{Binding HasSourceAttachments}" Height="30">
                       <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                         <TextBlock Text="{Binding SourceAttachmentSummary}" FontSize="{DynamicResource FontCaption}" />
@@ -190,37 +186,46 @@
                     </Grid>
                   </Grid>
                 </Border>
-                <Border x:Name="FontsDropZone" Grid.Row="2" Classes="panel drop-target" MinHeight="118" Padding="12,10" DragDrop.AllowDrop="True">
-                  <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="6">
+                <Border x:Name="FontsDropZone" Grid.Row="2" Classes="work-section" MinHeight="124" Padding="0,10">
+                  <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
                     <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
-                      <TextBlock Text="封装设置" FontSize="{DynamicResource FontSection}" FontWeight="SemiBold" />
-                      <TextBlock Grid.Column="1" Text="字体将在封装时检查" Classes="muted" FontSize="{DynamicResource FontCaption}" VerticalAlignment="Center" />
+                      <TextBlock Text="输出设置" FontSize="{DynamicResource FontSection}" FontWeight="SemiBold" />
                     </Grid>
                     <Grid Grid.Row="1" ColumnDefinitions="*,16,*" VerticalAlignment="Center">
                       <Grid Grid.Column="0" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="4">
                         <TextBlock Text="字体目录" VerticalAlignment="Center" FontSize="{DynamicResource FontCaption}" />
                         <TextBox Grid.Column="1" Text="{Binding FontsDirectory, Mode=OneWay}" IsReadOnly="True" FontSize="{DynamicResource FontCaption}" ToolTip.Tip="{Binding FontsDirectory}" AutomationProperties.Name="字体目录完整路径" />
                         <Button Grid.Column="2" x:Name="PickFontsButton" Content="选择" Classes="tiny" Click="PickFonts" IsEnabled="{Binding CanEdit}" AutomationProperties.Name="选择字体目录" />
-                        <Button Grid.Column="3" Content="打开" Classes="quiet tiny" Click="OpenFonts" IsEnabled="{Binding HasFontsDirectory}" AutomationProperties.Name="打开字体目录" />
+                        <Button Grid.Column="3" x:Name="FontsMenuButton" Content="⋯" Classes="quiet icon" AutomationProperties.Name="字体目录操作">
+                          <Button.Flyout><MenuFlyout>
+                            <MenuItem Header="打开目录" Click="OpenFonts" IsEnabled="{Binding #Root.((vm:SingleMuxViewModel)DataContext).HasFontsDirectory}" />
+                            <MenuItem Header="清空" Click="ClearFonts" IsEnabled="{Binding #Root.((vm:SingleMuxViewModel)DataContext).CanEdit}" />
+                          </MenuFlyout></Button.Flyout>
+                        </Button>
                       </Grid>
                       <Grid Grid.Column="2" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="4">
                         <TextBlock Text="输出目录" VerticalAlignment="Center" FontSize="{DynamicResource FontCaption}" />
                         <TextBox Grid.Column="1" Text="{Binding OutputDirectory, Mode=OneWay}" IsReadOnly="True" FontSize="{DynamicResource FontCaption}" ToolTip.Tip="{Binding OutputDirectory}" AutomationProperties.Name="输出目录完整路径" />
                         <Button Grid.Column="2" x:Name="PickOutputButton" Content="选择" Classes="tiny" Click="PickOutput" IsEnabled="{Binding CanEdit}" AutomationProperties.Name="选择独立输出目录" />
-                        <Button Grid.Column="3" Content="打开" Classes="quiet tiny" Click="OpenOutputDirectory" IsEnabled="{Binding HasOutputDirectory}" AutomationProperties.Name="打开输出目录" />
+                        <Button Grid.Column="3" x:Name="OutputMenuButton" Content="⋯" Classes="quiet icon" AutomationProperties.Name="输出目录操作">
+                          <Button.Flyout><MenuFlyout>
+                            <MenuItem Header="打开目录" Click="OpenOutputDirectory" IsEnabled="{Binding #Root.((vm:SingleMuxViewModel)DataContext).HasOutputDirectory}" />
+                            <MenuItem Header="清空" Click="ClearOutput" IsEnabled="{Binding #Root.((vm:SingleMuxViewModel)DataContext).CanEdit}" />
+                          </MenuFlyout></Button.Flyout>
+                        </Button>
                       </Grid>
                     </Grid>
-                    <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                    <TextBlock Grid.Row="2" Text="{Binding FontCheckHint}" Classes="muted caption" Margin="54,0,0,0" />
+                    <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
                       <TextBlock Text="输出文件" VerticalAlignment="Center" FontSize="{DynamicResource FontCaption}" />
                       <TextBox x:Name="OutputNameInput" Grid.Column="1" Text="{Binding OutputFileName}" IsEnabled="{Binding CanEdit}" PlaceholderText="留空使用 源文件名.muxed.mkv" AutomationProperties.Name="输出文件名" FontSize="{DynamicResource FontCaption}" />
                       <TextBlock Grid.Column="2" Text="MKV · 已有目标不覆盖" Classes="muted" FontSize="{DynamicResource FontCaption}" VerticalAlignment="Center" />
                     </Grid>
-                    <TextBlock x:Name="FontsDropHint" Grid.Row="3" Classes="hint" IsVisible="False" />
                   </Grid>
                 </Border>
               </Grid>
               <!-- 底部结果详情 Overlay：300 高，从状态栏上缘向上覆盖主内容。 -->
-              <Border x:Name="ResultInspector" Classes="inspector" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Height="300" IsVisible="{Binding IsResultInspectorOpen}" BoxShadow="{DynamicResource ResultInspectorShadow}" Focusable="True">
+              <Border x:Name="ResultInspector" DragDrop.AllowDrop="False" Classes="inspector" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Height="300" IsVisible="{Binding IsResultInspectorOpen}" BoxShadow="{DynamicResource ResultInspectorShadow}" Focusable="True">
                 <Grid RowDefinitions="Auto,*,Auto">
                   <Grid Grid.Row="0" Height="44" ColumnDefinitions="*,Auto" Margin="14,0">
                     <TextBlock Text="结果详情" FontSize="{DynamicResource FontInspector}" FontWeight="SemiBold" VerticalAlignment="Center" />
@@ -279,22 +284,24 @@
                 </Grid>
               </Border>
             </Grid>
-            <Border x:Name="StatusPanel" Grid.Row="1" Classes="panel" MinHeight="76" Padding="12,10">
+            <Border x:Name="StatusPanel" Grid.Row="1" BorderBrush="{DynamicResource TrackDivider}" BorderThickness="0,1,0,0" MinHeight="76" Padding="0,12,0,0">
               <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                 <StackPanel Spacing="2">
-                  <TextBlock x:Name="CurrentState" Text="{Binding StateSummary}" FontWeight="SemiBold" FontSize="{DynamicResource FontBody}" TextWrapping="Wrap" />
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="{Binding ActionBarIcon}" Foreground="{DynamicResource AccentText}" FontSize="{DynamicResource FontBody}" />
+                    <TextBlock x:Name="CurrentState" Text="{Binding ActionBarSummary}" FontWeight="SemiBold" FontSize="{DynamicResource FontBody}" TextWrapping="Wrap" />
+                  </StackPanel>
                   <TextBlock Text="{Binding StatusDescription}" Classes="muted" FontSize="{DynamicResource FontCaption}" TextWrapping="Wrap" MaxHeight="38" />
                   <TextBlock Text="{Binding OutputDisplayName}" IsVisible="{Binding HasCurrentSuccess}" Classes="muted" FontSize="{DynamicResource FontCaption}" TextTrimming="CharacterEllipsis" />
                   <StackPanel IsVisible="{Binding IsRunning}" Spacing="4" Margin="0,4,0,0">
                     <TextBlock Text="{Binding ProgressMessage}" Classes="muted" FontSize="{DynamicResource FontCaption}" TextWrapping="Wrap" MaxHeight="32" />
                     <ProgressBar IsIndeterminate="{Binding IsIndeterminate}" Value="{Binding Percent}" Height="4" Minimum="0" Maximum="100" />
                   </StackPanel>
-                  <TextBlock x:Name="InteractionMessage" Text="{Binding InteractionMessage}" IsVisible="{Binding HasInteractionMessage}" Foreground="{DynamicResource AccentText}" FontSize="{DynamicResource FontCaption}" TextWrapping="Wrap" MaxHeight="34" ToolTip.Tip="{Binding InteractionMessage}" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
                   <Button x:Name="OpenOutputButton" Content="打开文件位置" Classes="tiny" Click="OpenOutput" IsVisible="{Binding HasCurrentSuccess}" />
                   <Button x:Name="StartButton" Content="{Binding PrimaryActionText}" Classes="primary" Command="{Binding StartCommand}" IsVisible="{Binding !IsRunning}" />
-                  <Button x:Name="CancelButton" Content="取消封装" Classes="primary" Command="{Binding CancelCommand}" IsVisible="{Binding IsRunning}" />
+                  <Button x:Name="CancelButton" Content="取消封装" Command="{Binding CancelCommand}" IsVisible="{Binding IsRunning}" />
                   <Button x:Name="ShowResultButton" Content="结果详情" Classes="tiny" Click="ShowResult" IsVisible="{Binding HasResult}" />
                 </StackPanel>
               </Grid>
@@ -302,7 +309,7 @@
           </Grid>
         </TabItem>
         <TabItem Header="字体附件">
-          <ScrollViewer VerticalScrollBarVisibility="Auto"><Border Classes="panel" Margin="0,12,0,0" VerticalAlignment="Top"><StackPanel Spacing="12">
+          <ScrollViewer VerticalScrollBarVisibility="Auto"><Border Margin="0,16,0,0" VerticalAlignment="Top"><StackPanel Spacing="12">
             <TextBlock Text="字体附件 · 封装时处理" FontSize="{DynamicResource FontCardTitle}" FontWeight="SemiBold" />
             <TextBox Text="{Binding FontsDirectory, Mode=OneWay}" IsReadOnly="True" AutomationProperties.Name="字体页目录" />
             <Button Content="选择字体目录…" HorizontalAlignment="Left" Click="PickFonts" IsEnabled="{Binding CanEdit}" />
@@ -314,7 +321,7 @@
       </TabControl>
     </Grid>
     <!-- 全高轨道属性栏覆盖客户区右侧，标题与操作固定，正文单独滚动。 -->
-    <Border x:Name="TrackInspector" Classes="inspector sidebar" HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="300" BoxShadow="{DynamicResource TrackInspectorShadow}" Focusable="True">
+    <Border x:Name="TrackInspector" DragDrop.AllowDrop="False" Classes="inspector sidebar" HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="300" BoxShadow="{DynamicResource TrackInspectorShadow}" Focusable="True">
       <Border.IsVisible>
         <MultiBinding Converter="{x:Static converters:BoolConverters.And}">
           <Binding Path="IsTrackInspectorOpen" />
@@ -329,7 +336,7 @@
         <ScrollViewer x:Name="TrackInspectorScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
           <StackPanel Margin="14,12" Spacing="12" IsVisible="{Binding HasSelectedTrack}">
             <TextBlock Text="{Binding SelectedTrack.InspectorTitle}" Foreground="{DynamicResource AccentText}" FontSize="{DynamicResource FontCaption}" />
-            <CheckBox x:Name="InspectorIncludedInput" Content="包含在本次输出中" IsChecked="{Binding SelectedTrack.InclusionBox, Mode=TwoWay}" IsEnabled="{Binding SelectedTrack.InclusionBoxEnabled}" />
+            <CheckBox x:Name="InspectorIncludedInput" Content="纳入本次封装" IsChecked="{Binding SelectedTrack.InclusionBox, Mode=TwoWay}" IsEnabled="{Binding SelectedTrack.InclusionBoxEnabled}" />
             <StackPanel Spacing="5">
               <TextBlock Text="名称" Classes="muted" FontSize="{DynamicResource FontCaption}" />
               <TextBox x:Name="TrackNameInput" Text="{Binding SelectedTrack.Name}" IsEnabled="{Binding SelectedTrack.CanEdit}" AutomationProperties.Name="所选轨道名称" />
@@ -338,27 +345,32 @@
               <TextBlock Text="语言" Classes="muted" FontSize="{DynamicResource FontCaption}" />
               <Border Classes="readonly-field">
                 <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Text="{Binding SelectedTrack.Language}" FontSize="{DynamicResource FontCaption}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding SelectedTrack.LanguageName}" FontSize="{DynamicResource FontCaption}" TextTrimming="CharacterEllipsis" />
                   <TextBlock Grid.Column="1" Text="只读" Classes="muted" FontSize="{DynamicResource FontCaption}" />
                 </Grid>
               </Border>
             </StackPanel>
-            <CheckBox x:Name="DefaultFlagInput" Content="默认轨道" IsChecked="{Binding SelectedTrack.IsDefault}" IsEnabled="{Binding SelectedTrack.CanEdit}" />
-            <CheckBox x:Name="ForcedFlagInput" Content="强制显示" IsChecked="{Binding SelectedTrack.IsForced}" IsEnabled="{Binding SelectedTrack.CanEdit}" />
+            <Grid ColumnDefinitions="64,*">
+              <TextBlock Text="语言代码" Classes="muted caption" />
+              <TextBlock Grid.Column="1" Text="{Binding SelectedTrack.Language}" Classes="caption" ToolTip.Tip="{Binding SelectedTrack.LanguageTip}" />
+            </Grid>
+            <CheckBox x:Name="DefaultFlagInput" Content="默认轨道" ToolTip.Tip="{Binding SelectedTrack.DefaultTip}" IsChecked="{Binding SelectedTrack.IsDefault}" IsEnabled="{Binding SelectedTrack.CanEdit}" />
+            <CheckBox x:Name="ForcedFlagInput" Content="强制显示" IsVisible="{Binding SelectedTrack.IsSubtitle}" ToolTip.Tip="{Binding SelectedTrack.ForcedTip}" IsChecked="{Binding SelectedTrack.IsForced}" IsEnabled="{Binding SelectedTrack.CanEdit}" />
             <Border BorderBrush="{DynamicResource InspectorDivider}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
               <StackPanel Spacing="8">
                 <TextBlock Text="来源与媒体信息" FontSize="{DynamicResource FontCaption}" FontWeight="SemiBold" />
                 <Grid ColumnDefinitions="56,*"><TextBlock Text="来源" Classes="muted" FontSize="{DynamicResource FontCaption}" /><TextBlock Grid.Column="1" Text="{Binding SelectedTrack.SourceLabel}" FontSize="{DynamicResource FontCaption}" /></Grid>
-                <Grid ColumnDefinitions="56,*"><TextBlock Text="格式" Classes="muted" FontSize="{DynamicResource FontCaption}" /><TextBlock Grid.Column="1" Text="{Binding SelectedTrack.Codec}" FontSize="{DynamicResource FontCaption}" /></Grid>
-                <Grid ColumnDefinitions="56,*"><TextBlock Text="标识" Classes="muted" FontSize="{DynamicResource FontCaption}" /><TextBlock Grid.Column="1" Text="{Binding SelectedTrack.Id}" FontSize="{DynamicResource FontCaption}" /></Grid>
+                <Grid ColumnDefinitions="56,*"><TextBlock Text="编码" Classes="muted" FontSize="{DynamicResource FontCaption}" /><TextBlock Grid.Column="1" Text="{Binding SelectedTrack.Codec}" FontSize="{DynamicResource FontCaption}" /></Grid>
+                <Grid ColumnDefinitions="56,*"><TextBlock Text="ID" Classes="muted" FontSize="{DynamicResource FontCaption}" /><TextBlock Grid.Column="1" Text="{Binding SelectedTrack.DisplayId}" FontSize="{DynamicResource FontCaption}" /></Grid>
+                <TextBlock Text="{Binding SelectedTrack.Detail}" Classes="muted caption" TextWrapping="Wrap" IsVisible="{Binding !SelectedTrack.IsExternal}" />
                 <TextBlock x:Name="InspectorPathText" Text="{Binding SelectedTrackFilePath}" FontSize="{DynamicResource FontCaption}" TextWrapping="Wrap" />
               </StackPanel>
             </Border>
           </StackPanel>
         </ScrollViewer>
         <StackPanel x:Name="ExternalActions" Grid.Row="2" Orientation="Horizontal" Spacing="8" Margin="14,10" IsVisible="{Binding SelectedTrackIsExternal}">
-          <Button x:Name="ReplaceExternalButton" Content="更换文件" Classes="tiny" Click="ReplaceExternal" IsEnabled="{Binding CanEditSelectedTrack}" AutomationProperties.Name="更换所选字幕文件" />
-          <Button x:Name="RemoveExternalButton" Content="移除轨道" Classes="danger tiny" Click="RemoveExternal" IsEnabled="{Binding CanEditSelectedTrack}" AutomationProperties.Name="移除所选字幕轨道" />
+          <Button x:Name="ReplaceExternalButton" Content="更换文件" Classes="tiny" Click="ReplaceExternal" IsEnabled="{Binding CanEditSelectedTrack}" AutomationProperties.Name="更换所选轨道文件" />
+          <Button x:Name="RemoveExternalButton" Content="移除轨道" Classes="danger tiny" Click="RemoveExternal" IsEnabled="{Binding CanEditSelectedTrack}" AutomationProperties.Name="移除所选外加轨道" />
         </StackPanel>
       </Grid>
     </Border>

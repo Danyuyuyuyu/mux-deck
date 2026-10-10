@@ -2,7 +2,7 @@ namespace MuxDeck.Desktop.ViewModels;
 
 public enum InputCandidateKind { LocalFile, LocalDirectory, NonLocal }
 public enum SubtitleSlot { Sc, Tc }
-public enum InputOperation { Video, Subtitles, FontsDirectory, OutputDirectory }
+public enum InputOperation { Video, Subtitles, FontsDirectory, OutputDirectory, Audio }
 public enum InputAcceptanceError { None, Locked, InvalidCount, NonLocal, InvalidPath, WrongType, MissingPath, Duplicate, InvalidSlot, Stale, ConfirmationRequired }
 public enum VideoProbeState { Empty, Probing, Succeeded, Failed }
 public enum SingleMuxState { NoVideo, Probing, ProbeFailed, Incomplete, Ready, Running, Cancelling, Closing, Cancelled, Failed, Succeeded, SucceededWithWarnings }

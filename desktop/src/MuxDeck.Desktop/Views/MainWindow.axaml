@@ -7,6 +7,26 @@
         Title="Mux Deck · 桌面版" Width="1280" Height="900" MinWidth="1040" MinHeight="760"
         Background="{DynamicResource WorkspaceBackground}" FontFamily="{DynamicResource UiFontFamily}" FontSize="{DynamicResource FontBody}">
   <Window.Styles>
+    <Style Selector="views|InteractionNotice">
+      <Setter Property="Margin" Value="20,20,20,0" />
+      <Setter Property="MaxWidth" Value="360" />
+    </Style>
+    <Style Selector="views|InteractionNotice.inspector">
+      <Setter Property="Margin" Value="20,20,320,0" />
+      <Setter Property="MaxWidth" Value="300" />
+    </Style>
+    <Style Selector="Grid.drop-overlay.blocked Rectangle.drop-outline">
+      <Setter Property="Stroke" Value="{DynamicResource WarningText}" />
+    </Style>
+    <Style Selector="Rectangle.drop-outline">
+      <Setter Property="Stroke" Value="{DynamicResource FocusBorder}" />
+    </Style>
+    <Style Selector="Grid.drop-overlay.blocked TextBlock.drop-icon">
+      <Setter Property="Foreground" Value="{DynamicResource WarningText}" />
+    </Style>
+    <Style Selector="TextBlock.drop-icon">
+      <Setter Property="Foreground" Value="{DynamicResource AccentText}" />
+    </Style>
     <Style Selector="ListBoxItem">
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     </Style>
@@ -76,8 +96,22 @@
     <!-- 单任务视图拥有整块客户区，属性栏可贴右边并覆盖到底部路径条。 -->
     <views:SingleMuxView x:Name="SingleView" Grid.Column="1" Grid.RowSpan="2"
                          IsVisible="{Binding #WindowRoot.((vm:MainWindowViewModel)DataContext).IsSingle}"
-                         DataContext="{Binding Single}"
-                         PageTitle="{Binding #WindowRoot.((vm:MainWindowViewModel)DataContext).PageTitle}"
-                         PageDescription="{Binding #WindowRoot.((vm:MainWindowViewModel)DataContext).PageDescription}" />
+                         DataContext="{Binding Single}" />
+    <views:InteractionNotice x:Name="InputNotice" Grid.Column="1" Grid.RowSpan="2"
+                             HorizontalAlignment="Right" VerticalAlignment="Top"
+                             Classes.inspector="{Binding #WindowRoot.((vm:MainWindowViewModel)DataContext).Single.IsTrackInspectorOpen}" DataContext="{Binding Single.Notification}" />
+    <!-- 纯展示遮罩覆盖导航和内容，实际接纳仍由窗口事件宿主判断，不截获指针。 -->
+    <Grid x:Name="MediaDropOverlay" Grid.ColumnSpan="2" Grid.RowSpan="2" IsVisible="{Binding Single.DropFeedback.IsVisible}"
+          Classes="drop-overlay" Classes.blocked="{Binding !Single.DropFeedback.CanAccept}" IsHitTestVisible="False" Background="{DynamicResource DropOverlayBackground}">
+      <Rectangle Classes="drop-outline" Margin="10" StrokeThickness="1.5" StrokeDashArray="4,4" RadiusX="6" RadiusY="6" />
+      <Border HorizontalAlignment="Center" VerticalAlignment="Center" Background="{DynamicResource PanelBackground}"
+              BorderBrush="{DynamicResource SoftBorder}" BorderThickness="1" CornerRadius="6" Padding="28,20" MaxWidth="620" Margin="24">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="drop-icon" Text="{Binding Single.DropFeedback.Icon}" HorizontalAlignment="Center" FontSize="30" />
+          <TextBlock Text="{Binding Single.DropFeedback.Title}" HorizontalAlignment="Center" FontSize="20" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding Single.DropFeedback.Description}" Classes="muted" TextAlignment="Center" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+    </Grid>
   </Grid>
 </Window>

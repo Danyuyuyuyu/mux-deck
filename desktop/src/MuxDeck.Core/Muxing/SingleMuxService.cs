@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace MuxDeck.Core.Muxing;
 
-public sealed class SingleMuxService
+public sealed partial class SingleMuxService
 {
     private readonly Workspace workspace;
     private readonly IMuxToolRunner runner;
@@ -41,7 +41,7 @@ public sealed class SingleMuxService
         {
             // 在任何进度回调和异步等待前复制集合，任务只消费本次提交的参数快照。
             ArgumentNullException.ThrowIfNull(request);
-            request = request with { Subtitles = request.Subtitles?.ToArray()! };
+            request = request with { Subtitles = request.Subtitles?.ToArray()!, Audios = request.Audios?.ToArray()! };
             var run = Path.Combine(workspace.Root, "desktop", "artifacts", "runs",
                 DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(run);
@@ -57,20 +57,37 @@ public sealed class SingleMuxService
                 throw new IOException("目标已存在，拒绝覆盖：" + destination);
             var mkvmerge = RequireTool("mkvmerge");
             var mkvextract = RequireTool("mkvextract");
-            var afs = RequireTool("AssFontSubset");
-            var fontTools = LocateFontTools();
-            await RunToolAsync(Path.Combine(fontTools, Executable("pyftsubset")), ["--help"], work,
-                log, cancellationToken, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
-            await RunToolAsync(Path.Combine(fontTools, Executable("ttx")), ["--version"], work,
-                log, cancellationToken, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
+            var afs = ""; var fontTools = "";
+            if (snapshot.Subtitles.Any(s => MediaFileTypes.IsAss(s.Path)))
+            {
+                afs = RequireTool("AssFontSubset"); fontTools = LocateFontTools();
+                await RunToolAsync(Path.Combine(fontTools, Executable("pyftsubset")), ["--help"], work,
+                    log, cancellationToken, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
+                await RunToolAsync(Path.Combine(fontTools, Executable("ttx")), ["--version"], work,
+                    log, cancellationToken, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
+            }
             Stage(MuxStage.Probing, "探测源视频和所有音轨");
             var source = await ProbeLogged(snapshot.VideoPath).ConfigureAwait(false);
             if (!source.Tracks.Any(t => t.Type == "video")) throw new InvalidDataException("源文件没有视频轨。");
+            var audioSources = new List<MediaProbe>();
+            foreach (var audio in snapshot.Audios)
+            {
+                var probe = await ProbeLogged(audio.Path).ConfigureAwait(false);
+                if (!probe.Tracks.Any(t => t.Type == "audio" && t.Id == audio.TrackId)) throw new InvalidDataException("外加音频 Track ID 不存在：" + audio.Path);
+                audioSources.Add(probe);
+            }
 
             var corrected = new List<string>();
             var fonts = new List<string>();
             for (var i = 0; i < snapshot.Subtitles.Count; i++)
             {
+                if (!MediaFileTypes.IsAss(snapshot.Subtitles[i].Path))
+                {
+                    var srt = Path.Combine(work, $"subtitle-{i}.srt");
+                    File.Copy(snapshot.Subtitles[i].Path, srt);
+                    corrected.Add(srt);
+                    continue;
+                }
                 Stage(MuxStage.Subsetting, $"子集化字幕 {i + 1}/{snapshot.Subtitles.Count}");
                 var input = Path.Combine(work, $"input-{i}", Path.GetFileName(snapshot.Subtitles[i].Path));
                 Directory.CreateDirectory(Path.GetDirectoryName(input)!);
@@ -139,10 +156,11 @@ public sealed class SingleMuxService
             for (var i = 0; i < corrected.Count; i++)
             {
                 var subtitle = snapshot.Subtitles[i];
-                args.AddRange(["--language", "0:" + subtitle.Language, "--track-name", "0:" + subtitle.Name,
+                args.AddRange(["--sub-charset", "0:UTF-8", "--language", "0:" + subtitle.Language, "--track-name", "0:" + subtitle.Name,
                     "--default-track-flag", "0:" + (subtitle.IsDefault ? "1" : "0"),
                     "--forced-display-flag", "0:" + (subtitle.IsForced ? "1" : "0"), corrected[i]]);
             }
+            foreach (var audio in snapshot.Audios) args.AddRange(AudioArguments(audio));
             for (var i = 0; i < fonts.Count; i++)
                 args.AddRange(["--attachment-name", attachmentNames[i], "--attachment-mime-type",
                     Path.GetExtension(fonts[i]).Equals(".otf", StringComparison.OrdinalIgnoreCase)
@@ -153,7 +171,7 @@ public sealed class SingleMuxService
             if (!File.Exists(temporaryMkv) || new FileInfo(temporaryMkv).Length == 0)
                 throw new InvalidDataException("封装工具未产出有效 MKV。");
             var outputProbe = await ProbeLogged(temporaryMkv).ConfigureAwait(false);
-            CheckTracks(source, outputProbe, snapshot, checks);
+            CheckTracks(source, outputProbe, snapshot, checks, audioSources);
             if (outputProbe.Attachments.Count != fonts.Count) throw new InvalidDataException("成品字体附件数量不符。");
             for (var i = 0; i < fonts.Count; i++)
             {
@@ -167,16 +185,16 @@ public sealed class SingleMuxService
             var subtitleTracks = outputProbe.Tracks.Where(t => t.Type == "subtitles").ToArray();
             var trackArgs = new List<string> { temporaryMkv, "tracks" };
             for (var i = 0; i < subtitleTracks.Length; i++)
-                trackArgs.Add($"{subtitleTracks[i].Id}:{Path.Combine(extracted, $"subtitle-{i}.ass")}");
-            await RunToolAsync(mkvextract, trackArgs, work, log, cancellationToken, TimeSpan.FromMinutes(10)).ConfigureAwait(false);
+                trackArgs.Add($"{subtitleTracks[i].Id}:{Path.Combine(extracted, $"subtitle-{i}" + Path.GetExtension(corrected[i]))}");
+            if (subtitleTracks.Length > 0) await RunToolAsync(mkvextract, trackArgs, work, log, cancellationToken, TimeSpan.FromMinutes(10)).ConfigureAwait(false);
             for (var i = 0; i < corrected.Count; i++)
             {
                 // ASS 在 Matroska 中由头部和带 ReadOrder/时序的 Dialogue 块组成；
                 // MKVToolNix 会把 Comment 移回头部。用同工具做仅字幕往返作为参考，
                 // 不跳过任何样式、映射、事件或文本字段，也不重封源视频。
                 var referenceMks = Path.Combine(work, $"ass-reference-{i}.mks");
-                var referenceAss = Path.Combine(extracted, $"reference-{i}.ass");
-                await RunToolAsync(mkvmerge, ["-o", referenceMks, corrected[i]], work, log,
+                var referenceAss = Path.Combine(extracted, $"reference-{i}" + Path.GetExtension(corrected[i]));
+                await RunToolAsync(mkvmerge, ["-o", referenceMks, "--sub-charset", "0:UTF-8", corrected[i]], work, log,
                     cancellationToken, TimeSpan.FromMinutes(10)).ConfigureAwait(false);
                 if (!File.Exists(referenceMks) || new FileInfo(referenceMks).Length == 0)
                     throw new InvalidDataException($"新增字幕 {i + 1} 未产出有效 ASS 校验参考容器。");
@@ -184,19 +202,32 @@ public sealed class SingleMuxService
                     cancellationToken, TimeSpan.FromMinutes(10)).ConfigureAwait(false);
                 if (!File.Exists(referenceAss) || new FileInfo(referenceAss).Length == 0)
                     throw new InvalidDataException($"新增字幕 {i + 1} 未产出有效 ASS 校验参考字幕。");
-                if (NormalizeAss(AssGlyphValidator.ReadAss(referenceAss)) !=
-                    NormalizeAss(AssGlyphValidator.ReadAss(Path.Combine(extracted, $"subtitle-{i}.ass"))))
-                    throw new InvalidDataException($"新增字幕 {i + 1} 提取后内容与修正 ASS 不符。");
+                if (NormalizeAss(SubtitleText.Read(referenceAss)) !=
+                    NormalizeAss(SubtitleText.Read(Path.Combine(extracted, $"subtitle-{i}" + Path.GetExtension(corrected[i])))))
+                    throw new InvalidDataException($"新增字幕 {i + 1} 提取后内容与同工具字幕参考不符。");
             }
             var attachmentArgs = new List<string> { temporaryMkv, "attachments" };
             for (var i = 0; i < fonts.Count; i++)
                 attachmentArgs.Add($"{outputProbe.Attachments[i].Id}:{Path.Combine(extracted, attachmentNames[i])}");
-            await RunToolAsync(mkvextract, attachmentArgs, work, log, cancellationToken, TimeSpan.FromMinutes(10)).ConfigureAwait(false);
+            if (fonts.Count > 0) await RunToolAsync(mkvextract, attachmentArgs, work, log, cancellationToken, TimeSpan.FromMinutes(10)).ConfigureAwait(false);
             for (var i = 0; i < fonts.Count; i++)
                 if (!HashFile(fonts[i]).SequenceEqual(HashFile(Path.Combine(extracted, attachmentNames[i]))))
                     throw new InvalidDataException($"字体附件 {i + 1} 提取后校验不一致。");
             checks.Add($"源字幕和附件已移除；{fonts.Count} 个子集字体附件提取与 SHA-256 校验通过");
-            checks.Add("MKV 可探测，新增 ASS 提取后与同工具往返的修正字幕全文一致");
+            checks.Add("MKV 可探测，新增字幕提取后与同工具往返参考全文一致");
+            for (var i = 0; i < snapshot.Audios.Count; i++)
+            {
+                var reference = Path.Combine(work, $"audio-reference-{i}.mka");
+                await RunToolAsync(mkvmerge, ["-o", reference, .. AudioArguments(snapshot.Audios[i])], work, log, cancellationToken, TimeSpan.FromMinutes(20)).ConfigureAwait(false);
+                var referenceProbe = await ProbeLogged(reference).ConfigureAwait(false);
+                var referenceTrack = referenceProbe.Tracks.Single(t => t.Type == "audio");
+                var actual = outputProbe.Tracks.Where(t => t.Type == "audio").Skip(source.Tracks.Count(t => t.Type == "audio")).ElementAt(i);
+                var beforeRaw = Path.Combine(extracted, $"audio-reference-{i}.raw"); var afterRaw = Path.Combine(extracted, $"audio-output-{i}.raw");
+                await RunToolAsync(mkvextract, [reference, "tracks", "--fullraw", $"{referenceTrack.Id}:{beforeRaw}"], work, log, cancellationToken, TimeSpan.FromMinutes(20)).ConfigureAwait(false);
+                await RunToolAsync(mkvextract, [temporaryMkv, "tracks", "--fullraw", $"{actual.Id}:{afterRaw}"], work, log, cancellationToken, TimeSpan.FromMinutes(20)).ConfigureAwait(false);
+                if (!HashFile(beforeRaw).SequenceEqual(HashFile(afterRaw))) throw new InvalidDataException($"外加音频 {i + 1} 数据与参考不符。");
+                checks.Add($"外加音频 {i + 1} 原始数据及 CodecPrivate SHA-256 一致");
+            }
 
             Stage(MuxStage.Installing, "在输出目录准备成品并拒绝覆盖地提交");
             Directory.CreateDirectory(snapshot.OutputDirectory);
@@ -258,12 +289,12 @@ public sealed class SingleMuxService
     private MuxRequest Validate(MuxRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        if (request.Subtitles is null || request.Subtitles.Count is < 1 or > 2)
-            throw new ArgumentException("单个封装需要一份或两份 UTF-8 ASS。");
+        if (request.Subtitles is null || request.Audios is null || request.Subtitles.Count + request.Audios.Count == 0)
+            throw new ArgumentException("至少需要一条启用的外加字幕或音频。");
         var video = Path.GetFullPath(request.VideoPath);
         if (!File.Exists(video)) throw new FileNotFoundException("视频不存在", video);
-        var fonts = Path.GetFullPath(request.FontsDirectory);
-        if (!Directory.Exists(fonts)) throw new DirectoryNotFoundException("字体目录不存在：" + fonts);
+        var fonts = string.IsNullOrWhiteSpace(request.FontsDirectory) ? "" : Path.GetFullPath(request.FontsDirectory);
+        if (request.Subtitles.Any(s => MediaFileTypes.IsAss(s.Path)) && !Directory.Exists(fonts)) throw new DirectoryNotFoundException("字体目录不存在：" + fonts);
         var output = Path.GetFullPath(request.OutputDirectory);
         if (SamePath(output.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), Path.GetDirectoryName(video)!))
             throw new ArgumentException("请使用与源视频不同的独立输出目录。");
@@ -276,15 +307,23 @@ public sealed class SingleMuxService
         {
             if (subtitle is null) throw new ArgumentException("字幕参数不能为空。");
             var path = Path.GetFullPath(subtitle.Path);
-            if (!File.Exists(path) || !path.EndsWith(".ass", StringComparison.OrdinalIgnoreCase))
-                throw new ArgumentException("字幕必须是存在的 ASS 文件：" + path);
-            AssGlyphValidator.ReadUsage(AssGlyphValidator.ReadAss(path));
-            if (string.IsNullOrWhiteSpace(subtitle.Language) || !Regex.IsMatch(subtitle.Language, "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$"))
+            if (!File.Exists(path) || !MediaFileTypes.IsSubtitle(path))
+                throw new ArgumentException("字幕必须是存在的 ASS/SRT 文件：" + path);
+            SubtitleText.Validate(path);
+            if (!ValidLanguage(subtitle.Language))
                 throw new ArgumentException("字幕语言必须使用有效的语言代码或 BCP 47 标签。");
             if (subtitle.Name is null || subtitle.Name.Contains('\0')) throw new ArgumentException("字幕轨名称无效。");
             return subtitle with { Path = path };
         }).ToArray();
-        return new MuxRequest(video, subtitles, fonts, output, name);
+        var audios = request.Audios.Select(audio =>
+        {
+            if (audio is null) throw new ArgumentException("音频参数不能为空。");
+            var path = Path.GetFullPath(audio.Path);
+            if (!File.Exists(path) || !(MediaFileTypes.IsAudio(path) || MediaFileTypes.IsVideo(path)) || audio.TrackId < 0) throw new ArgumentException("音频路径或 Track ID 无效。");
+            if (!ValidLanguage(audio.Language) || audio.Name is null || audio.Name.Contains('\0')) throw new ArgumentException("音频名称或语言无效。");
+            return audio with { Path = path };
+        }).ToArray();
+        return new MuxRequest(video, subtitles, fonts, output, name) { Audios = audios };
     }
 
     private string RequireTool(string name) => new ToolLocator(workspace).Inspect().First(x => x.Name == name).Path
@@ -391,13 +430,13 @@ public sealed class SingleMuxService
         return new MediaProbe(Path.GetFullPath(path), tracks.ToArray(), attachments.ToArray(), duration);
     }
 
-    private static void CheckTracks(MediaProbe source, MediaProbe output, MuxRequest request, List<string> checks)
+    private static void CheckTracks(MediaProbe source, MediaProbe output, MuxRequest request, List<string> checks, IReadOnlyList<MediaProbe> audioSources)
     {
         foreach (var type in new[] { "video", "audio" })
         {
             var before = source.Tracks.Where(x => x.Type == type).ToArray();
             var after = output.Tracks.Where(x => x.Type == type).ToArray();
-            if (before.Length != after.Length) throw new InvalidDataException($"{type} 轨数量与源文件不同。");
+            if (before.Length + (type == "audio" ? request.Audios.Count : 0) != after.Length) throw new InvalidDataException($"{type} 轨数量与请求不同。");
             for (var i = 0; i < before.Length; i++)
                 // MP4 等容器不提供 Matroska codec_id/旗标；已知源字段严格比较，允许输出补齐缺失字段。
                 if (before[i].Codec != after[i].Codec || (before[i].CodecId is not null && before[i].CodecId != after[i].CodecId) ||
@@ -411,8 +450,13 @@ public sealed class SingleMuxService
                     throw new InvalidDataException($"{type} 轨 {i + 1} 的编码、媒体属性或轨道元数据与源文件不同。");
             checks.Add($"保留 {before.Length} 条 {type} 轨：编码、尺寸/声道/采样率和轨道元数据一致");
         }
-        if (source.DurationNanoseconds is { } sourceDuration && output.DurationNanoseconds is { } outputDuration &&
-            Math.Abs((double)sourceDuration - outputDuration) > Math.Max(1_000_000_000, sourceDuration * 0.01))
+        // 只有所有 A/V 输入声明时长时才能预测总时长；不能拿字幕尾时间或未知 MP4 时长代替源证据。
+        long? expectedDuration = source.DurationNanoseconds;
+        if (audioSources.Count > 0)
+            expectedDuration = source.DurationNanoseconds is not null && audioSources.All(p => p.DurationNanoseconds is not null)
+                ? new[] { source.DurationNanoseconds.Value }.Concat(audioSources.Select(p => p.DurationNanoseconds!.Value)).Max() : null;
+        if (expectedDuration is { } duration && output.DurationNanoseconds is { } outputDuration &&
+            Math.Abs((double)duration - outputDuration) > Math.Max(1_000_000_000, duration * 0.01))
             throw new InvalidDataException("成品时长与源文件不符。");
         var subtitles = output.Tracks.Where(x => x.Type == "subtitles").ToArray();
         if (subtitles.Length != request.Subtitles.Count) throw new InvalidDataException("新增字幕轨数量不符。");
@@ -420,11 +464,12 @@ public sealed class SingleMuxService
         {
             var actual = subtitles[i];
             var expected = request.Subtitles[i];
-            if (actual.CodecId != "S_TEXT/ASS" || actual.Name != expected.Name ||
+            if (actual.CodecId != (MediaFileTypes.IsAss(expected.Path) ? "S_TEXT/ASS" : "S_TEXT/UTF8") || actual.Name != expected.Name ||
                 !LanguageMatches(actual, expected.Language) || actual.IsDefault != expected.IsDefault || actual.IsForced != expected.IsForced)
                 throw new InvalidDataException($"新增字幕轨 {i + 1} 的 ASS 类型、名称、语言、default 或 forced 旗标不符。");
             checks.Add($"新增字幕 {i + 1}（轨 ID {actual.Id}）：{actual.Name} / {actual.LanguageIetf ?? actual.Language} / default={actual.IsDefault} / forced={actual.IsForced}");
         }
+        CheckExternalAudio(source, output, request, audioSources, checks);
     }
 
     private static bool LanguageMatches(MediaTrack track, string language)

@@ -14,11 +14,7 @@ namespace MuxDeck.Desktop.Views;
 
 public partial class SingleMuxView : UserControl
 {
-    // 单任务视图拥有完整客户区；标题由窗口传入，避免为全高属性栏跨视图重挂控件。
-    public static readonly StyledProperty<string> PageTitleProperty = AvaloniaProperty.Register<SingleMuxView, string>(nameof(PageTitle), "单个封装");
-    public static readonly StyledProperty<string> PageDescriptionProperty = AvaloniaProperty.Register<SingleMuxView, string>(nameof(PageDescription), "一个视频 · 字幕与字体 · MKV 成品");
-    public string PageTitle { get => GetValue(PageTitleProperty); set => SetValue(PageTitleProperty, value); }
-    public string PageDescription { get => GetValue(PageDescriptionProperty); set => SetValue(PageDescriptionProperty, value); }
+    // 单任务视图拥有完整客户区；浮层、拖入与焦点仍在页面宿主统一协调。
     public static readonly StyledProperty<bool> ShowDeveloperLogProperty = AvaloniaProperty.Register<SingleMuxView, bool>(nameof(ShowDeveloperLog), DefaultDeveloperMode);
     private static bool DefaultDeveloperMode => Environment.GetEnvironmentVariable("MUX_DECK_DEV_LOG") == "1" ||
 #if DEBUG
@@ -35,21 +31,25 @@ public partial class SingleMuxView : UserControl
     private SingleMuxViewModel? observedModel;
     private TopLevel? keyboardRoot;
     private SingleMuxViewModel? Model => DataContext as SingleMuxViewModel;
+    public static readonly StyledProperty<TrackColumnLayout> ColumnLayoutProperty = AvaloniaProperty.Register<SingleMuxView, TrackColumnLayout>(nameof(ColumnLayout));
+    public TrackColumnLayout ColumnLayout { get => GetValue(ColumnLayoutProperty); set => SetValue(ColumnLayoutProperty, value); }
     public SingleMuxView()
     {
+        ColumnLayout = new();
         InitializeComponent();
-        RegisterDrop(VideoDropZone, InputOperation.Video, VideoDropHint);
-        RegisterDrop(AssDropZone, InputOperation.Subtitles, AssDropHint);
-        RegisterDrop(FontsDropZone, InputOperation.FontsDirectory, FontsDropHint);
+        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) ClearDropFeedback(); };
         DataContextChanged += (_, _) => ObserveModel();
-        LayoutUpdated += (_, _) => UpdateResultScrollSpace();
+        LayoutUpdated += (_, _) => { UpdateColumnViewport(); UpdateResultScrollSpace(); };
+        TrackListScroll.ScrollChanged += (_, _) => SyncHorizontalScroll(TrackListScroll, TrackHeaderScroll);
+        TrackHeaderScroll.ScrollChanged += (_, _) => SyncHorizontalScroll(TrackHeaderScroll, TrackListScroll);
         DetachedFromVisualTree += (_, _) =>
         {
             if (observedModel is not null) observedModel.PropertyChanged -= ModelChanged;
             observedModel = null;
             keyboardRoot?.RemoveHandler(KeyDownEvent, HandleOverlayTab);
+            if (keyboardRoot is not null) DetachWindowDrop(keyboardRoot);
             keyboardRoot = null;
-            ClearDropHighlights();
+            ClearDropFeedback();
         };
         AttachedToVisualTree += (_, _) =>
         {
@@ -57,18 +57,39 @@ public partial class SingleMuxView : UserControl
             keyboardRoot = TopLevel.GetTopLevel(this);
             // 侧栏不在本视图内，窗口级接线才能保持非模态面板的双向导航。
             keyboardRoot?.AddHandler(KeyDownEvent, HandleOverlayTab, RoutingStrategies.Tunnel);
+            if (keyboardRoot is not null) AttachWindowDrop(keyboardRoot);
         };
     }
     private void ObserveModel()
     {
         if (ReferenceEquals(observedModel, Model)) return;
+        observedModel?.DropFeedback.Clear();
         if (observedModel is not null) observedModel.PropertyChanged -= ModelChanged;
         observedModel = Model;
+        if (observedModel is not null) ColumnLayout = observedModel.TrackColumns;
         if (observedModel is not null) observedModel.PropertyChanged += ModelChanged;
+    }
+    private void UpdateColumnViewport()
+    {
+        if (TrackListScroll.Viewport.Width <= 0) return;
+        ColumnLayout.SetAvailableWidth(TrackListScroll.Viewport.Width);
+        if (!double.IsFinite(TrackHeaderScroll.Width) || Math.Abs(TrackHeaderScroll.Width - TrackListScroll.Viewport.Width) > 0.5)
+            TrackHeaderScroll.Width = TrackListScroll.Viewport.Width;
+    }
+    private static void SyncHorizontalScroll(ScrollViewer from, ScrollViewer to)
+    {
+        if (Math.Abs(from.Offset.X - to.Offset.X) > 0.5) to.Offset = new Vector(from.Offset.X, to.Offset.Y);
+    }
+    private async void ColumnsResized(object? sender, EventArgs e) => await PersistColumnsAsync();
+    private async void ResetColumns(object? sender, RoutedEventArgs e) { ColumnLayout.Reset(); await PersistColumnsAsync(); }
+    private async Task PersistColumnsAsync()
+    {
+        try { await ColumnLayout.PersistAsync(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Model?.ReportInteractionMessage("列宽保存失败；本次调整仍有效：" + ex.Message, NotificationKind.Warning); }
     }
     private void ModelChanged(object? sender, PropertyChangedEventArgs args)
     {
-        if (args.PropertyName == nameof(SingleMuxViewModel.CanEdit) && Model?.CanEdit != true) ClearDropHighlights();
+        if (args.PropertyName == nameof(SingleMuxViewModel.CanEdit) && Model?.CanEdit != true) ClearDropFeedback();
         if (args.PropertyName is nameof(SingleMuxViewModel.IsTrackInspectorOpen) or nameof(SingleMuxViewModel.IsResultInspectorOpen)) UpdateOverlayBlocking();
     }
     // 被 Overlay 完全遮住的区域退出命中测试，避免点击/拖入穿透到不可见控件；清单保持可用以便切换可见轨道。
@@ -87,51 +108,15 @@ public partial class SingleMuxView : UserControl
             ? Math.Max(0, TrackListScroll.Viewport.Height - Math.Max(0, panelPoint.Y)) : 0;
         if (Math.Abs(ResultScrollSpace.Height - height) > 0.5) ResultScrollSpace.Height = height;
     }
-    // 拖入预判只在悬停/离开时切换高亮和一条临时提示；提示平时隐藏，不改变主布局预算。
-    private void RegisterDrop(Border zone, InputOperation operation, TextBlock hint)
-    {
-        void Over(object? sender, DragEventArgs args)
-        {
-            try
-            {
-                var candidates = ReadTransfer(args.DataTransfer);
-                var error = Preflight(operation, candidates);
-                var accepts = Model?.CanEdit == true && !acceptingInput && error is null && (args.DragEffects & DragDropEffects.Copy) != 0;
-                args.DragEffects = accepts ? DragDropEffects.Copy : DragDropEffects.None;
-                zone.Classes.Set("accepting", accepts);
-                SetHint(hint, accepts ? operation switch { InputOperation.Video => "释放后接纳视频；已有视频将确认替换。", InputOperation.Subtitles => "释放后分配 SC / TC，并确认已有槽位替换。", _ => "释放后设置字体目录，封装时检查。" } : error ?? "当前不能接纳输入，等待任务或输入操作结束。");
-                args.Handled = true;
-            }
-            catch (Exception ex) { zone.Classes.Remove("accepting"); args.DragEffects = DragDropEffects.None; SetHint(hint, "无法读取拖入数据：" + ex.Message); args.Handled = true; }
-        }
-        DragDrop.AddDragEnterHandler(zone, Over); DragDrop.AddDragOverHandler(zone, Over);
-        DragDrop.AddDragLeaveHandler(zone, (_, args) => { zone.Classes.Remove("accepting"); SetHint(hint, null); args.Handled = true; });
-        DragDrop.AddDropHandler(zone, (_, args) =>
-        {
-            args.Handled = true; args.DragEffects = DragDropEffects.None;
-            try
-            {
-                var candidates = ReadTransfer(args.DataTransfer);
-                zone.Classes.Remove("accepting"); SetHint(hint, null);
-                BeginInput(operation, () => Task.FromResult(candidates));
-            }
-            catch (Exception ex) { Model?.ReportInteractionMessage("拖入失败：" + ex.Message); ClearDropHighlights(); }
-        });
-    }
-    private static void SetHint(TextBlock hint, string? text)
-    {
-        hint.Text = text ?? "";
-        hint.IsVisible = !string.IsNullOrEmpty(text);
-    }
     public static IReadOnlyList<InputCandidate> ReadStorageItems(IEnumerable<IStorageItem> items) => items.Select(item =>
         item.TryGetLocalPath() is { } path && item is IStorageFile or IStorageFolder
             ? new InputCandidate(path, item is IStorageFolder ? InputCandidateKind.LocalDirectory : InputCandidateKind.LocalFile)
             : new InputCandidate(item.Path.ToString(), InputCandidateKind.NonLocal)).ToArray();
     public static IReadOnlyList<InputCandidate> ReadTransfer(IDataTransfer transfer)
     {
-        // 文件格式的数据才具备本地候选资格；纯文本/URL 不提升为文件路径。
-        if (transfer.Items.Count == 0) return [new("", InputCandidateKind.NonLocal)];
-        return transfer.Items.SelectMany(item => item.TryGetFile() is { } file ? ReadStorageItems([file]) : [new InputCandidate(item.TryGetText() ?? "", InputCandidateKind.NonLocal)]).ToArray();
+        // Windows 可同时提供文件与文本表示。只读取文件集合，不把伴随格式误判成混入的 URL。
+        var files = transfer.TryGetFiles()?.ToArray() ?? [];
+        return files.Length > 0 ? ReadStorageItems(files) : [new(transfer.TryGetText() ?? "", InputCandidateKind.NonLocal)];
     }
     private static string? Preflight(InputOperation operation, IReadOnlyList<InputCandidate> candidates)
     {
@@ -148,11 +133,6 @@ public partial class SingleMuxView : UserControl
         if (operation == InputOperation.Subtitles && candidates.Select(c => Path.GetFullPath(c.Path)).Distinct(StringComparer.OrdinalIgnoreCase).Count() != candidates.Count) return "同一 ASS 不能重复分配。";
         return null;
     }
-    private void ClearDropHighlights()
-    {
-        foreach (var zone in new[] { VideoDropZone, AssDropZone, FontsDropZone }) zone.Classes.Remove("accepting");
-        SetHint(VideoDropHint, null); SetHint(AssDropHint, null); SetHint(FontsDropHint, null);
-    }
     private void PickVideo(object? sender, RoutedEventArgs args) => Pick(InputOperation.Video);
     private async void ReprobeVideo(object? sender, RoutedEventArgs args)
     {
@@ -160,7 +140,8 @@ public partial class SingleMuxView : UserControl
         try { await model.ProbeVideoAsync(); }
         catch (Exception ex) { model.ReportInteractionMessage("重新探测失败：" + ex.Message); }
     }
-    private void PickAss(object? sender, RoutedEventArgs args) => Pick(InputOperation.Subtitles);
+    private void PickAss(object? sender, RoutedEventArgs args) => PickMedia(InputOperation.Subtitles);
+    private void PickAudio(object? sender, RoutedEventArgs args) => PickMedia(InputOperation.Audio);
     private void PickFonts(object? sender, RoutedEventArgs args) => Pick(InputOperation.FontsDirectory);
     private void PickOutput(object? sender, RoutedEventArgs args) => Pick(InputOperation.OutputDirectory);
     private void Pick(InputOperation operation, SubtitleSlot? fixedSlot = null) => BeginInput(operation, async () =>
@@ -168,7 +149,7 @@ public partial class SingleMuxView : UserControl
     private void BeginInput(InputOperation operation, Func<Task<IReadOnlyList<InputCandidate>>> gather, SubtitleSlot? fixedSlot = null)
     {
         if (Model is not { } model) return;
-        if (acceptingInput || !model.CanEdit) { model.ReportInteractionMessage("正在处理输入或任务，当前不能接纳新的输入。"); ClearDropHighlights(); return; }
+        if (acceptingInput || !model.CanEdit) { model.ReportInteractionMessage("正在处理输入或任务，当前不能接纳新的输入。"); ClearDropFeedback(); return; }
         acceptingInput = true;
         InputTask = ProcessInputAsync(model, operation, model.DraftRevision, gather, fixedSlot);
     }
@@ -211,7 +192,7 @@ public partial class SingleMuxView : UserControl
             model.CommitInput(prepared.Plan!, confirmed);
         }
         catch (Exception ex) { model.ReportInteractionMessage("输入操作失败：" + ex.Message); }
-        finally { acceptingInput = false; ClearDropHighlights(); }
+        finally { acceptingInput = false; ClearDropFeedback(); }
     }
     private void ShowTrack(object? sender, RoutedEventArgs args)
     {
@@ -338,12 +319,16 @@ public partial class SingleMuxView : UserControl
     }
     private void ReplaceExternal(object? sender, RoutedEventArgs args)
     {
-        if (Model?.SelectedTrack is { IsEditable: true } row) Pick(InputOperation.Subtitles, row.Id == "SC" ? SubtitleSlot.Sc : SubtitleSlot.Tc);
+        if (Model?.SelectedTrack is { IsEditable: true } row)
+        {
+            if (row.Id is "SC" or "TC") Pick(InputOperation.Subtitles, row.Id == "SC" ? SubtitleSlot.Sc : SubtitleSlot.Tc);
+            else PickMedia(row.IsAudio ? InputOperation.Audio : InputOperation.Subtitles, row);
+        }
     }
     private void RemoveExternal(object? sender, RoutedEventArgs args)
     {
         if (Model?.SelectedTrack is not { IsEditable: true } row) return;
-        Model.RemoveSubtitle(row.Id == "SC" ? SubtitleSlot.Sc : SubtitleSlot.Tc);
+        Model.RemoveExternalTrack(row);
     }
     private async void OpenAttachments(object? sender, RoutedEventArgs args)
     {
@@ -368,21 +353,31 @@ public partial class SingleMuxView : UserControl
     private async void CopyDiagnostics(object? sender, RoutedEventArgs args)
     {
         if (Model?.Result is { } result) await CopyTextAsync(Model.ResultLabel + "\n" + JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
-        else Model?.ReportInteractionMessage("尚无任务结果可复制。");
+        else Model?.ReportInteractionMessage("尚无任务结果可复制。", NotificationKind.Information);
     }
     private async Task CopyTextAsync(string? text)
     {
         if (Model is not { } model) return;
-        try { if (string.IsNullOrWhiteSpace(text)) { model.ReportInteractionMessage("当前没有可复制的路径或诊断。"); return; } await Interactions.CopyAsync(TopLevel.GetTopLevel(this) ?? throw new InvalidOperationException("窗口不可用。"), text); model.ReportInteractionMessage("已复制。"); }
+        try { if (string.IsNullOrWhiteSpace(text)) { model.ReportInteractionMessage("当前没有可复制的路径或诊断。", NotificationKind.Information); return; } await Interactions.CopyAsync(TopLevel.GetTopLevel(this) ?? throw new InvalidOperationException("窗口不可用。"), text); model.ReportInteractionMessage("已复制。", NotificationKind.Success); }
         catch (Exception ex) { model.ReportInteractionMessage("复制失败：" + ex.Message); }
     }
     private void OpenOutput(object? sender, RoutedEventArgs args) => OpenPath(Model?.OutputPath, "已打开文件位置。");
     private void OpenOutputDirectory(object? sender, RoutedEventArgs args) => OpenPath(Model?.OutputDirectory, "已打开输出目录。");
     private void OpenFonts(object? sender, RoutedEventArgs args) => OpenPath(Model?.FontsDirectory, "已打开字体目录。");
+    private void ClearFonts(object? sender, RoutedEventArgs args)
+    {
+        if (Model is not { CanEdit: true } model) return;
+        model.FontsDirectory = ""; model.ReportInteractionMessage("已清空字体目录。", NotificationKind.Information);
+    }
+    private void ClearOutput(object? sender, RoutedEventArgs args)
+    {
+        if (Model is not { CanEdit: true } model) return;
+        model.OutputDirectory = ""; model.ReportInteractionMessage("已清空输出目录。", NotificationKind.Information);
+    }
     private void OpenLog(object? sender, RoutedEventArgs args) => OpenPath(Model?.LogPath, "已打开文件位置。");
     private void OpenPath(string? path, string successMessage)
     {
-        try { if (string.IsNullOrWhiteSpace(path) || !File.Exists(path) && !Directory.Exists(path)) throw new FileNotFoundException("目标不存在或已经移除。"); Interactions.OpenLocation(path); Model?.ReportInteractionMessage(successMessage); }
+        try { if (string.IsNullOrWhiteSpace(path) || !File.Exists(path) && !Directory.Exists(path)) throw new FileNotFoundException("目标不存在或已经移除。"); Interactions.OpenLocation(path); Model?.ReportInteractionMessage(successMessage, NotificationKind.Success); }
         catch (Exception ex) { Model?.ReportInteractionMessage("打开失败：" + ex.Message); }
     }
     protected override void OnKeyDown(KeyEventArgs e)

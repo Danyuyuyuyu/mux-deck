@@ -3,10 +3,11 @@ using System.ComponentModel;
 using System.Globalization;
 using Avalonia.Threading;
 using MuxDeck.Core.Muxing;
+using MuxDeck.Desktop.Preferences;
 
 namespace MuxDeck.Desktop.ViewModels;
 
-public sealed class SingleMuxViewModel : ObservableObject
+public sealed partial class SingleMuxViewModel : ObservableObject
 {
     private readonly SingleMuxService service;
     private readonly Queue<string> logLines = new();
@@ -23,6 +24,7 @@ public sealed class SingleMuxViewModel : ObservableObject
     private TrackRowViewModel? selectedTrack;
     private MuxResult? result;
     private readonly ObservableCollection<TrackRowViewModel> sourceTracks = [], externalTracks = [];
+    private readonly List<TrackRowViewModel> externalOrder = [];
     private long draftRevision, submittedRevision, resultRevision;
     private int configurationDepth;
     private bool configurationChanged, isCancelling;
@@ -36,9 +38,13 @@ public sealed class SingleMuxViewModel : ObservableObject
     private readonly List<Task> outputProbeTasks = [];
     private Task outputProbeTask = Task.CompletedTask;
 
-    public SingleMuxViewModel(SingleMuxService service)
+    public TrackColumnLayout TrackColumns { get; }
+    public InteractionNotification Notification { get; } = new();
+    public MediaDropFeedback DropFeedback { get; } = new();
+    public SingleMuxViewModel(SingleMuxService service, UserPreferencesStore? preferences = null)
     {
         this.service = service;
+        TrackColumns = new(preferences);
         StartCommand = new(StartAsync, () => CanStart, ReportCommandError);
         CancelCommand = new(CancelAsync, () => CanCancel, ReportCommandError);
         SourceTracks = new(sourceTracks);
@@ -56,7 +62,7 @@ public sealed class SingleMuxViewModel : ObservableObject
     public string VideoPath { get => videoPath; set { if (!CanEdit || !Set(ref videoPath, value)) return; sourceProbe = null; SelectedTrack = null; RebuildTracks(false); Raise(nameof(ResolvedOutputFileName)); NotifyVideoSummary(); MarkDraftChanged(); UpdateInputs(); _ = ProbeVideoAsync(); } }
     public string ScSubtitle { get => scSubtitle; set => SetSubtitlePath(SubtitleSlot.Sc, value); }
     public string TcSubtitle { get => tcSubtitle; set => SetSubtitlePath(SubtitleSlot.Tc, value); }
-    // 目录值变化必须同步派生可用性，否则“打开”与次级复制菜单会一直保持旧状态。
+    // 目录值变化同步菜单可用性和提交条件。
     public string FontsDirectory { get => fontsDirectory; set { if (CanEdit && Set(ref fontsDirectory, value)) { Raise(nameof(HasFontsDirectory)); MarkDraftChanged(); UpdateInputs(); } } }
     public string OutputDirectory { get => outputDirectory; set { if (CanEdit && Set(ref outputDirectory, value)) { Raise(nameof(HasOutputDirectory)); MarkDraftChanged(); UpdateInputs(); } } }
     public string OutputFileName { get => outputFileName; set { if (!CanEdit || !Set(ref outputFileName, value)) return; Raise(nameof(ResolvedOutputFileName)); MarkDraftChanged(); UpdateInputs(); } }
@@ -64,8 +70,11 @@ public sealed class SingleMuxViewModel : ObservableObject
     public bool IsRunning { get => isRunning; private set { if (!Set(ref isRunning, value)) return; NotifyEditability(); CancelCommand.NotifyCanExecuteChanged(); } }
     public bool IsProbing { get => isProbing; private set => Set(ref isProbing, value); }
     public bool CanEdit => !IsRunning && !isClosing;
-    public bool CanStart => CanEdit && !string.IsNullOrWhiteSpace(VideoPath) && ((!string.IsNullOrWhiteSpace(ScSubtitle) && ScTrack.IsIncluded) || (!string.IsNullOrWhiteSpace(TcSubtitle) && TcTrack.IsIncluded)) && !string.IsNullOrWhiteSpace(FontsDirectory) && !string.IsNullOrWhiteSpace(OutputDirectory);
-    public string InputHint => IsRunning ? "本次参数已锁定。可切换页面；取消后等待工具退出与清理。" : CanStart ? "输入已齐全。开始时检查文件、工具与字体，目标存在时拒绝覆盖。" : "请选择一个视频、至少一份 UTF-8 ASS、字体目录和独立输出目录。";
+    public bool RequiresFonts => externalOrder.Any(t => t.IsIncluded && t.IsSubtitle && MediaFileTypes.IsAss(t.InputPath));
+    public bool HasEnabledExternal => externalOrder.Any(t => t.IsIncluded);
+    public string FontCheckHint => RequiresFonts ? "开始封装时检查字体" : "仅 ASS 字幕需要字体目录";
+    public bool CanStart => CanEdit && !string.IsNullOrWhiteSpace(VideoPath) && HasEnabledExternal && (!RequiresFonts || !string.IsNullOrWhiteSpace(FontsDirectory)) && !string.IsNullOrWhiteSpace(OutputDirectory);
+    public string InputHint => IsRunning ? "本次参数已锁定。可切换页面；取消后等待工具退出与清理。" : CanStart ? "输入已齐全。开始时检查文件、工具与字体，目标存在时拒绝覆盖。" : "请选择视频、启用字幕或音频及输出目录；ASS 另需字体目录。";
     public string Log { get => log; private set => Set(ref log, value); }
     public string StatusText { get => statusText; private set => Set(ref statusText, value); }
     public string StageText { get => stageText; private set { if (Set(ref stageText, value)) Raise(nameof(StateSummary)); } }
@@ -139,19 +148,36 @@ public sealed class SingleMuxViewModel : ObservableObject
     public bool HasInteractionMessage => !string.IsNullOrWhiteSpace(interactionMessage);
     public bool HasExternalTracks => externalTracks.Count > 0;
     public bool HasSourceAttachments => SourceAttachmentCount > 0;
-    public string SourceGroupTitle => $"源内容 {SourceTrackCount} 条 · 当前策略只读";
+    public string SourceGroupTitle => $"源视频 · {SourceTrackCount} 条";
+    public string ExternalGroupTitle => $"外加内容 · {externalTracks.Count} 条";
     public string SourceAttachmentSummary => $"源附件（{SourceAttachmentCount}）";
     public bool HasFontsDirectory => !string.IsNullOrWhiteSpace(FontsDirectory);
     public bool HasOutputDirectory => !string.IsNullOrWhiteSpace(OutputDirectory);
     public string VideoSummaryLine => !HasVideo
-        ? "拖入 MKV / MP4 视频，或使用右侧按钮选择；封装时检查工具与字体。"
+        ? "拖入视频、音频、ASS / SRT 或字体目录，自动识别并落位。"
         : ProbeState switch { VideoProbeState.Probing => "正在读取源视频轨道…", VideoProbeState.Failed => ProbeText, _ => DisplayMediaSummary };
     public string StatusDescription => IsRunning ? "本次参数已锁定；取消后等待工具退出与清理。"
         : State == SingleMuxState.ProbeFailed ? ProbeText
         : State is SingleMuxState.Succeeded or SingleMuxState.SucceededWithWarnings ? "成品、校验与提示可在结果详情查看。"
         : State == SingleMuxState.Failed ? "失败原因、原始错误与日志在结果详情。"
         : State == SingleMuxState.Cancelled ? "已取消，未发布成品；输入保持可编辑。"
-        : "视频、启用字幕与目录将在开始时检查。";
+        : State == SingleMuxState.Ready ? "基本输入已齐全；开始时检查文件、字体与输出目标。"
+        : MissingInputDescription;
+    private IReadOnlyList<string> MissingInputs => new[]
+    {
+        string.IsNullOrWhiteSpace(VideoPath) ? "缺少源视频" : null,
+        !HasEnabledExternal ? "缺少启用的字幕或音频" : null,
+        RequiresFonts && string.IsNullOrWhiteSpace(FontsDirectory) ? "缺少字体目录" : null,
+        string.IsNullOrWhiteSpace(OutputDirectory) ? "缺少输出目录" : null
+    }.OfType<string>().ToArray();
+    public string MissingInputDescription => string.Join(" · ", MissingInputs);
+    public string ActionBarSummary => State == SingleMuxState.Incomplete ? $"还有 {MissingInputs.Count} 项需要处理" : State == SingleMuxState.Ready ? "已准备好" : StateSummary;
+    public string ActionBarIcon => State switch
+    {
+        SingleMuxState.Ready or SingleMuxState.Succeeded => "✓",
+        SingleMuxState.Incomplete or SingleMuxState.ProbeFailed or SingleMuxState.Failed or SingleMuxState.SucceededWithWarnings => "!",
+        _ => ""
+    };
     // 两个 Overlay 暂互斥：打开一个关闭另一个，主布局与固定状态区不重排。
     public void OpenTrackInspector() { IsResultInspectorOpen = false; IsTrackInspectorOpen = true; }
     public void CloseInspectors() { IsTrackInspectorOpen = false; IsResultInspectorOpen = false; }
@@ -167,7 +193,7 @@ public sealed class SingleMuxViewModel : ObservableObject
     public string StateSummary => State switch
     {
         SingleMuxState.NoVideo => "请选择源视频", SingleMuxState.Probing => "正在探测视频", SingleMuxState.ProbeFailed => "视频探测失败，详情见探测消息",
-        SingleMuxState.Ready => "输入已齐全，封装时检查", SingleMuxState.Incomplete => "输入不全，请补充启用的 ASS、字体和输出目录",
+        SingleMuxState.Ready => "输入已齐全，封装时检查", SingleMuxState.Incomplete => "输入不全，请补充启用轨道与输出设置",
         SingleMuxState.Running => StageText, SingleMuxState.Cancelling => "正在取消，等待工具退出与清理", SingleMuxState.Closing => "正在关闭，等待任务和探测结束",
         SingleMuxState.Cancelled => "已取消", SingleMuxState.Failed => "封装失败，请查看结果详情", SingleMuxState.SucceededWithWarnings => "封装成功，附提示", _ => "封装成功"
     };
@@ -223,17 +249,21 @@ public sealed class SingleMuxViewModel : ObservableObject
         ReportInteractionMessage("操作失败：" + ex.Message);
     }
 
-    public void ReportInteractionMessage(string message) => InteractionMessage = message;
+    public void ReportInteractionMessage(string message, NotificationKind kind = NotificationKind.Error)
+    {
+        InteractionMessage = message;
+        Notification.Show(message, kind);
+    }
     private void NotifyState()
     {
-        foreach (var name in new[] { nameof(State), nameof(StateSummary), nameof(IsResultHistorical), nameof(ResultLabel), nameof(ResultRevision), nameof(CanCancel), nameof(HasResult), nameof(HasSuccessfulResult), nameof(HasRawError), nameof(HasCurrentSuccess), nameof(ResultOutcome), nameof(OutputDisplayName), nameof(PrimaryActionText), nameof(HasWarnings), nameof(ResultHeadline), nameof(ResultHeaderNote), nameof(OutputDirectoryDisplay), nameof(StatusDescription) }) Raise(name);
+        foreach (var name in new[] { nameof(ActionBarSummary), nameof(ActionBarIcon), nameof(MissingInputDescription), nameof(State), nameof(StateSummary), nameof(IsResultHistorical), nameof(ResultLabel), nameof(ResultRevision), nameof(CanCancel), nameof(HasResult), nameof(HasSuccessfulResult), nameof(HasRawError), nameof(HasCurrentSuccess), nameof(ResultOutcome), nameof(OutputDisplayName), nameof(PrimaryActionText), nameof(HasWarnings), nameof(ResultHeadline), nameof(ResultHeaderNote), nameof(OutputDirectoryDisplay), nameof(StatusDescription) }) Raise(name);
         CancelCommand.NotifyCanExecuteChanged();
     }
-    private void UpdateInputs() { Raise(nameof(CanStart)); Raise(nameof(InputHint)); StartCommand.NotifyCanExecuteChanged(); NotifyState(); }
+    private void UpdateInputs() { Raise(nameof(RequiresFonts)); Raise(nameof(HasEnabledExternal)); Raise(nameof(FontCheckHint)); Raise(nameof(CanStart)); Raise(nameof(InputHint)); StartCommand.NotifyCanExecuteChanged(); NotifyState(); }
     private void NotifyEditability()
     {
         Raise(nameof(CanEdit)); Raise(nameof(CanEditSelectedTrack));
-        ScTrack.NotifyEditability(); TcTrack.NotifyEditability(); UpdateInputs();
+        foreach (var row in externalOrder.Concat(new[] { ScTrack, TcTrack }).Distinct()) row.NotifyEditability(); UpdateInputs();
     }
     private void NotifyVideoSummary()
     {
@@ -276,6 +306,7 @@ public sealed class SingleMuxViewModel : ObservableObject
             if (ReferenceEquals(SelectedTrack, SlotTrack(slot))) Raise(nameof(SelectedTrackFilePath));
             if (hadSubtitle != !string.IsNullOrWhiteSpace(value))
             {
+                if (hadSubtitle) externalOrder.Remove(SlotTrack(slot)); else externalOrder.Add(SlotTrack(slot));
                 SlotTrack(slot).IsIncluded = true;
                 ApplySubtitleDefaults();
             }
@@ -302,8 +333,8 @@ public sealed class SingleMuxViewModel : ObservableObject
     public InputAcceptanceResult PrepareSubtitleInputs(IReadOnlyList<SubtitleAssignment> assignments) => PrepareInput(InputOperation.Subtitles, [], assignments);
     public InputAcceptanceResult PrepareFontsDirectory(IReadOnlyList<InputCandidate> candidates) => PrepareInput(InputOperation.FontsDirectory, candidates, []);
     public InputAcceptanceResult PrepareOutputDirectory(IReadOnlyList<InputCandidate> candidates) => PrepareInput(InputOperation.OutputDirectory, candidates, []);
-    private InputAcceptanceResult Reject(InputAcceptanceError error, string message) { InteractionMessage = message; return new(error, message); }
-    private InputAcceptanceResult AcceptMessage(string message) { InteractionMessage = message; return new(InputAcceptanceError.None, message); }
+    private InputAcceptanceResult Reject(InputAcceptanceError error, string message) { ReportInteractionMessage(message); return new(error, message); }
+    private InputAcceptanceResult AcceptMessage(string message) { ReportInteractionMessage(message, NotificationKind.Success); return new(InputAcceptanceError.None, message); }
     private static bool SamePath(string left, string right)
     {
         if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) return left == right;
@@ -413,20 +444,24 @@ public sealed class SingleMuxViewModel : ObservableObject
         {
             foreach (var track in sourceProbe.Tracks)
             {
-                var row = new TrackRowViewModel { Id = track.Id.ToString(), Type = track.Type switch { "video" => "视频", "audio" => "音频", "subtitles" => "字幕", _ => track.Type }, Codec = track.Codec, Source = "源视频 · 内封", Language = track.LanguageIetf ?? track.Language, Name = track.Name, IsDefault = track.IsDefault, IsForced = track.IsForced, HasDefaultFlag = track.HasDefaultFlag, HasForcedFlag = track.HasForcedFlag, Policy = track.Type is "video" or "audio" ? "保留" : "移除", Detail = $"{track.PixelDimensions ?? ""} { (track.AudioChannels is { } channels ? channels + " 声道" : "") } {track.CodecId}".Trim() };
+                var row = new TrackRowViewModel { Id = track.Id.ToString(), Type = track.Type switch { "video" => "视频", "audio" => "音频", "subtitles" => "字幕", _ => track.Type }, Codec = track.Codec, Source = "源视频 · 内封", Language = track.LanguageIetf ?? track.Language, LegacyLanguage = track.Language, LanguageIetf = track.LanguageIetf, CodecId = track.CodecId, PixelDimensions = track.PixelDimensions, AudioChannels = track.AudioChannels, Name = track.Name, IsDefault = track.IsDefault, IsForced = track.IsForced, HasDefaultFlag = track.HasDefaultFlag, HasForcedFlag = track.HasForcedFlag, Policy = track.Type is "video" or "audio" ? "保留" : "移除", Detail = $"{track.PixelDimensions ?? ""} { (track.AudioChannels is { } channels ? channels + " 声道" : "") } {track.CodecId}".Trim() };
                 row.SetEditGuard(() => false);
                 sourceTracks.Add(row); Tracks.Add(row);
             }
             foreach (var attachment in sourceProbe.Attachments)
                 Tracks.Add(new TrackRowViewModel { Id = attachment.Id.ToString(), Type = "附件", Codec = attachment.ContentType, Source = "源视频 · 内封", Name = attachment.FileName, Policy = "移除", Detail = $"源附件 {attachment.Size:N0} 字节；成品只包含本次子集字体。" });
         }
-        if (!string.IsNullOrWhiteSpace(ScSubtitle)) { Tracks.Add(ScTrack); externalTracks.Add(ScTrack); }
-        if (!string.IsNullOrWhiteSpace(TcSubtitle)) { Tracks.Add(TcTrack); externalTracks.Add(TcTrack); }
+        foreach (var row in externalOrder)
+        {
+            row.DisplayId = externalTracks.Count.ToString(CultureInfo.InvariantCulture);
+            Tracks.Add(row); externalTracks.Add(row);
+        }
         // 同一视频的源行随字幕变更重建，按来源/类型/轨道标识恢复到当前对象；换视频时调用方已清空选择。
         var retained = previous is null ? null : Tracks.Contains(previous) ? previous :
             Tracks.FirstOrDefault(t => !t.IsEditable && t.Id == previous.Id && t.Type == previous.Type && t.Source == previous.Source);
         SelectedTrack = retained ?? (selectFallback ? Tracks.FirstOrDefault(t => t.IsEditable) ?? Tracks.FirstOrDefault() : null);
         Raise(nameof(HasExternalTracks));
+        Raise(nameof(ExternalGroupTitle));
     }
 
     public Task ProbeVideoAsync()
@@ -515,7 +550,9 @@ public sealed class SingleMuxViewModel : ObservableObject
         var subtitles = new List<SubtitleInput>();
         if (!string.IsNullOrWhiteSpace(ScSubtitle) && ScTrack.IsIncluded) subtitles.Add(new(ScSubtitle, ScTrack.Name, ScTrack.Language, ScTrack.IsDefault, ScTrack.IsForced));
         if (!string.IsNullOrWhiteSpace(TcSubtitle) && TcTrack.IsIncluded) subtitles.Add(new(TcSubtitle, TcTrack.Name, TcTrack.Language, TcTrack.IsDefault, TcTrack.IsForced));
-        var request = new MuxRequest(VideoPath, subtitles.ToArray(), FontsDirectory, OutputDirectory, string.IsNullOrWhiteSpace(OutputFileName) ? null : OutputFileName);
+        subtitles.AddRange(externalOrder.Where(t => t.IsIncluded && t.IsSubtitle && t.Id is not ("SC" or "TC")).Select(t => new SubtitleInput(t.InputPath, t.Name, t.Language, t.IsDefault, t.IsForced)));
+        var request = new MuxRequest(VideoPath, subtitles.ToArray(), FontsDirectory, OutputDirectory, string.IsNullOrWhiteSpace(OutputFileName) ? null : OutputFileName)
+        { Audios = externalOrder.Where(t => t.IsIncluded && t.IsAudio).Select(t => new AudioInput(t.InputPath, t.OriginTrackId, t.Name, t.Language, t.IsDefault, t.IsForced)).ToArray() };
         // 此处构造本次不可变快照，执行中即使导航切页也不会改变提交参数。
         IsRunning = true;
         submittedRevision = DraftRevision;
@@ -571,8 +608,9 @@ public sealed class SingleMuxViewModel : ObservableObject
         Raise(nameof(IsClosing)); NotifyEditability();
         probeCancellation?.Cancel();
         outputProbeCancellation?.Cancel();
+        importCancellation.Cancel();
         await CancelAsync();
-        await Task.WhenAll(RunTask, Task.WhenAll(probeTasks), Task.WhenAll(outputProbeTasks));
+        await Task.WhenAll(RunTask, Task.WhenAll(probeTasks), Task.WhenAll(outputProbeTasks), Task.WhenAll(importTasks));
     }
     private sealed class UiProgress(Action<MuxProgress> update) : IProgress<MuxProgress>
     {

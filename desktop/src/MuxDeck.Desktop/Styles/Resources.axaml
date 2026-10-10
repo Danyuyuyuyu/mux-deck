@@ -24,6 +24,12 @@
   <SolidColorBrush x:Key="SelectedRowBackground" Color="#EFF6FF" />
   <SolidColorBrush x:Key="SelectionBorder" Color="{StaticResource BrandAccentColor}" />
   <SolidColorBrush x:Key="DropBackground" Color="#EFF6FF" />
+  <SolidColorBrush x:Key="DropOverlayBackground" Color="#70EAF2FF" />
+  <SolidColorBrush x:Key="NoticeInformationBackground" Color="#F1F6FE" />
+  <SolidColorBrush x:Key="NoticeSuccessBackground" Color="#EAF7F0" />
+  <SolidColorBrush x:Key="NoticeSuccessBorder" Color="#9BD6B8" />
+  <SolidColorBrush x:Key="NoticeWarningBackground" Color="#FFF8E8" />
+  <SolidColorBrush x:Key="NoticeWarningBorder" Color="#E7CE91" />
   <SolidColorBrush x:Key="SuccessText" Color="#137547" />
   <SolidColorBrush x:Key="WarningText" Color="#925500" />
   <SolidColorBrush x:Key="DangerText" Color="#B42318" />
@@ -34,6 +40,11 @@
   <SolidColorBrush x:Key="InspectorBackground" Color="#FFFFFF" />
   <SolidColorBrush x:Key="InspectorBorder" Color="#CBD5E1" />
   <SolidColorBrush x:Key="InspectorDivider" Color="#E2E8F0" />
+  <SolidColorBrush x:Key="TrackDivider" Color="#E8EDF3" />
+  <SolidColorBrush x:Key="MediaTypeVideo" Color="#90AEE8" />
+  <SolidColorBrush x:Key="MediaTypeAudio" Color="#8AC8B0" />
+  <SolidColorBrush x:Key="MediaTypeSubtitle" Color="#D9B184" />
+  <SolidColorBrush x:Key="MediaTypeOther" Color="#A6B0BF" />
 
   <FontFamily x:Key="UiFontFamily">Microsoft YaHei UI, Segoe UI, sans-serif</FontFamily>
   <FontFamily x:Key="LogFontFamily">Consolas, Microsoft YaHei UI, monospace</FontFamily>

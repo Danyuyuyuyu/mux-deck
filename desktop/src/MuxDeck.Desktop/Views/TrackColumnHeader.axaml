@@ -1,0 +1,13 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MuxDeck.Desktop.Views.TrackColumnHeader" x:Name="HeaderRoot"
+             x:DataType="local:TrackColumnHeader" xmlns:local="using:MuxDeck.Desktop.Views">
+  <Grid>
+    <TextBlock Text="{Binding #HeaderRoot.Title}" Classes="muted caption" Margin="8,0"
+               VerticalAlignment="Center" HorizontalAlignment="{Binding #HeaderRoot.TitleAlignment}" />
+    <Border x:Name="ResizeGrip" Classes="resize-grip" Width="8" HorizontalAlignment="Right" Background="Transparent"
+            Cursor="SizeWestEast" Focusable="True" ToolTip.Tip="{Binding #HeaderRoot.ResizeHint}"
+            AutomationProperties.Name="{Binding #HeaderRoot.ResizeHint}">
+      <Border Width="1" Background="{DynamicResource SoftBorder}" IsVisible="{Binding #HeaderRoot.ShowGuide}" />
+    </Border>
+  </Grid>
+</UserControl>

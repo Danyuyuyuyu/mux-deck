@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using MuxDeck.Core;
 using MuxDeck.Core.Muxing;
+using MuxDeck.Desktop.Preferences;
 
 namespace MuxDeck.Desktop.ViewModels;
 
@@ -10,11 +11,11 @@ public sealed class MainWindowViewModel : ObservableObject
     private int selectedPage;
     private string log = "桌面工作区已就绪。选择视频或检查本机工具环境。";
 
-    public MainWindowViewModel(Workspace workspace, SingleMuxService? singleService = null)
+    public MainWindowViewModel(Workspace workspace, SingleMuxService? singleService = null, UserPreferencesStore? preferences = null)
     {
         WorkspaceRoot = workspace.Root;
         tools = new ToolLocator(workspace);
-        Single = new SingleMuxViewModel(singleService ?? new SingleMuxService(workspace));
+        Single = new SingleMuxViewModel(singleService ?? new SingleMuxService(workspace), preferences);
         ShowSingleCommand = new(() => SelectedPage = 0);
         ShowBatchCommand = new(() => SelectedPage = 1);
         ShowSubtitleCommand = new(() => SelectedPage = 2);

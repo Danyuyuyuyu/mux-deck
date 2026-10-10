@@ -995,7 +995,7 @@ internal static class WarningPolicyChecks
                 if (Path.GetFileName(args[1]).StartsWith("ass-reference-", StringComparison.Ordinal))
                 {
                     ReferenceMuxCalls++;
-                    referenceInputs[Path.GetFullPath(args[1])] = Path.GetFullPath(args[2]);
+                    referenceInputs[Path.GetFullPath(args[1])] = Path.GetFullPath(args[^1]);
                     if (!scenario.OmitReferenceMks) File.WriteAllBytes(args[1], [0x4D, 0x4B, 0x53]);
                     return Task.FromResult(new ProcessResult(0, "", ""));
                 }

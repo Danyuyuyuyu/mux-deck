@@ -25,6 +25,16 @@ internal static class UiInputTestSupport
         control.Focus();
         window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " "); window.KeyRelease(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " "); Dispatcher.UIThread.RunJobs();
     }
+    public static void UntilWithTimers(Func<bool> condition, int seconds = 20)
+    {
+        // RunJobs 只泵送已入队操作；计时器验收需要完整 Dispatcher 循环推进到期计时。
+        if (condition()) return;
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(seconds));
+        using var poll = DispatcherTimer.Run(() => { if (!condition()) return true; cancellation.Cancel(); return false; }, TimeSpan.FromMilliseconds(10));
+        Dispatcher.UIThread.MainLoop(cancellation.Token);
+        Dispatcher.UIThread.RunJobs();
+        if (!condition()) throw new TimeoutException("UI 计时操作未在时限内完成。");
+    }
     public static void Click(Window window, SingleMuxView view, string name) => Click(window, view.FindControl<Control>(name)!);
     public static DragEventArgs Drag(Border zone, Avalonia.Interactivity.RoutedEvent<DragEventArgs> routedEvent, IDataTransfer data)
     {

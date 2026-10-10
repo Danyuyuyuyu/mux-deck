@@ -20,6 +20,9 @@ public partial class MainWindow : Window
         try
         {
             await model.Single.CancelAndWaitAsync();
+            // 界面偏好失败不改变工具退出结论；列宽保存结束后才关闭窗口。
+            try { await model.Single.TrackColumns.PersistAsync(); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { model.Single.AppendLog("列宽偏好保存失败：" + ex.Message); }
             closingAllowed = true;
             Dispatcher.UIThread.Post(Close);
         }

@@ -41,32 +41,21 @@ internal static class RealUiAcceptance
                 var main = new MainWindowViewModel(workspace); single = main.Single;
                 window = new MainWindow { DataContext = main }; window.Show(); Dispatcher.UIThread.RunJobs();
                 var view = window.FindControl<SingleMuxView>("SingleView")!; var interactions = new ScriptedInteractions(); view.Interactions = interactions;
-                SubtitleSlot[] assignmentSlots = [SubtitleSlot.Sc];
-                interactions.AssignmentFlow = (owner, model, candidates, fixedSlot) =>
-                {
-                    // 使用生产分配对话框与真实确认控件，仅存储选择由替身返回隔离文件。
-                    var dialog = new SubtitleAssignmentWindow(model, candidates, fixedSlot);
-                    var choice = dialog.ShowDialog<IReadOnlyList<SubtitleAssignment>?>(owner);
-                    Dispatcher.UIThread.Post(() =>
-                    {
-                        for (var i = 0; i < candidates.Count; i++) dialog.SlotSelectors[i].SelectedIndex = (int)assignmentSlots[i];
-                        Click(dialog, dialog.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ConfirmAssignment"));
-                    });
-                    return choice;
-                };
                 Pick(window, view, interactions, "PickVideoButton", File(window, video)); Pump(single.ProbeVideoAsync(), 45);
                 Check(view.FindControl<TextBlock>("VideoName")!.Text == "测试 视频.MKV" && single.SourceTracks.Any(t => t.Type == "视频" && t.Policy == "保留") && single.SourceTracks.Any(t => t.Type == "音频" && t.Policy == "保留"), "新视频选择按钮接纳真实小 fixture，摘要/源 A/V 绑定正确");
                 Check(single.SourceTracks.Any(t => t.Type == "字幕" && t.Policy == "移除") && single.SourceAttachmentCount > 0 && !single.SourceTracks.Any(t => t.Type == "附件"), "真实源字幕移除和附件数量投影正确");
                 Pick(window, view, interactions, "PickFontsButton", Folder(window, fonts));
                 AddAss(view, interactions, File(window, sc));
-                Check(single.ScSubtitle == sc && single.TcSubtitle == "" && single.ScTrack.IsDefault && interactions.AssignmentCount == 1, "真实添加轨道菜单与生产分配对话框接纳单 SC");
+                var scTrack = single.ExternalTracks.Single(t => t.InputPath == sc);
+                Check(scTrack.IsDefault && scTrack.Language == "zh-Hans" && interactions.AssignmentCount == 0, "真实添加菜单自动接纳简体 ASS，无分配弹窗");
                 RunScenario("single-ass", ["zh-Hans"]);
-                assignmentSlots = [SubtitleSlot.Tc]; AddAss(view, interactions, File(window, tc));
-                Check(single.ScTrack.IsDefault && !single.TcTrack.IsDefault && single.ExternalTracks.Count == 2, "新添加入口扩展 SC+TC，固定语言与默认旗标正确");
+                AddAss(view, interactions, File(window, tc));
+                var tcTrack = single.ExternalTracks.Single(t => t.InputPath == tc);
+                Check(scTrack.IsDefault && !tcTrack.IsDefault && single.ExternalTracks.Count == 2, "新添加入口扩展 SC+TC，固定语言与默认旗标正确");
                 RunScenario("sc-tc", ["zh-Hans", "zh-Hant"]);
-                var scCheck = view.FindControl<ItemsControl>("ExternalRows")!.GetVisualDescendants().OfType<CheckBox>().First(c => ReferenceEquals(c.DataContext, single.ScTrack));
+                var scCheck = view.FindControl<ItemsControl>("ExternalRows")!.GetVisualDescendants().OfType<CheckBox>().First(c => ReferenceEquals(c.DataContext, scTrack));
                 Click(window, scCheck);
-                Check(!single.ScTrack.IsIncluded && single.ScSubtitle == sc && !single.TcTrack.IsDefault, "新行加入开关暂时禁用 SC，保留路径与 TC 显式旗标");
+                Check(!scTrack.IsIncluded && scTrack.InputPath == sc && !tcTrack.IsDefault, "新行加入开关暂时禁用 SC，保留路径与 TC 显式旗标");
                 RunScenario("tc-only", ["zh-Hant"]);
                 var published = single.OutputPath; var publishedHash = Hash(published); var previousResult = single.Result;
                 Check(single.PrimaryActionText == "再次封装" && view.FindControl<Button>("OpenOutputButton")!.IsEffectivelyVisible, "真实成功状态提供再次封装与成品位置操作");
@@ -92,7 +81,7 @@ internal static class RealUiAcceptance
                     Check(result.Checks.Count > 0 && System.IO.File.Exists(single.LogPath), name + " 成品 QC 和日志可定位");
                     var probeTask = new SingleMuxService(workspace).ProbeAsync(single.OutputPath); Pump(probeTask, 45); var probe = probeTask.Result;
                     var subtitles = probe.Tracks.Where(t => t.Type == "subtitles").ToArray();
-                    var expectedTracks = new[] { single.ScTrack, single.TcTrack }.Where(t => t.IsIncluded && !string.IsNullOrWhiteSpace(t.InputPath)).ToArray();
+                    var expectedTracks = single.ExternalTracks.Where(t => t.IsSubtitle && t.IsIncluded).ToArray();
                     Check(subtitles.Length == expectedLanguages.Length && expectedLanguages.All(language => subtitles.Count(t => t.LanguageIetf == language) == 1), name + " 实际产物只含本次启用的字幕语言");
                     Check(expectedTracks.All(t => subtitles.Any(actual => actual.LanguageIetf == t.Language && actual.Name == t.Name && actual.IsDefault == t.IsDefault && actual.IsForced == t.IsForced)), name + " 实际字幕名称/default/forced 与新 UI 配置相同");
                     Check(probe.Tracks.Count(t => t.Type == "video") == single.SourceTracks.Count(t => t.Type == "视频") && probe.Tracks.Count(t => t.Type == "audio") == single.SourceTracks.Count(t => t.Type == "音频") && probe.Attachments.Count > 0 && probe.Attachments.All(a => !a.FileName.Equals("LegacyFont.ttf", StringComparison.OrdinalIgnoreCase)), name + " 产物保留源 A/V、移除旧附件并包含新子集字体");
@@ -112,7 +101,7 @@ internal static class RealUiAcceptance
                     }
                     window.Width = 1280; window.Height = 900; Dispatcher.UIThread.RunJobs();
                     if (name == "sc-tc") { Directory.CreateDirectory(Path.GetDirectoryName(requestedScreenshot)!); Save(window, requestedScreenshot); }
-                    scenarios.Add(new { Name = name, Input = submitted, Result = result, OutputProbe = probe, OutputSha256 = Hash(single.OutputPath), NewUiEntry = "PickVideoButton / PickFontsButton / AddTrackButton 菜单(字幕 ASS) + SubtitleAssignmentWindow / 行加入 CheckBox / PickOutputButton / StartButton 键盘事件", NativePicker = "由公开 StorageProvider 获取真实本地项目，选择器返回被替身代替；非原生选择器证明" });
+                    scenarios.Add(new { Name = name, Input = submitted, Result = result, OutputProbe = probe, OutputSha256 = Hash(single.OutputPath), NewUiEntry = "PickVideoButton / PickFontsButton / AddTrackButton 菜单(字幕 ASS) 自动落位 / 行加入 CheckBox / PickOutputButton / StartButton 键盘事件", NativePicker = "由公开 StorageProvider 获取真实本地项目，选择器返回被替身代替；非原生选择器证明" });
                     Console.WriteLine($"Output [{name}]: {single.OutputPath}");
                 }
             }

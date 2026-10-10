@@ -1,0 +1,38 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MuxDeck.Desktop.ViewModels"
+             x:Class="MuxDeck.Desktop.Views.InteractionNotice" x:DataType="vm:InteractionNotification"
+             IsVisible="{Binding IsVisible}" Focusable="False">
+  <UserControl.Styles>
+    <Style Selector="Border.notice">
+      <Setter Property="Background" Value="{DynamicResource NoticeInformationBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SoftBorder}" />
+      <Setter Property="TextElement.Foreground" Value="{DynamicResource AccentText}" />
+    </Style>
+    <Style Selector="Border.notice.success">
+      <Setter Property="Background" Value="{DynamicResource NoticeSuccessBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource NoticeSuccessBorder}" />
+      <Setter Property="TextElement.Foreground" Value="{DynamicResource SuccessText}" />
+    </Style>
+    <Style Selector="Border.notice.warning">
+      <Setter Property="Background" Value="{DynamicResource NoticeWarningBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource NoticeWarningBorder}" />
+      <Setter Property="TextElement.Foreground" Value="{DynamicResource WarningText}" />
+    </Style>
+    <Style Selector="Border.notice.error">
+      <Setter Property="Background" Value="{DynamicResource DangerBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource DangerBorder}" />
+      <Setter Property="TextElement.Foreground" Value="{DynamicResource DangerText}" />
+    </Style>
+  </UserControl.Styles>
+  <Border Classes="notice" Classes.success="{Binding IsSuccess}" Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}"
+          BorderThickness="1" CornerRadius="15" Padding="10,4,5,4" MinHeight="30" ToolTip.Tip="{Binding Message}">
+    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="7">
+      <TextBlock Text="{Binding Icon}" FontSize="15" VerticalAlignment="Center" />
+      <TextBlock x:Name="NoticeMessage" Grid.Column="1" Text="{Binding Message}" TextTrimming="CharacterEllipsis"
+                 VerticalAlignment="Center" FontSize="{DynamicResource FontCaption}" AutomationProperties.LiveSetting="Polite" />
+      <Button x:Name="DismissNoticeButton" Grid.Column="2" Content="×" Classes="quiet icon" Width="22" Height="22" MinHeight="22"
+              Padding="0" IsVisible="{Binding CanDismiss}" Click="DismissNotice" AutomationProperties.Name="关闭操作通知" />
+    </Grid>
+  </Border>
+</UserControl>
