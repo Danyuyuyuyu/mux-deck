@@ -274,26 +274,15 @@ internal static class SingleMuxUiRound1Checks
             // ---- F1/F2：目录派生状态与 Inspector 路径刷新（真实按钮/菜单/绑定文本） ----
             bool Within(Visual? child, Visual ancestor) { for (Visual? v = child; v is not null; v = v.GetVisualParent()) if (ReferenceEquals(v, ancestor)) return true; return false; }
             Button ByAutomation(string name) => view.GetVisualDescendants().OfType<Button>().First(b => Avalonia.Automation.AutomationProperties.GetName(b) == name);
-            // 菜单项在弹出层里才继承 DataContext，按真实路径打开后再读 IsEnabled。
-            bool MenuEnabled(string buttonName)
-            {
-                var button = view.FindControl<Button>(buttonName)!;
-                var flyout = (MenuFlyout)button.Flyout!;
-                flyout.ShowAt(button); Dispatcher.UIThread.RunJobs();
-                var enabled = flyout.Items.OfType<MenuItem>().First().IsEnabled;
-                flyout.Hide(); Dispatcher.UIThread.RunJobs();
-                return enabled;
-            }
             var fontOpen = ByAutomation("打开字体目录"); var outputOpen = ByAutomation("打开输出目录");
             var outputName = view.FindControl<TextBox>("OutputNameInput")!; var fm = TopLevel.GetTopLevel(view)!.FocusManager!;
             vm.FontsDirectory = ""; vm.OutputDirectory = ""; Dispatcher.UIThread.RunJobs();
             check(!vm.HasFontsDirectory && !vm.HasOutputDirectory && !fontOpen.IsEffectivelyEnabled && !outputOpen.IsEffectivelyEnabled, "清空字体/输出目录后派生状态与打开入口立即禁用");
-            check(!MenuEnabled("FontsMoreButton") && !MenuEnabled("OutputMoreButton"), "清空目录后次级菜单复制入口禁用");
             vm.FontsDirectory = fonts; Dispatcher.UIThread.RunJobs();
-            check(vm.HasFontsDirectory && fontOpen.IsEffectivelyEnabled && MenuEnabled("FontsMoreButton") && !vm.HasOutputDirectory && !outputOpen.IsEffectivelyEnabled,
-                "设置字体目录后其打开/菜单入口启用，输出目录仍禁用");
+            check(vm.HasFontsDirectory && fontOpen.IsEffectivelyEnabled && !vm.HasOutputDirectory && !outputOpen.IsEffectivelyEnabled,
+                "设置字体目录后其打开入口启用，输出目录仍禁用");
             vm.OutputDirectory = output; Dispatcher.UIThread.RunJobs();
-            check(vm.HasOutputDirectory && outputOpen.IsEffectivelyEnabled && MenuEnabled("OutputMoreButton"), "设置输出目录后其打开/菜单入口启用");
+            check(vm.HasOutputDirectory && outputOpen.IsEffectivelyEnabled, "设置输出目录后其打开入口启用");
             vm.FontsDirectory = ""; Dispatcher.UIThread.RunJobs();
             check(!vm.HasFontsDirectory && !fontOpen.IsEffectivelyEnabled, "再次清空字体目录同步禁用");
             vm.FontsDirectory = fonts; Dispatcher.UIThread.RunJobs();

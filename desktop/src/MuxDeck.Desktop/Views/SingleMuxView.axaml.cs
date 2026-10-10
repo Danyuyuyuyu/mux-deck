@@ -364,13 +364,7 @@ public partial class SingleMuxView : UserControl
         }
         catch (Exception ex) { model.ReportInteractionMessage("查看附件失败：" + ex.Message); }
     }
-    private void CopyInspectorPath(object? sender, RoutedEventArgs args) => _ = CopyTextAsync(Model?.SelectedTrackFilePath);
-    private async void CopyPath(object? sender, RoutedEventArgs args)
-    {
-        if (Model is not { } model) return;
-        var path = ((sender as Control)?.Tag as string) switch { "video" => model.VideoFullPath, "subtitle" => model.SelectedTrack?.InputPath, "fonts" => model.FontsDirectory, "output-directory" => model.OutputDirectory, "result" => model.OutputPath, _ => null };
-        await CopyTextAsync(path);
-    }
+    private async void CopyOutputPath(object? sender, RoutedEventArgs args) => await CopyTextAsync(Model?.OutputPath);
     private async void CopyDiagnostics(object? sender, RoutedEventArgs args)
     {
         if (Model?.Result is { } result) await CopyTextAsync(Model.ResultLabel + "\n" + JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));

@@ -102,10 +102,9 @@
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                       <Button x:Name="PickVideoButton" Content="更换视频" Classes="tiny" Click="PickVideo" IsEnabled="{Binding CanEdit}" AutomationProperties.Name="选择或更换 MKV MP4 视频" />
-                      <Button x:Name="VideoDetailsButton" Content="···" Classes="quiet icon" AutomationProperties.Name="视频详情与路径">
+                      <Button x:Name="VideoDetailsButton" Content="···" Classes="quiet icon" AutomationProperties.Name="视频操作">
                         <Button.Flyout>
                           <MenuFlyout>
-                            <MenuItem x:Name="CopyVideoPathMenuItem" Header="复制完整路径" Tag="video" Click="CopyPath" IsEnabled="{Binding HasVideo}" />
                             <MenuItem x:Name="ReprobeVideoMenuItem" Header="重新探测" Click="ReprobeVideo" IsEnabled="{Binding CanEdit}" />
                           </MenuFlyout>
                         </Button.Flyout>
@@ -198,27 +197,17 @@
                       <TextBlock Grid.Column="1" Text="字体将在封装时检查" Classes="muted" FontSize="{DynamicResource FontCaption}" VerticalAlignment="Center" />
                     </Grid>
                     <Grid Grid.Row="1" ColumnDefinitions="*,16,*" VerticalAlignment="Center">
-                      <Grid Grid.Column="0" ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="4">
+                      <Grid Grid.Column="0" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="4">
                         <TextBlock Text="字体目录" VerticalAlignment="Center" FontSize="{DynamicResource FontCaption}" />
-                        <TextBox Grid.Column="1" Text="{Binding FontsDirectory, Mode=OneWay}" IsReadOnly="True" FontSize="{DynamicResource FontCaption}" ToolTip.Tip="{Binding FontsDirectory}" AutomationProperties.Name="字体目录完整路径">
-                          <TextBox.ContextMenu><ContextMenu><MenuItem Header="复制完整路径" Tag="fonts" Click="CopyPath" /></ContextMenu></TextBox.ContextMenu>
-                        </TextBox>
+                        <TextBox Grid.Column="1" Text="{Binding FontsDirectory, Mode=OneWay}" IsReadOnly="True" FontSize="{DynamicResource FontCaption}" ToolTip.Tip="{Binding FontsDirectory}" AutomationProperties.Name="字体目录完整路径" />
                         <Button Grid.Column="2" x:Name="PickFontsButton" Content="选择" Classes="tiny" Click="PickFonts" IsEnabled="{Binding CanEdit}" AutomationProperties.Name="选择字体目录" />
                         <Button Grid.Column="3" Content="打开" Classes="quiet tiny" Click="OpenFonts" IsEnabled="{Binding HasFontsDirectory}" AutomationProperties.Name="打开字体目录" />
-                        <Button Grid.Column="4" x:Name="FontsMoreButton" Content="···" Classes="quiet icon" AutomationProperties.Name="字体目录更多操作">
-                          <Button.Flyout><MenuFlyout><MenuItem Header="复制完整路径" Tag="fonts" Click="CopyPath" IsEnabled="{Binding HasFontsDirectory}" /></MenuFlyout></Button.Flyout>
-                        </Button>
                       </Grid>
-                      <Grid Grid.Column="2" ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="4">
+                      <Grid Grid.Column="2" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="4">
                         <TextBlock Text="输出目录" VerticalAlignment="Center" FontSize="{DynamicResource FontCaption}" />
-                        <TextBox Grid.Column="1" Text="{Binding OutputDirectory, Mode=OneWay}" IsReadOnly="True" FontSize="{DynamicResource FontCaption}" ToolTip.Tip="{Binding OutputDirectory}" AutomationProperties.Name="输出目录完整路径">
-                          <TextBox.ContextMenu><ContextMenu><MenuItem Header="复制完整路径" Tag="output-directory" Click="CopyPath" /></ContextMenu></TextBox.ContextMenu>
-                        </TextBox>
+                        <TextBox Grid.Column="1" Text="{Binding OutputDirectory, Mode=OneWay}" IsReadOnly="True" FontSize="{DynamicResource FontCaption}" ToolTip.Tip="{Binding OutputDirectory}" AutomationProperties.Name="输出目录完整路径" />
                         <Button Grid.Column="2" x:Name="PickOutputButton" Content="选择" Classes="tiny" Click="PickOutput" IsEnabled="{Binding CanEdit}" AutomationProperties.Name="选择独立输出目录" />
                         <Button Grid.Column="3" Content="打开" Classes="quiet tiny" Click="OpenOutputDirectory" IsEnabled="{Binding HasOutputDirectory}" AutomationProperties.Name="打开输出目录" />
-                        <Button Grid.Column="4" x:Name="OutputMoreButton" Content="···" Classes="quiet icon" AutomationProperties.Name="输出目录更多操作">
-                          <Button.Flyout><MenuFlyout><MenuItem Header="复制完整路径" Tag="output-directory" Click="CopyPath" IsEnabled="{Binding HasOutputDirectory}" /></MenuFlyout></Button.Flyout>
-                        </Button>
                       </Grid>
                     </Grid>
                     <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
@@ -282,7 +271,7 @@
                   <Grid Grid.Row="2" Height="42" ColumnDefinitions="*,Auto" Margin="14,0">
                     <TextBlock Text="高级信息与原始诊断按需查看" Classes="muted" FontSize="{DynamicResource FontCaption}" VerticalAlignment="Center" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7">
-                      <Button Content="复制路径" Classes="quiet tiny" Tag="result" Click="CopyPath" AutomationProperties.Name="复制成品路径" />
+                      <Button Content="复制路径" Classes="quiet tiny" Click="CopyOutputPath" AutomationProperties.Name="复制成品路径" />
                       <Button Content="复制诊断" Classes="tiny" Click="CopyDiagnostics" AutomationProperties.Name="复制诊断" />
                       <Button x:Name="OpenLogButton" Content="任务日志" Classes="tiny" Click="OpenLog" AutomationProperties.Name="定位任务日志" />
                     </StackPanel>
@@ -316,7 +305,7 @@
           <ScrollViewer VerticalScrollBarVisibility="Auto"><Border Classes="panel" Margin="0,12,0,0" VerticalAlignment="Top"><StackPanel Spacing="12">
             <TextBlock Text="字体附件 · 封装时处理" FontSize="{DynamicResource FontCardTitle}" FontWeight="SemiBold" />
             <TextBox Text="{Binding FontsDirectory, Mode=OneWay}" IsReadOnly="True" AutomationProperties.Name="字体页目录" />
-            <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="选择字体目录…" Click="PickFonts" IsEnabled="{Binding CanEdit}" /><Button Content="复制路径" Tag="fonts" Click="CopyPath" /></StackPanel>
+            <Button Content="选择字体目录…" HorizontalAlignment="Left" Click="PickFonts" IsEnabled="{Binding CanEdit}" />
             <TextBlock Text="从显式目录匹配启用 ASS 的字体并生成子集。成品仅加入本次生成的字体；源附件固定移除。" TextWrapping="Wrap" />
             <TextBlock Text="此页尚未执行字体检查，也不扫描或列出目录内的字体。开始封装后检查实际文件、缺字形与子集产物；失败时停止发布。" Classes="muted" TextWrapping="Wrap" />
           </StackPanel></Border></ScrollViewer>
@@ -363,7 +352,6 @@
                 <Grid ColumnDefinitions="56,*"><TextBlock Text="格式" Classes="muted" FontSize="{DynamicResource FontCaption}" /><TextBlock Grid.Column="1" Text="{Binding SelectedTrack.Codec}" FontSize="{DynamicResource FontCaption}" /></Grid>
                 <Grid ColumnDefinitions="56,*"><TextBlock Text="标识" Classes="muted" FontSize="{DynamicResource FontCaption}" /><TextBlock Grid.Column="1" Text="{Binding SelectedTrack.Id}" FontSize="{DynamicResource FontCaption}" /></Grid>
                 <TextBlock x:Name="InspectorPathText" Text="{Binding SelectedTrackFilePath}" FontSize="{DynamicResource FontCaption}" TextWrapping="Wrap" />
-                <Button x:Name="CopyInspectorPathButton" Content="复制完整路径" Classes="quiet" Padding="0" HorizontalAlignment="Left" Click="CopyInspectorPath" AutomationProperties.Name="复制所选轨道完整路径" />
               </StackPanel>
             </Border>
           </StackPanel>
