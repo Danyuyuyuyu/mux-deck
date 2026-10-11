@@ -44,6 +44,14 @@
 
 现有 [UI 174/174](../../artifacts/single-mux-round1-b/ui-90d1ac91cc3f4e9fb8f974b6813995fb/report.json)、[自动导入 25/25](../../artifacts/automatic-drop/ui-94dd300517d948dab48084ee75819a90/report.json)、[工作台 38/38](../../artifacts/workbench-ui/9caec66d6fd14a8eb3f084139c086682/report.json)、[旧接纳 88/88](../../artifacts/single-mux-round1-a/20261010-150629-4f83f9b25d1542dca99ba15c48f650b8/report.json) 及 Smoke 26/26 通过。检查并保留[遮罩](../../artifacts/input-feedback/6029c2c3e07c4257a5a79efcf4b79e04/overlay-1280.png)、[成功通知](../../artifacts/input-feedback/6029c2c3e07c4257a5a79efcf4b79e04/success-1280.png) 与两尺寸属性栏/长通知截图。此轮未重放 Core 工具链，原生 Explorer、系统标题栏、DPI 及辅助技术仍需人工验收。
 
+## 状态栏刷新与切页进度（2026-10-11）
+
+修复两处底部状态栏缺陷。其一：运行中标题绑定 `ActionBarSummary`，其取值在运行时等于 `StageText`，但 `StageText` 变化只通知了 `StateSummary`，导致取消或失败后再运行仍显示上次终态；在 `StageText` setter 补发 `ActionBarSummary` 通知。其二：状态栏原先位于封装 `TabItem` 内，`TabControl` 切换页面会卸载其内容，`ProgressBar` 的不确定动画随模板实例丢失，返回后停在原位（实测指示器平移值切页后恒为 0）；将状态栏移到 `TabControl` 之外，以 `#PackagingTab.IsSelected` 控制可见性，切页只切换可见性而不卸载。
+
+Release 构建 0 warnings / 0 errors；旧接纳 [89/89](../../artifacts/single-mux-round1-a/20261011-140753-12864fae9b0d42dcad698612e93310e6/report.json)，UI 回归 [176/176](../../artifacts/single-mux-round1-b/ui-5586819504014d6a90d8d5a6c436b568/report.json)，新增运行中切页往返后进度指示继续扫动、状态栏保留在可视树两项检查；[工作台 38/38](../../artifacts/workbench-ui/e266d1221f78430186c6b8101b4338a0/report.json)、[输入反馈 24/24](../../artifacts/input-feedback/43b2ef84634a4f32b56051f21d06711f/report.json)、Smoke 26/26 通过。
+
+本轮仅改 Desktop 的 ViewModel 通知与 `SingleMuxView` 布局，Core、工具参数与依赖未改动。切页动画证据来自 headless 渲染帧推进并比对指示器平移值，不替代原生桌面上的目视确认。
+
 ## 单个封装验收矩阵
 
 | 场景 | 预期 |

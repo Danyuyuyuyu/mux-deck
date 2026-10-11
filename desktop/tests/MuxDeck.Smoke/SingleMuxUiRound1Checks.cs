@@ -382,6 +382,24 @@ internal static class SingleMuxUiRound1Checks
             var runningDraft = Draft(); pendingPick.TrySetResult([videoItem]); Pump(pendingTask); interactions.PickOverride = null;
             check(Draft() == runningDraft && vm.InteractionMessage.Contains("已锁定"), "选择器迟到返回不能更改运行任务");
             Snapshot("running");
+            // 切换页面不得卸载状态栏：TabControl 卸载内容会丢掉 ProgressBar 的不确定动画，返回后停在原位。
+            var progressBar = view.GetVisualDescendants().OfType<ProgressBar>().Single();
+            var indicator = progressBar.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "IndeterminateProgressBarIndicator");
+            Avalonia.Media.TranslateTransform IndicatorTransform() => indicator.RenderTransform switch
+            {
+                Avalonia.Media.TranslateTransform direct => direct,
+                Avalonia.Media.TransformGroup group => group.Children.OfType<Avalonia.Media.TranslateTransform>().Single(),
+                var other => throw new InvalidOperationException("不确定进度指示缺少平移变换：" + other?.GetType().Name)
+            };
+            double IndicatorX() { AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs(); return IndicatorTransform().X; }
+            var sweepBefore = IndicatorX(); Thread.Sleep(150); var sweepAfter = IndicatorX();
+            var statusPanel = view.FindControl<Border>("StatusPanel")!;
+            view.FindControl<TabControl>("MuxTabs")!.SelectedIndex = 1; Dispatcher.UIThread.RunJobs();
+            check(!statusPanel.IsEffectivelyVisible && TopLevel.GetTopLevel(progressBar) is not null, "运行中切到字体页只隐藏状态栏，进度条保留在可视树");
+            view.FindControl<TabControl>("MuxTabs")!.SelectedIndex = 0; Dispatcher.UIThread.RunJobs();
+            var resumedBefore = IndicatorX(); Thread.Sleep(150); var resumedAfter = IndicatorX();
+            check(sweepBefore != sweepAfter && resumedBefore != resumedAfter && statusPanel.IsEffectivelyVisible,
+                $"切页往返后不确定进度继续扫动（before={sweepBefore:0.#}→{sweepAfter:0.#}, after={resumedBefore:0.#}→{resumedAfter:0.#}）");
             Click(window, view, "CancelButton"); Until(() => runner.CleanupStarted.Task.IsCompleted);
             check(vm.IsCancelling && !view.FindControl<Button>("CancelButton")!.IsEffectivelyEnabled && !vm.CanEdit, "取消清理期间禁用重复取消和输入");
             Snapshot("cancelling"); runner.CleanupRelease.TrySetResult(true); Pump(vm.RunTask);

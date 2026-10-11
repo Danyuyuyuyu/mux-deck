@@ -110,11 +110,12 @@
     </Style>
   </UserControl.Styles>
   <Grid>
-    <Grid x:Name="PageContent" Margin="20,12,20,40">
-      <TabControl x:Name="MuxTabs">
+    <Grid x:Name="PageContent" Margin="20,12,20,40" RowDefinitions="*,Auto">
+      <!-- 状态栏放在 TabControl 之外：TabControl 切换页面会卸载内容，ProgressBar 的不确定动画随之丢失，返回后停在原位。 -->
+      <TabControl x:Name="MuxTabs" Grid.Row="0">
         <TabItem x:Name="PackagingTab" Header="封装">
           <!-- 主区不整体滚动；结果面板止于状态栏上缘，全高轨道属性栏在外层覆盖客户区右侧。 -->
-          <Grid x:Name="Workspace" RowDefinitions="*,Auto" RowSpacing="12" Margin="0,4,0,0">
+          <Grid x:Name="Workspace" RowDefinitions="*" Margin="0,4,0,0">
             <Grid x:Name="MainBodyArea" Grid.Row="0">
               <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
                 <Border x:Name="VideoDropZone" Grid.Row="0" Classes="work-section" MinHeight="72" Padding="0,10" BorderThickness="0,0,0,1">
@@ -284,28 +285,6 @@
                 </Grid>
               </Border>
             </Grid>
-            <Border x:Name="StatusPanel" Grid.Row="1" BorderBrush="{DynamicResource TrackDivider}" BorderThickness="0,1,0,0" MinHeight="76" Padding="0,12,0,0">
-              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                <StackPanel Spacing="2">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <TextBlock Text="{Binding ActionBarIcon}" Foreground="{DynamicResource AccentText}" FontSize="{DynamicResource FontBody}" />
-                    <TextBlock x:Name="CurrentState" Text="{Binding ActionBarSummary}" FontWeight="SemiBold" FontSize="{DynamicResource FontBody}" TextWrapping="Wrap" />
-                  </StackPanel>
-                  <TextBlock Text="{Binding StatusDescription}" Classes="muted" FontSize="{DynamicResource FontCaption}" TextWrapping="Wrap" MaxHeight="38" />
-                  <TextBlock Text="{Binding OutputDisplayName}" IsVisible="{Binding HasCurrentSuccess}" Classes="muted" FontSize="{DynamicResource FontCaption}" TextTrimming="CharacterEllipsis" />
-                  <StackPanel IsVisible="{Binding IsRunning}" Spacing="4" Margin="0,4,0,0">
-                    <TextBlock Text="{Binding ProgressMessage}" Classes="muted" FontSize="{DynamicResource FontCaption}" TextWrapping="Wrap" MaxHeight="32" />
-                    <ProgressBar IsIndeterminate="{Binding IsIndeterminate}" Value="{Binding Percent}" Height="4" Minimum="0" Maximum="100" />
-                  </StackPanel>
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
-                  <Button x:Name="OpenOutputButton" Content="打开文件位置" Classes="tiny" Click="OpenOutput" IsVisible="{Binding HasCurrentSuccess}" />
-                  <Button x:Name="StartButton" Content="{Binding PrimaryActionText}" Classes="primary" Command="{Binding StartCommand}" IsVisible="{Binding !IsRunning}" />
-                  <Button x:Name="CancelButton" Content="取消封装" Command="{Binding CancelCommand}" IsVisible="{Binding IsRunning}" />
-                  <Button x:Name="ShowResultButton" Content="结果详情" Classes="tiny" Click="ShowResult" IsVisible="{Binding HasResult}" />
-                </StackPanel>
-              </Grid>
-            </Border>
           </Grid>
         </TabItem>
         <TabItem Header="字体附件">
@@ -319,6 +298,29 @@
         </TabItem>
         <TabItem x:Name="DeveloperLogTab" Header="日志" IsVisible="{Binding #Root.ShowDeveloperLog}"><TextBox Text="{Binding Log, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="{DynamicResource LogFontFamily}" AutomationProperties.Name="开发任务日志" /></TabItem>
       </TabControl>
+      <!-- 状态栏常驻此层，切页只切换可见性而不卸载，运行中的进度条动画不会被中断。 -->
+      <Border x:Name="StatusPanel" Grid.Row="1" Margin="0,12,0,0" IsVisible="{Binding #PackagingTab.IsSelected}" BorderBrush="{DynamicResource TrackDivider}" BorderThickness="0,1,0,0" MinHeight="76" Padding="0,12,0,0">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <StackPanel Spacing="2">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="{Binding ActionBarIcon}" Foreground="{DynamicResource AccentText}" FontSize="{DynamicResource FontBody}" />
+              <TextBlock x:Name="CurrentState" Text="{Binding ActionBarSummary}" FontWeight="SemiBold" FontSize="{DynamicResource FontBody}" TextWrapping="Wrap" />
+            </StackPanel>
+            <TextBlock Text="{Binding StatusDescription}" Classes="muted" FontSize="{DynamicResource FontCaption}" TextWrapping="Wrap" MaxHeight="38" />
+            <TextBlock Text="{Binding OutputDisplayName}" IsVisible="{Binding HasCurrentSuccess}" Classes="muted" FontSize="{DynamicResource FontCaption}" TextTrimming="CharacterEllipsis" />
+            <StackPanel IsVisible="{Binding IsRunning}" Spacing="4" Margin="0,4,0,0">
+              <TextBlock Text="{Binding ProgressMessage}" Classes="muted" FontSize="{DynamicResource FontCaption}" TextWrapping="Wrap" MaxHeight="32" />
+              <ProgressBar IsIndeterminate="{Binding IsIndeterminate}" Value="{Binding Percent}" Height="4" Minimum="0" Maximum="100" />
+            </StackPanel>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
+            <Button x:Name="OpenOutputButton" Content="打开文件位置" Classes="tiny" Click="OpenOutput" IsVisible="{Binding HasCurrentSuccess}" />
+            <Button x:Name="StartButton" Content="{Binding PrimaryActionText}" Classes="primary" Command="{Binding StartCommand}" IsVisible="{Binding !IsRunning}" />
+            <Button x:Name="CancelButton" Content="取消封装" Command="{Binding CancelCommand}" IsVisible="{Binding IsRunning}" />
+            <Button x:Name="ShowResultButton" Content="结果详情" Classes="tiny" Click="ShowResult" IsVisible="{Binding HasResult}" />
+          </StackPanel>
+        </Grid>
+      </Border>
     </Grid>
     <!-- 全高轨道属性栏覆盖客户区右侧，标题与操作固定，正文单独滚动。 -->
     <Border x:Name="TrackInspector" DragDrop.AllowDrop="False" Classes="inspector sidebar" HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="300" BoxShadow="{DynamicResource TrackInspectorShadow}" Focusable="True">

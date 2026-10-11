@@ -147,8 +147,13 @@ internal static class SingleMuxRound1Checks
             vm.SetSubtitleIncluded(SubtitleSlot.Tc, true);
             check(vm.TcTrack.Name == "显式 繁体" && vm.TcTrack.IsDefault && vm.TcTrack.IsForced, "启用恢复不丢名称或旗标");
             var lockedPlan = vm.PrepareVideoInput([FileCandidate(video)]).Plan!;
+            // 捕获运行期间 ActionBarSummary 的通知值：真实绑定只会在收到 PropertyChanged 时重读，
+            // 值正确但缺少通知时界面仍停留在上次终态。
+            string? notifiedHeadline = null;
+            vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(SingleMuxViewModel.ActionBarSummary)) notifiedHeadline = vm.ActionBarSummary; };
             _ = vm.StartAsync(); Until(() => runner.AfsStarted.Task.IsCompleted);
             check(vm.State == SingleMuxState.Running && !vm.CanEdit && !vm.CanEditSelectedTrack && !vm.TcTrack.CanEdit && vm.ProgressStage == MuxStage.Subsetting && vm.IsIndeterminate && vm.ProgressMessage.Contains("子集化"), "运行状态、真实阶段消息和不定进度");
+            check(vm.ActionBarSummary == vm.StageText && notifiedHeadline == vm.ActionBarSummary, "运行中任务摘要随阶段变化通知刷新，不残留上次终态");
             var runningConfiguration = Configuration();
             vm.TcTrack.Name = "运行中篡改"; vm.TcTrack.IsDefault = false; vm.TcTrack.IsForced = false; vm.TcTrack.IsIncluded = false;
             vm.VideoPath = video; vm.FontsDirectory = output; vm.OutputDirectory = fonts; vm.OutputFileName = "运行中.mkv";

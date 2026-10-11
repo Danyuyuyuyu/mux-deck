@@ -77,7 +77,8 @@ public sealed partial class SingleMuxViewModel : ObservableObject
     public string InputHint => IsRunning ? "本次参数已锁定。可切换页面；取消后等待工具退出与清理。" : CanStart ? "输入已齐全。开始时检查文件、工具与字体，目标存在时拒绝覆盖。" : "请选择视频、启用字幕或音频及输出目录；ASS 另需字体目录。";
     public string Log { get => log; private set => Set(ref log, value); }
     public string StatusText { get => statusText; private set => Set(ref statusText, value); }
-    public string StageText { get => stageText; private set { if (Set(ref stageText, value)) Raise(nameof(StateSummary)); } }
+    // 运行中 ActionBarSummary 取 StageText，阶段变化必须同时通知摘要，否则绑定停留在上次终态。
+    public string StageText { get => stageText; private set { if (Set(ref stageText, value)) { Raise(nameof(StateSummary)); Raise(nameof(ActionBarSummary)); } } }
     public string ProbeText { get => probeText; private set { if (Set(ref probeText, value)) { Raise(nameof(VideoSummaryLine)); Raise(nameof(StatusDescription)); } } }
     public double Percent { get => percent; private set => Set(ref percent, value); }
     public bool IsIndeterminate { get => isIndeterminate; private set => Set(ref isIndeterminate, value); }
