@@ -22,7 +22,7 @@ v2 重新实现主程序，按单个封装、可靠性、批量、扩展能力�
 
 - 组件卸载于 2026-10-13 完成：按当前组件目录管理软件安装与手动副本，不增加归属记录；外部主程序不卸载。轻量菜单、行内范围确认、失败详情/重试和自动检测已接入，AFS 随包与独立依赖分别处理，安装/卸载/封装/探测互斥。Release 无告警/错误，卸载受控 26/26、固定缓存真实工具循环 17/17、卸载 UI 61/61；既有安装 41/41、安装 UI 37/37、组件 31/31、环境 23/23、导入 25/25、封装 UI 176/176、Smoke 28/28 通过。两尺寸截图已检查，原生菜单/选择器与 DPI 尚未人工验收；见[卸载记录](../tasks/component-uninstall.md)。
 
-下一阶段先处理进程启动归属竞态与剩余可靠性；之后再规划批量复用。阶段进度记录自动验收、人工未覆盖项与上述限制，不把它们合并宣称为完整阶段通过。
+下一阶段先按 [ADR-0001](../adr/0001-layered-architecture.md) 完成[架构分层重构](#架构分层重构)，再处理进程启动归属竞态与剩余可靠性；之后再规划批量复用。阶段进度记录自动验收、人工未覆盖项与上述限制，不把它们合并宣称为完整阶段通过。
 
 ## 每次功能开发
 
@@ -54,6 +54,23 @@ v2 重新实现主程序，按单个封装、可靠性、批量、扩展能力�
 - AFS 的 Python/fonttools 后端属于真实依赖，随首条链路验证，不因主程序使用 C# 而视为已消除。
 
 完成条件：使用真实视频、ASS、字体和工具生成成品；核对视频、音轨、新增字幕轨、语言与旗标、字体附件，并在播放器检查字体渲染。随后在同阶段补齐简繁双字幕及对应默认轨规则。
+
+## 架构分层重构
+
+决策见 [ADR-0001](../adr/0001-layered-architecture.md)，分层、依赖与契约规则见[代码骨架](skeleton.md)。本阶段在阶段二进程归属竞态修复和阶段三批量之前完成；不改变用户可见行为、工具参数和 QC 判定，每一步独立可合并。
+
+1. **契约与护栏**：建立 `MuxDeck.Domain`、`MuxDeck.Application`、`MuxDeck.Infrastructure` 及按层测试项目，确定测试框架并提交锁文件；架构测试覆盖骨架中的依赖规则。定义目标契约，与旧模型并存并提供转换。
+2. **抽取 Domain 规则**：SC/TC 默认轨、纳入策略、文件名语言推断、命名模板、接纳校验、`MediaFileTypes`、AFS 诊断分类与 QC 判定移入 Domain，补单元测试；ViewModel 与 `SingleMuxService` 改为调用。
+3. **拆单任务流水线与操作协调**：`SingleMuxService` 拆为 Application 用例、Infrastructure 工具适配（mkvmerge/mkvextract/AFS/ttx）、`TaskWorkspace` 与不覆盖落位；结果改为结构化契约，工具配置随任务快照。引入 `IOperationCoordinator` 替换 `ComponentOperations.Gate` 与 `MainWindowViewModel` 联动，组件检测/安装/卸载同步迁入。
+4. **拆 Desktop**：`MuxDraft` 接管草稿；`SingleMuxViewModel` 按页面区域拆分；`Program` 与 `Composition/` 集中装配，移除 `App.Workspace`/`App.Storage` 静态与 ViewModel 内默认依赖创建；窗口关闭改为等待协调器。
+5. **收尾**：删除旧模型与 `MuxDeck.Core`，改写骨架“迁移前现状”两节，更新 README 与验证文档。
+
+完成条件：
+
+- 架构测试覆盖全部依赖规则并通过，`MuxDeck.Core` 已移除。
+- Release 无告警/错误；Smoke、单个封装 UI、接纳、工作台、输入反馈、组件与 `--warning-policy` 回归保持通过；用例因迁移而改变数量时说明原因。
+- 第 3 步改动工具调用编排，须重跑 `--integration`、`--media-drop-real`、`--ui-integration` 等真实工具链，与迁移前的成品、检查项和告警对照一致。
+- 重构中发现的旧缺陷单独记录、单独修复，不混入搬迁改动。
 
 ## 阶段二：单个封装可靠性加固
 
