@@ -141,7 +141,7 @@
 
 | PR | 状态 | 验证 | 备注 |
 |---|---|---|---|
-| 1a | 未开始 | | |
+| [1a · PR #3](https://github.com/Danyuyuyuyu/mux-deck/pull/3) | 已实现，本地验收通过，待合并 | 锁定 restore：9/9 项目；Release build：0 警告 / 0 错误；dotnet test：32/32（架构规则 27 + 扫描反例 5），失败/跳过 0；Smoke：28/28 | 三个空生产项目、三个 xUnit 测试项目、过渡引用、NetArchTest 护栏、CI test 步骤与全部新增项目锁文件；按已接受 ADR-0001 实施，未移动代码、定义契约或修改行为。Domain/Application 业务测试 0；未重放真实工具链或原生 UI。 |
 | 1b | 未开始 | | |
 | 2a | 未开始 | | |
 | 2b | 未开始 | | |
@@ -156,6 +156,22 @@
 | 4c | 未开始 | | |
 | 4d | 未开始 | | |
 | 5 | 未开始 | | |
+
+### 1a 实际验证（2026-10-13）
+
+输入基线为 `e360510`（包含 `7133b8c` 与 `e360510` 的 ADR/开发约定更新）。依照已接受的 [ADR-0001](../adr/0001-layered-architecture.md) 建立骨架，不修改 ADR。输出、失败行为与验收范围按上方 1a：依赖或既有回归失败即停止；本轮 NuGet 联网 restore 成功，未发现现有代码违反架构规则。
+
+以下命令均在 `desktop/` 执行：
+
+| 实际命令 | 结果 |
+|---|---|
+| `dotnet restore MuxDeck.sln` | 首次联网生成新锁文件，9/9 项目成功 |
+| `dotnet restore MuxDeck.sln --locked-mode` | 9/9 项目成功 |
+| `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false` | 9/9 项目构建成功，0 警告 / 0 错误 |
+| `dotnet test MuxDeck.sln --no-build -c Release` | Architecture.Tests 32/32，通过 32、失败 0、跳过 0；Domain.Tests / Application.Tests 各 0 业务用例 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release` | 28/28 PASS |
+
+三层生产项目为空，命名空间护栏会在 1b 及后续迁移中继续生效；本轮不声称已完成业务分层或真实媒体工具链验收。CI 的最新结果见 [PR #3 检查](https://github.com/Danyuyuyuyu/mux-deck/pull/3/checks)。
 
 ## 发现的旧缺陷
 

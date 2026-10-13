@@ -188,7 +188,20 @@
         "resolved": "0.94.1",
         "contentHash": "11YMr7FnAbL83bQmVxlhbIKHvSLxjO81D12Ej0QMSGXMDTxNA9MTOa4MQxx43nv5el/efuPHwzyrj6a5ha2gug=="
       },
+      "muxdeck.application": {
+        "type": "Project",
+        "dependencies": {
+          "MuxDeck.Domain": "[1.0.0, )"
+        }
+      },
       "muxdeck.core": {
+        "type": "Project",
+        "dependencies": {
+          "MuxDeck.Application": "[1.0.0, )",
+          "MuxDeck.Domain": "[1.0.0, )"
+        }
+      },
+      "muxdeck.domain": {
         "type": "Project"
       }
     }

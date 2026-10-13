@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../MuxDeck.Domain/MuxDeck.Domain.csproj" />
+  </ItemGroup>
+</Project>

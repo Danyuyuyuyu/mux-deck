@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "muxdeck.application": {
+        "type": "Project",
+        "dependencies": {
+          "MuxDeck.Domain": "[1.0.0, )"
+        }
+      },
+      "muxdeck.domain": {
+        "type": "Project"
+      }
+    }
+  }
+}
