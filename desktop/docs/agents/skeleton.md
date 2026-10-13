@@ -1,32 +1,106 @@
 # 代码骨架
 
-本文规定 v2 的代码职责、依赖和接口。路径均相对于 `desktop/`；功能顺序见 [开发流程](migration.md)，验证要求见 [验证文档](verification.md)。
+本文规定 v2 的代码职责、依赖和契约。路径均相对于 `desktop/`；功能顺序见 [开发流程](migration.md)，验证要求见 [验证文档](verification.md)。分层决策的背景与取舍见 [ADR-0001](../adr/0001-layered-architecture.md)，规则以本文为准。
 
 ## 项目与依赖
 
+目标结构为四个生产项目：
+
 ```text
-src/MuxDeck.Core/       核心规则、单任务流程、外部工具与文件操作
-src/MuxDeck.Desktop/    Avalonia 应用装配、视图与 ViewModel
-tests/                 自动化验证与测试素材生成入口
+src/MuxDeck.Domain/          纯业务规则与值类型：无文件、进程、时间或 UI 副作用
+src/MuxDeck.Application/     用例编排、草稿会话、跨功能操作协调、端口接口；Contracts/ 承载对外契约
+src/MuxDeck.Infrastructure/  端口实现：外部工具适配、进程与 Job、工具定位、文件落位、下载、持久化
+src/MuxDeck.Desktop/         Avalonia 视图、ViewModel、平台交互；Program 与 Composition/ 为唯一装配入口
+tests/                      按层划分的自动化验证与验收入口
 ```
 
-允许依赖：`Desktop → Core`，测试项目依赖其验证的生产项目。Core 保持独立于 Avalonia 和 v1 应用代码。项目间依赖保持单向；当前保留两个生产项目，出现真实隔离需求后再拆分。
+```text
+Domain ← Application ← Infrastructure
+              ↑               ↑
+           Desktop ───────────┘（仅 Program 与 Composition/）
+```
+
+- Domain 不引用任何项目或第三方包。
+- Application 只引用 Domain，不引用 Avalonia、Infrastructure 或具体工具。
+- Infrastructure 引用 Application（实现其端口）与 Domain，不引用 Desktop。
+- Desktop 引用 Application 与 Infrastructure；`ViewModels/` 与 `Views/` 只使用 `MuxDeck.Contracts` 命名空间、Domain 值类型和用例接口，不构造 Infrastructure 类型。只有 `Program.cs` 与 `Composition/` 可使用 Infrastructure 命名空间。
+- 测试项目只引用其验证的生产项目。上述规则由架构测试固定，违反即测试失败。
+
+当前仍为 `MuxDeck.Core` 与 `MuxDeck.Desktop` 两个项目，按[架构分层重构](migration.md#架构分层重构)逐步搬迁。对应项目建立前，新代码先放入 Core 内与目标层同名的命名空间（`MuxDeck.Domain`、`MuxDeck.Contracts`、`MuxDeck.Application`、`MuxDeck.Infrastructure`），遵守同样的依赖规则，搬迁时只移动文件。每完成一步，在同一改动中更新本节与下方“迁移前现状”。
+
+测试按层划分：
+
+| 项目 | 内容 |
+|---|---|
+| `tests/MuxDeck.Domain.Tests` | 纯规则单元测试，覆盖有效输入与关键反例 |
+| `tests/MuxDeck.Application.Tests` | 假端口下的流程、失败、取消、清理与不覆盖落位 |
+| `tests/MuxDeck.Infrastructure.IntegrationTests` | 真实工具、进程、编码与进程树 |
+| `tests/MuxDeck.Architecture.Tests` | 项目引用与命名空间依赖规则 |
+| `tests/MuxDeck.Smoke` | 保留为验收入口与 headless UI 检查 |
+
+测试框架与架构测试实现方式在重构第一步确定，固定版本并提交锁文件后写入本节。
+
+## 契约
+
+`MuxDeck.Contracts` 是 Desktop（及以后其他入口）与 Application 的交接格式：任务规格、进度、结果、诊断和用例接口。
+
+- 命名空间固定为 `MuxDeck.Contracts`，文件位于 `src/MuxDeck.Application/Contracts/`。出现第二个调用方时拆为独立项目，命名空间不变。
+- 只依赖 `System.*` 与 `MuxDeck.Domain`。`TrackKind`、`LanguageTag`、`TrackFlags` 等值类型归 Domain，由契约引用。
+- 只含不可变 record、枚举和用例接口；不含读写文件、调用服务或依赖当前时间的逻辑。
+- 类型全部 `public`，不以 `InternalsVisibleTo` 访问内部成员，不暴露 Application 内部类型（如任务临时目录）。
+- 结果结构化：成败用枚举表达；检查项为 `CheckResult(Code, Status, Subject, Expected, Actual)`；失败为 `JobFailure(Code, Stage, Message, Detail)`。界面不解析文案或日志判断成败。
+- 工具诊断码以[工具诊断分类](diagnostics.md)为唯一来源；任务错误码集中定义在 `Contracts/ErrorCodes.cs`。
+- 任务阶段 `JobStage` 只含单任务阶段；组件检测、安装、卸载使用组件契约自己的阶段。
+- 改变契约属于接口变更，在同一改动中更新调用方、本节与契约相关测试。
+
+目标契约与迁移前对应：
+
+| 契约 | 作用 | 迁移前 |
+|---|---|---|
+| `MuxJobSpec`、`ExternalTrackSpec`、`SourceTrackSelection`、`FontSpec`、`OutputSpec` | 单任务不可变规格 | `MuxRequest`、`SubtitleInput`、`AudioInput` |
+| `JobProgress(Stage, StepCode, Percent, Message)` | 阶段进度 | `MuxProgress` |
+| `MuxJobResult`、`CheckResult`、`JobFailure`、`Diagnostic`、`OutputArtifact`、`LogRef` | 结构化结果 | `MuxResult`（`Checks` 文本、`Error` 字符串）、`MuxWarning` |
+| `MediaProbeResult` 及轨道、附件类型 | 只读探测结果 | `MediaProbe`、`MediaTrack`（`Type` 为字符串）、`MediaAttachment` |
+| `InputItem`、`ImportPlan` | 导入准备与提交 | `InputCandidate`、`InputAcceptancePlan`、`MediaImportPlan` |
+| `IRunSingleMux`、`IProbeMedia`、`IPrepareImport`、`IManageComponents` | 用例接口 | 直接调用 `SingleMuxService`、`ComponentInstaller` 等 |
+| `OperationKind`、`IOperationLease` | 跨功能占用与互斥 | `ComponentOperations.Gate` 与 `MainWindowViewModel` 联动 |
 
 ## 职责与落位
 
 | 职责 | 归属 | 对外表达 |
 |---|---|---|
-| 输入、任务快照、结果、进度 | Core 的任务类型 | 用业务数据表示，不携带 UI 控件 |
-| 命名、轨道策略、校验判定 | Core 的纯规则 | 输入与结果明确，无进程或文件副作用 |
-| 单个封装编排 | Core 的单任务模块 | 一个执行入口，接收任务、进度与取消 |
-| 子集化、探测、封装工具适配 | Core 的对应工具模块 | 参数构建、协议解析、产物与错误转换 |
-| 进程、工具定位、临时文件操作 | Core 的基础能力 | 屏蔽技术细节，不决定业务成败 |
-| 批量队列编排 | Core 的批量模块 | 调用单任务入口，管理顺序与逐项结果 |
-| 输入、当前页、忙碌态、结果展示 | Desktop 的 ViewModels | 属性和命令，不拼封装命令 |
-| 布局、原生文件选择、焦点 | Desktop 的 Views | 视图行为，不执行封装流程 |
-| 模块创建、依赖注入、窗口接线 | Desktop 的应用启动处 | 集中装配，避免业务模块自行读取全局 UI 状态 |
+| 轨道策略、默认/强制规则、语言标签、命名模板、输入类型识别、接纳校验、QC 判定、诊断分类 | Domain | 纯函数或值类型，输入与结果明确，无副作用 |
+| 草稿会话 `MuxDraft`：草稿版本、准备→提交、运行时锁定、生成 `MuxJobSpec` | Application | 单个与批量共用，规则调用 Domain |
+| 单任务流水线 | Application 单任务用例 | 一个 `IRunSingleMux.RunAsync` 入口，接收规格、进度与取消 |
+| 批量队列编排 | Application 批量用例 | 逐项调用单任务入口，管理顺序与逐项结果 |
+| 环境检测、组件安装与卸载编排 | Application 组件用例 | 组件契约表达状态、阶段与结果 |
+| 跨功能互斥与关闭等待 | Application `IOperationCoordinator` | 租约表达占用；关闭时等待全部租约释放 |
+| 外部工具参数构建、输出解析、产物与错误转换 | Infrastructure 工具适配 | 实现 `IMediaProber`、`IFontSubsetter`、`IMuxer`、`IMediaExtractor` 等端口 |
+| 进程、Job Object、工具定位、临时目录、不覆盖落位、下载、业务设置持久化 | Infrastructure 基础能力 | 屏蔽技术细节，不决定业务成败 |
+| 页面状态投影、命令、选中行、面板开关、列宽、焦点、通知 | Desktop ViewModels | 属性和命令；不写业务规则、不拼工具参数 |
+| 布局、原生选择器、剪贴板、打开路径、拖放 | Desktop Views 与平台服务 | 视图行为，经小接口（如 `ISingleMuxInteractions`）可替换 |
+| 对象创建、依赖注入、窗口接线 | Desktop `Program` 与 `Composition/` | 唯一装配入口；不使用静态全局服务 |
 
-### 阶段一单任务职责
+### 端口
+
+- 只在真实外部边界建立端口：外部工具、进程、文件落位、下载、持久化、时间与 ID。名称表达业务能力（如 `IFontSubsetter`），不建通用仓储、事件总线、中介者或万能任务接口。
+- 端口接口定义在 Application，实现位于 Infrastructure，测试替身位于测试项目。
+- 现有 `IMuxToolRunner` 是进程边界，迁移后成为 Infrastructure 内部依赖。`--warning-policy` 等依赖它的回归改为替换工具端口后再收紧其可见性。
+
+### 单任务流水线
+
+```text
+检查输入 → 探测源 → 子集化 → 生成封装计划 → 封装临时成品 → 成品校验 → 不覆盖落位
+ Domain   IMediaProber IFontSubsetter Domain   IMuxer     IOutputVerifier IArtifactPublisher
+```
+
+每阶段输入输出为 record，阶段转换与进度由用例负责，工具适配只解析工具自身进度。临时目录、任务日志与清理由 `TaskWorkspace`（`IAsyncDisposable`）负责，成功、失败、取消与异常路径都经过同一清理。
+
+### 迁移前现状
+
+以下两节记录迁移前的文件落位与 Desktop 行为约定。行为约定（接纳、草稿修订、Overlay、键盘、结果展示等）在迁移后继续有效；文件归属随[架构分层重构](migration.md#架构分层重构)改写，搬迁哪一部分就在同一改动中更新对应条目。
+
+#### 阶段一单任务职责
 
 阶段一的业务编排与媒体工具代码位于 `src/MuxDeck.Core/Muxing/`。下表路径相对于 `src/MuxDeck.Core/`；进程技术适配位于 Core 根目录，不拆出额外生产项目：
 
@@ -44,7 +118,7 @@ tests/                 自动化验证与测试素材生成入口
 
 接口合同与第一阶段具体验收案例见 [阶段一任务](../tasks/phase-1-single-mux.md)。Core 已确认的探测类型为 `MediaTrack`、`MediaAttachment`、`MediaProbe`；公开的单任务签名按任务文档约定，真实文件和额外依赖以实现为准。
 
-### 阶段一 Desktop 单任务约定
+#### 阶段一 Desktop 单任务约定
 
 最新自动入口由 `ViewModels/MediaImport.cs` 和 `Views/SingleMuxView.MediaInput.cs` 承担：工作区文件格式优先，混合批次准备后一次提交；文件名仅在语言未声明时提供提示。字幕/音频追加到共享 `externalOrder`，显示 ID 连续编号，GUID 只作内部身份；一份音频容器可以投影多条真实音轨。字幕/音频更换、移除与编辑守卫共同维护草稿版本。ASS 才要求字体目录和字体后端；SRT/音频可单独封装。`MuxRequest` 快照复制字幕与音频集合，开始/取消/关闭锁定不变，关闭等待还包含媒体识别进程。以下 SC/TC API 保留其旧草稿契约和回归，不再限制新拖放/添加入口。
 
@@ -91,13 +165,13 @@ tests/                 自动化验证与测试素材生成入口
 
 ## 单任务接口
 
-单任务入口封装子集化、封装、校验与成品落位的整条流程。界面和批量共用这一入口，参数组装与业务规则只有一份实现。
+单任务入口封装子集化、封装、校验与成品落位的整条流程。界面和批量共用这一入口，参数组装与业务规则只有一份实现。目标入口为 `IRunSingleMux.RunAsync(MuxJobSpec, IProgress<JobProgress>?, CancellationToken)`，返回 `MuxJobResult`；迁移完成前为 `SingleMuxService.RunAsync(MuxRequest, …)`。
 
-- 输入是本次任务的不可变快照，包含所有影响结果的路径和选项。
-- 输出包含明确的成功、失败或取消状态，成品位置、校验结果与可定位的失败原因。
+- 输入是本次任务的不可变快照，包含所有影响结果的路径和选项。工具与工作目录配置随任务快照传入，运行中的任务不受后续配置修改影响，不在服务上保留可变配置（迁移前为 `SingleMuxService.UpdateWorkspace`）。
+- 输出包含明确的成功、失败或取消状态，成品位置、结构化检查结果与可定位的失败原因（见[契约](#契约)）。
 - 进度包含明确阶段；工具适配模块可解析工具自己的进度，流程模块负责阶段转换。
 - 任务拥有独立临时目录、进程生命周期和结果；可通过取消令牌停止执行。
-- 需要替换外部调用或做失败注入时，在具体依赖处建立小接口；不用通用仓储、事件总线或万能任务接口代替业务表达。
+- 需要替换外部调用或做失败注入时，按上文[端口](#端口)规则在具体依赖处建立小接口。
 
 ## 工具与文件操作
 
@@ -105,19 +179,22 @@ tests/                 自动化验证与测试素材生成入口
 
 进程参数通过参数列表传递；同时读取 stdout/stderr；编码按工具约定处理。接入长任务时使用文件日志和有界界面缓存，避免无限累积输出。取消应终止并等待已纳入生命周期管理的相关进程退出，再清理本次资源；当前 Windows Job 归属不是 `Process.Start()` 原子操作的一部分，限制见 [开发流程](migration.md)。
 
-新版配置、日志和历史使用专属目录或命名空间，界面列宽偏好位置见上文；其他配置和历史位置在对应持久化阶段确定。v1 配置与历史作为只读参考；后续导入采用明确转换并保留原文件。共享第三方工具目录可以只读复用。
+新版配置、日志和历史使用专属目录或命名空间。业务相关设置（存储路径、工具目录，以后的预设与队列）的路径布局与读写归 Infrastructure；界面偏好（列宽等）只属于 Desktop，其存储留在 Desktop `Preferences/`，位置见上文。持久化文件带 schema 版本，写入互斥、原子替换、损坏回退。v1 配置与历史作为只读参考；后续导入采用明确转换并保留原文件。共享第三方工具目录可以只读复用。
 
 ## UI 与状态
 
 - 视觉资源与通用尺寸归 `Styles/Resources.axaml`，共享控件样式归 `Styles/Controls.axaml`；`App.axaml` 只装配。页面专属轨道、拖入与 Overlay 样式留在 Views。颜色、字号与控件规则见 [浅色视觉规范](../design/visual-language.md)，不在 ViewModel 中添加视觉资源。
 - 使用 MVVM 和编译绑定；每个绑定根与数据模板声明数据类型。
-- ViewModel 调用核心入口，异步展示进度和结果；耗时处理不阻塞 UI 线程。
+- ViewModel 只依赖契约与用例接口，经构造函数注入，不自行创建默认依赖；异步展示进度和结果，耗时处理不阻塞 UI 线程。
+- 草稿规则由 `MuxDraft` 与 Domain 承担；ViewModel 只保存界面状态（选中、面板、列宽、焦点、通知）和展示投影。
+- 单个封装 ViewModel 按页面区域拆分（视频摘要、轨道清单、轨道属性、输出设置、运行与结果详情），页面 ViewModel 只做组合。
 - 单个、批量和后续字幕工具各自拥有状态；切页保留输入，运行任务使用提交时快照。
 - 表单参数、进度阶段与完成结果分开表示；以核心结果决定成功，日志用于诊断。
+- 跨页面忙碌与互斥只读 `IOperationCoordinator` 的状态，窗口关闭只等待协调器，不在视图代码中组合各页面的忙碌标志。
 - 未实现的入口显示真实完成状态。原生窗口保持键盘操作、焦点反馈和内容滚动能力。
 
 ## 扩展与规则更新
 
-后续预设、配置和队列等模块加入当前职责体系；模块对外暴露所需命令和结果，内部可变状态由自身维护。只有确实解决依赖或维护问题时才扩大项目结构。
+后续预设、配置和队列等模块按上文分层加入；模块对外暴露所需用例与契约，内部可变状态由自身维护。新增生产项目、拆分 Contracts 或改变依赖方向须先新增或修订 ADR。
 
-改变项目依赖、单任务接口或状态归属时，在同一改动中更新本文与对应行为验证。SDK 与包版本直接查项目配置；更改依赖时一起维护锁文件。
+改变项目依赖、契约、单任务接口或状态归属时，在同一改动中更新本文、架构测试与对应行为验证。SDK 与包版本直接查项目配置；更改依赖时一起维护锁文件。
