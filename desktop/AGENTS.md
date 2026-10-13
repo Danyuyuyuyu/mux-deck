@@ -25,7 +25,7 @@
 - 依赖方向以架构测试为准。测试失败时修正代码，不通过放宽测试绕过；确需改变规则时先修订 ADR 与骨架。
 - 每条规则只保留一个权威位置；改变规则时同步调整它的链接和相关实现。
 - 新增或修改的代码注释使用中文，解释原因、约束和异常路径。
-- 子代理按实际需要使用；需要时按用户约定选择 `gpt-6.1-sol` / `high` 或 `gpt-6-luna` / `xhigh`。按任务文档的 PR 粒度分派，任务同时说明范围、共享文件归属和验收结果；`MuxDeck.sln`、`packages.lock.json`、`Directory.Build.props` 与 `docs/agents/` 同一时间只由一个代理修改。
+- 子代理按实际需要使用；按任务文档的 PR 粒度分派，任务同时说明范围、共享文件归属和验收结果；`MuxDeck.sln`、`packages.lock.json`、`Directory.Build.props` 与 `docs/agents/` 同一时间只由一个代理修改。
 
 ## 提交与分支
 
