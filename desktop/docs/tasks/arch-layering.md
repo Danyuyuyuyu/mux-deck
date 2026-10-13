@@ -265,6 +265,31 @@
 
 实现提交 [`aa85458`](https://github.com/Danyuyuyuyu/mux-deck/commit/aa85458a3caf7b11e76ae5f7d60317d3c862ffe8) 已按约定在本地验证后 `git pull --rebase origin v2/avalonia-rewrite` 并推送。[Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38380994829) 的唯一 desktop job 已完成且 conclusion 为 success：locked restore、build、分层/架构测试、Smoke 及全部 12 个带参数受控回归步骤均通过，失败产物上传步骤按预期跳过。此处 CI 证据对应实现提交；随后只补充结果链接的文档提交按工作流 paths 排除规则不重复触发构建。
 
+#### 修正 A：限定 Avalonia 基类
+
+Desktop 全部 C# 源码检索仅发现 App 的一处未限定基类，已改为 `Avalonia.Application`。在 Desktop 临时加入 `MuxDeck.Application.ApplicationNameProbe` 后 Release 构建成功（0 警告 / 0 错误），撤销后再执行下列完整验收；没有保留临时类型。原 71 个用例全部保留，计数不变；受控 13/13 套件、656/656。提交与 CI 链接推送确认后补充。
+
+| 实际命令（desktop/） | 结果 |
+|---|---|
+| `dotnet restore MuxDeck.sln --locked-mode` | 10/10 成功 |
+| `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false` | 0 警告 / 0 错误 |
+| `dotnet test MuxDeck.sln --no-build -c Release` | 71/71（Domain 8、Core 26、Architecture 37），失败/跳过 0 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release` | 28/28 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-policy` | 57/57 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-round1` | 89/89 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-ui-round1` | 176/176 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --workbench-ui` | 38/38 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --input-feedback` | 24/24 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop` | 25/25 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --environment-ui` | 23/23 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --components` | 31/31 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-ui` | 37/37 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all` | 41/41 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall` | 26/26 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui` | 61/61 |
+
+本机日志：`artifacts/arch-corrections/A/`。不改 ADR、锁文件、解决方案、共享构建配置或任何测试。
+
 ## 发现的旧缺陷
 
-（1b 反例实验发现，当前正式代码不受影响）`Desktop/App.axaml.cs` 将未限定的 `Application` 用作 Avalonia 基类；当目标程序集首次包含 `MuxDeck.Application` 命名空间的业务类型时，编译器会优先解析同名命名空间并报 CS0118。首个反例因此未计为架构护栏验收，改用独立禁止命名空间后两条护栏均确认失败。1b 只定义 `MuxDeck.Contracts`，没有触发该冲突；后续引入 Application 用例前需单独修复基类限定，不混入本步。
+（已修复：修正 A；提交号推送确认后补充。以下保留发现背景。）`Desktop/App.axaml.cs` 将未限定的 `Application` 用作 Avalonia 基类；当目标程序集首次包含 `MuxDeck.Application` 命名空间的业务类型时，编译器会优先解析同名命名空间并报 CS0118。首个反例因此未计为架构护栏验收，改用独立禁止命名空间后两条护栏均确认失败。1b 只定义 `MuxDeck.Contracts`，没有触发该冲突；后续引入 Application 用例前需单独修复基类限定，不混入本步。

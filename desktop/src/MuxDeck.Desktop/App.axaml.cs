@@ -8,7 +8,7 @@ using MuxDeck.Desktop.Preferences;
 
 namespace MuxDeck.Desktop;
 
-public partial class App : Application
+public partial class App : Avalonia.Application
 {
     public static Workspace Workspace { get; set; } = Workspace.Discover();
     public static StoragePaths Storage { get; set; } = StoragePaths.Default;
