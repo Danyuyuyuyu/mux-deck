@@ -430,6 +430,33 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 
 共享文件仅 `docs/agents/skeleton.md` 更新本步迁移现状与计数；`MuxDeck.sln`、`Directory.Build.props`、全部锁文件、ADR、步骤计划及 `diagnostics.md` 均不变。没有迁移草稿会话或修改媒体参数/QC；本轮未重放真实媒体工具链或原生选择器、Explorer、高 DPI、播放器，真实基准仍需在 3b 前重跑。实现提交 [`90fff6c`](https://github.com/Danyuyuyuyu/mux-deck/commit/90fff6c47d8a3fcef6c509fa81ec91f80425b865) 已在本地完整验证后执行 `git pull --rebase origin v2/avalonia-rewrite` 并推送。[Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38393673757) 已完成，workflow 与 desktop job 的 conclusion 均为 success，head_sha 与实现提交一致；locked restore、build、单元与架构测试、Smoke 及全部 12 个带参数受控回归步骤均通过，失败产物上传按预期跳过。随后仅补充实现提交与 CI 链接的文档提交，按工作流 paths 排除规则不重复触发构建。
 
+#### 2b 修正：合并输入位置枚举
+
+输入为 `2789ee3`，输出为 Contracts `InputItem.Kind` 直接采用 Domain `InputLocationKind`，删除重复的 `InputItemKind`。三个原有取值保留同样语义，新增契约测试覆盖 Domain 四个取值、类型归属、相等/不等和旧枚举已移除；旧运行调用方未接入该契约，行为不变。失败行为：构建、架构或既有回归失败即不推送；本修正 CI 通过后才开始 2c。按已接受 ADR-0001 实施，不修改 ADR。
+
+实际验证（`desktop/`）：locked restore 10/10，严格 Release 构建 0 警告 / 0 错误，`dotnet test` 348/348（Domain 218、Application 9、Core 26、Architecture 95），失败/跳过 0。343 → 348，仅新增契约测试 5；原 343 保留。受控 13/13、656/656，命令及计数如下，本机日志 `artifacts/arch-corrections/2b-enum/`：
+
+| 实际命令 | 结果 |
+|---|---|
+| `dotnet restore MuxDeck.sln --locked-mode` | 10/10 |
+| `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false` | 0 警告 / 0 错误 |
+| `dotnet test MuxDeck.sln --no-build -c Release` | 348/348 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release` | 28/28 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-policy` | 57/57 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-round1` | 89/89 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-ui-round1` | 176/176 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --workbench-ui` | 38/38 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --input-feedback` | 24/24 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop` | 25/25 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --environment-ui` | 23/23 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --components` | 31/31 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-ui` | 37/37 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all` | 41/41 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall` | 26/26 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui` | 61/61 |
+
+枚举修正本地验证完成，CI 链接待补；未重放真实工具链或原生 UI。共享文件仅 skeleton.md，sln、锁文件、props、ADR 不变。
+
 ## 发现的旧缺陷
 
 （已修复：修正 A；提交 c636e91，Desktop CI 38383347658 已通过。以下保留发现背景。）`Desktop/App.axaml.cs` 将未限定的 `Application` 用作 Avalonia 基类；当目标程序集首次包含 `MuxDeck.Application` 命名空间的业务类型时，编译器会优先解析同名命名空间并报 CS0118。首个反例因此未计为架构护栏验收，改用独立禁止命名空间后两条护栏均确认失败。1b 只定义 `MuxDeck.Contracts`，没有触发该冲突；该缺陷已由修正 A 的 c636e91 修复，并经临时同名类型与完整 CI 验证。

@@ -82,6 +82,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 ### 1b 契约与旧模型过渡
 
 - LanguageTag 的相等与哈希按 Value 比较，default 与空字符串相等；MediaTrackInfo 的 HasDefaultFlag / HasForcedFlag 必须显式传入，不再默认猜测元数据存在。ErrorCodes 为 static 常量类，现有常量和调用写法不变。
+- 输入契约 `InputItem.Kind` 直接使用 Domain 的 `InputLocationKind`（LocalFile / LocalDirectory / NonLocal / Unknown）；不在 Contracts 中重复定义输入位置枚举。Desktop 的旧候选类型暂由边界映射，随草稿迁移处理。
 - Domain 已定义 `TrackKind`、`LanguageTag`、`TrackFlags`、`TrackId`。语言值保留原字符串（含空值和传统/IETF 标签），1b 不引入规范化或匹配规则。
 - `Contracts/` 已定义单任务规格/结果/进度、媒体探测、导入计划、组件操作及协调器接口。集合统一使用 Domain 的 `EquatableArray<T>`（只读包装 ImmutableArray，按元素比较相等与哈希，default 视为空），仅保存数据；导入会话由调用方提供 ID 与修订号，不暴露 ViewModel 或 Application 内部对象。组件阶段独立于 `JobStage`，协调器目前只有契约，没有实现。
 - `MuxJobSpec.Tools` 显式携带工具、日志、缓存及独立 fonttools 后端配置；Core 的 `Muxing/LegacyMuxContractConverter.cs` 提供 `ToSpec(MuxRequest, Workspace/ToolConfiguration)`、`ToLegacyRequest(MuxJobSpec)` 与 `ToResult(MuxResult)`。旧入口与调用方尚未接入这些转换，保持原行为。

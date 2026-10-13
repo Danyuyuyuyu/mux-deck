@@ -2,9 +2,8 @@ using MuxDeck.Domain;
 
 namespace MuxDeck.Contracts;
 
-public enum InputItemKind { LocalFile, LocalDirectory, NonLocal }
 public enum ImportStatus { Prepared, Rejected, Cancelled }
-public sealed record InputItem(string Path, InputItemKind Kind);
+public sealed record InputItem(string Path, InputLocationKind Kind);
 public sealed record ImportedTrackSpec(string Path, MediaTrackInfo Track, LanguageTag Language);
 public sealed record ImportRequest(Guid DraftSessionId, long DraftRevision,
     EquatableArray<InputItem> Inputs, MuxJobSpec? CurrentSpec);
