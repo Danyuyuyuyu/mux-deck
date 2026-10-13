@@ -52,7 +52,7 @@ Desktop → Core 保留到既有入口迁移完成；Desktop → Infrastructure 
 
 1a 选定并固定测试依赖：`xunit.v3` **3.2.2**、`xunit.runner.visualstudio` **3.1.4**、`Microsoft.NET.Test.Sdk` **17.14.1**；架构测试使用 `NetArchTest.Rules` **1.3.2**。所有新增项目提交 `packages.lock.json`，继续使用 `dotnet restore MuxDeck.sln --locked-mode`。
 
-Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Application；Architecture.Tests 验证全部生产项目（过渡期包含 Core），Smoke 仍只直接引用 Desktop。1b 初始新增 Domain 值类型测试 8 项、Core 旧模型转换测试 26 项；修正 B 后 Domain 为 15 项、Application 契约值相等测试 4 项，修正 C 后架构测试 91 项。Application 流程尚未迁移，当前流程用例 0。Core.Tests 只直接引用 Core，不放宽既有分层测试依赖。架构测试检查 restore 后的实际直接项目引用、Domain 包依赖、程序集与命名空间依赖、Views/ViewModels 的契约与接口边界，以及 Infrastructure 只能由 Program/Composition 使用的装配边界（含源码路径）。字段、泛型、构造调用和异步方法反例验证 NetArchTest 的扫描能力。
+Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Application；Architecture.Tests 验证全部生产项目（过渡期包含 Core），Smoke 仍只直接引用 Desktop。1b 初始新增 Domain 值类型测试 8 项、Core 旧模型转换测试 26 项；修正 B 后 Domain 为 15 项、Application 契约值相等测试 4 项，修正 C 后架构测试 91 项；2a 后 Domain 84 / 架构 94，2b 后 Domain 218 / 架构 95（仅新增规则与护栏用例）。Application 流程尚未迁移，当前流程用例 0。Core.Tests 只直接引用 Core，不放宽既有分层测试依赖。架构测试检查 restore 后的实际直接项目引用、Domain 包依赖、程序集与命名空间依赖、Views/ViewModels 的契约与接口边界，以及 Infrastructure 只能由 Program/Composition 使用的装配边界（含源码路径）。字段、泛型、构造调用和异步方法反例验证 NetArchTest 的扫描能力。
 
 ## 契约
 
@@ -131,6 +131,14 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 - `OutputNaming.cs` 负责默认后缀、自定义名称和无视频时的预览占位。Desktop 预览将空白视为自动命名；旧服务仅将 null 视为自动命名，空白仍由原校验拒绝。路径拆分、文件存在性、合法文件名校验和落位均留在调用边界。
 - 原位置只调用上述 Domain 规则；规则不使用文件、目录、进程、当前时间或 ID 生成 API。Domain 单元测试注明对应的既有 Smoke 场景，架构测试逐个检查三个规则类型并保留全命名空间护栏。
 
+#### 2b 输入识别与接纳已迁入 Domain
+
+- `src/MuxDeck.Domain/InputRules.cs` 是媒体/字体扩展名、固定槽位类型与数量、候选来源类型、完整路径事实校验、规范化路径比较、去重及单字体目录的唯一规则位置；自动导入中的源视频数量、字幕/音频探测类型和已加入轨道身份也由该规则判定。
+- `MuxDeck.Core.Muxing.MediaFileTypes` 与旧 `SingleMuxService.IsFont` 仅提取扩展名并调用 Domain，保留现有调用方。Core 按运行平台决定路径大小写策略，Desktop 仍按 Windows 大小写无关策略比较。
+- `ViewModels/SingleMuxViewModel.cs` 与 `MediaImport.cs` 暂时收集 `Path` 规范化/完整性/无效字符、文件/目录存在性和媒体探测事实。规范化键先在边界收集，再交给 Domain 比较；Domain 不使用 `System.IO`，不查询文件或目录。
+- 固定槽位仍只接纳 MKV/MP4 与 ASS，自动导入保留原有广泛视频/音频/ASS/SRT/字体入口。两者的设备路径与规范化细节差异保持原行为，不统一或扩大允许范围。
+- 准备/提交、编辑锁、迟到修订、替换确认、原拒绝文案和全批次原子更新仍留 Desktop，随 4b 迁移。SC/TC 去重比较最终槽位集合；同音频容器按真实 Track ID 区分，字幕按文件身份去重。Domain 规则测试与新增副作用架构检查覆盖这些边界。
+
 #### 阶段一单任务职责
 
 阶段一尚未迁出的业务编排与媒体工具代码位于 `src/MuxDeck.Core/Muxing/`。下表路径相对于 `src/MuxDeck.Core/`；进程技术适配位于 Core 根目录，不拆出额外生产项目：
@@ -165,12 +173,12 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 
 单任务交互由 `ViewModels/SingleMuxViewModel.cs` 持有；它构造 `MuxRequest` 快照并调用 `SingleMuxService`，包含 `StartAsync`、`CancelAndWaitAsync`、`RunTask`、`IsRunning`、`CanEdit`、`Tracks`、`SelectedTrack`、`Log`、`Result` 与 `StatusText`。`TrackRowViewModel` 表示内封来源轨道与外加字幕的展示行；SC/TC 外加字幕各自显式维护名称、语言、default 和 forced，输入组合变更时只调用一次 Domain `TrackPolicy.SubtitleDefaults`；同槽替换、纳入切换和后续显式旗标编辑不重算默认值。`MainWindowViewModel` 继续负责导航和工具环境摘要。UI 不承担 QC，也不构造 AFS 或 mkvmerge 参数。
 
-第一轮任务 A 的新增状态和接纳接口位于同一 ViewModel 及 `ViewModels/InputAcceptance.cs`，不放入 Core：
+第一轮任务 A 的状态和接纳接口仍位于同一 ViewModel 及 `ViewModels/InputAcceptance.cs`；2b 已将其纯校验迁入 Domain `InputRules`，旧接口仅收集事实并调用规则，不放入 Core：
 
 - 摘要由 `VideoFileName`、`VideoFullPath`、`VideoDimensions`、`VideoCodec`、`VideoDurationNanoseconds`、`MediaSummary` 与 `ProbeState`/`ProbeText` 表达；未知字段为空，不猜容器。`SourceTracks` 和 `ExternalTracks` 是只读可观察分组；`SourceAttachmentCount`/`SourceAttachments` 用于附件数量和详情。旧 `Tracks` 仍含源轨、附件与外加字幕，以兼容当前视图。
 - 固定 `ScTrack`/`TcTrack` 的 `IsIncluded` 独立于路径、名称及旗标。禁用仍可查看；`SetSubtitleIncluded`、`RemoveSubtitle` 按槽位操作，提交只消费启用 ASS。同槽替换和启用切换保留名称/default/forced；添加或移除改变槽位组合时沿用 SC/TC 默认规则。两个槽位只订阅一次元数据变化，并在运行、取消清理和关闭等待时用模型守卫拒绝路径、元数据及启用变更。
 - 视图从系统文件数据构造 `InputCandidate`（本地文件、本地文件夹；URL/文本标为 `NonLocal`），先调用 `PrepareVideoInput`、`PrepareSubtitleInputs`、`PrepareFontsDirectory` 或 `PrepareOutputDirectory`。字幕分配用 `SubtitleAssignment(SubtitleSlot, InputCandidate)` 明确 SC/TC。准备阶段只校验并返回只读 `InputAcceptancePlan`，不修改配置。视频或已有字幕槽位的异路径替换通过 `RequiresReplacementConfirmation` 要求视图明示确认；取消直接丢弃计划。
-- 确认后 `CommitInput(plan, replacementsConfirmed)` 再核验 `CanEdit`、草稿修订及全部候选的类型/存在性/唯一性，一次提交。只接纳完整 Windows 路径；按规范化绝对路径和大小写比较，不识别硬链接/符号链接身份。批量重复按操作完成后的 SC/TC 集合比较，整组交换合法，同槽同路径无害。结果的 `Error`/`Message` 给出拒绝原因；失败仅更新 `InteractionMessage`，草稿和 Core 结果均保留。选择器、复制或平台动作异常可用 `ReportInteractionMessage` 表达。
+- 确认后 `CommitInput(plan, replacementsConfirmed)` 再核验 `CanEdit`、草稿修订，重新收集候选存在性与规范化事实，调用 Domain `InputRules` 检查类型/路径/数量/唯一性后一次提交。只接纳完整 Windows 路径；按规范化绝对路径和大小写比较，不识别硬链接/符号链接身份。批量重复按操作完成后的 SC/TC 集合比较，整组交换合法，同槽同路径无害。结果的 `Error`/`Message` 给出拒绝原因；失败仅更新 `InteractionMessage`，草稿和 Core 结果均保留。选择器、复制或平台动作异常可用 `ReportInteractionMessage` 表达。
 - `DraftRevision` 对参数、启用和外加元数据变化计数；一次接纳批次增加一次，同值赋值、导航、选择和展示不增加。`ResultRevision`、`IsResultHistorical`、`ResultLabel` 区分当前草稿与上次 Core 结果；配置变化保留 `Result`、诊断和日志，再次运行期间也保留上次结果至新结果返回。主区使用 `State`/`StateSummary`，进度使用 `ProgressStage`/`ProgressMessage` 与既有不定进度；详细 `Checks`/`Warnings`/原始 `Error` 从 `Result` 读取。`CanStart` 只表示提交条件齐全，最终验证仍归 Core。
 
 单个封装最新结构见 [工作台重构任务](../tasks/single-mux-workbench.md)；三张旧稿保留为历史布局参考：

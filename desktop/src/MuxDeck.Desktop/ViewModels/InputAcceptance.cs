@@ -1,3 +1,5 @@
+using MuxDeck.Domain;
+
 namespace MuxDeck.Desktop.ViewModels;
 
 public enum InputCandidateKind { LocalFile, LocalDirectory, NonLocal }
@@ -8,7 +10,16 @@ public enum VideoProbeState { Empty, Probing, Succeeded, Failed }
 public enum SingleMuxState { NoVideo, Probing, ProbeFailed, Incomplete, Ready, Running, Cancelling, Closing, Cancelled, Failed, Succeeded, SucceededWithWarnings }
 
 // 视图只能从系统文件数据构造 Local 候选；文本路径和 URL 必须标为 NonLocal。
-public sealed record InputCandidate(string Path, InputCandidateKind Kind);
+public sealed record InputCandidate(string Path, InputCandidateKind Kind)
+{
+    internal InputLocationKind LocationKind => Kind switch
+    {
+        InputCandidateKind.LocalFile => InputLocationKind.LocalFile,
+        InputCandidateKind.LocalDirectory => InputLocationKind.LocalDirectory,
+        InputCandidateKind.NonLocal => InputLocationKind.NonLocal,
+        _ => InputLocationKind.Unknown
+    };
+}
 public sealed record SubtitleAssignment(SubtitleSlot Slot, InputCandidate Candidate);
 public sealed record InputAcceptanceResult(InputAcceptanceError Error, string Message, InputAcceptancePlan? Plan = null)
 {

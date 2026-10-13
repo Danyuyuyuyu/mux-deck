@@ -472,11 +472,11 @@ public sealed partial class SingleMuxService
         LanguageRules.Matches(track.Language, track.LanguageIetf, language);
     // 仅统一文件换行；最后一条 Dialogue 的尾部空格也属于正文，必须保留比较。
     private static string NormalizeAss(string text) => text.Replace("\r\n", "\n");
-    private static bool IsFont(string path) => Path.GetExtension(path).ToLowerInvariant() is ".ttf" or ".otf" or ".ttc" or ".otc";
+    private static bool IsFont(string path) => InputRules.IsFontExtension(Path.GetExtension(path));
     private static byte[] HashFile(string path) { using var stream = File.OpenRead(path); return SHA256.HashData(stream); }
     private static string Executable(string name) => name + (OperatingSystem.IsWindows() ? ".exe" : "");
-    private static bool SamePath(string a, string b) => string.Equals(Path.GetFullPath(a), Path.GetFullPath(b),
-        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    private static bool SamePath(string a, string b) =>
+        InputRules.SameNormalizedPath(Path.GetFullPath(a), Path.GetFullPath(b), OperatingSystem.IsWindows());
     private static string Tail(string value) => value.Length <= 600 ? value.Trim() : value[^600..].Trim();
     private static string String(JsonElement element, string key) => OptionalString(element, key) ?? "";
     private static string? OptionalString(JsonElement element, string key) => element.TryGetProperty(key, out var value) ? value.GetString() : null;

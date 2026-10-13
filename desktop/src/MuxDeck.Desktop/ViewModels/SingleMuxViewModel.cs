@@ -349,14 +349,14 @@ public sealed partial class SingleMuxViewModel : ObservableObject
     public InputAcceptanceResult RemoveSubtitle(SubtitleSlot slot)
     {
         if (!CanEdit) return Reject(InputAcceptanceError.Locked, "当前正在运行、取消清理或关闭等待，不能修改输入。");
-        if (!Enum.IsDefined(slot)) return Reject(InputAcceptanceError.InvalidSlot, "字幕槽位必须是 SC 或 TC。");
+        if (!InputRules.IsSubtitleSlot((int)slot)) return Reject(InputAcceptanceError.InvalidSlot, "字幕槽位必须是 SC 或 TC。");
         SetSubtitlePath(slot, "");
         return AcceptMessage("已移除 " + slot.ToString().ToUpperInvariant() + " 字幕。");
     }
     public InputAcceptanceResult SetSubtitleIncluded(SubtitleSlot slot, bool included)
     {
         if (!CanEdit) return Reject(InputAcceptanceError.Locked, "当前不能修改字幕启用状态。");
-        if (!Enum.IsDefined(slot)) return Reject(InputAcceptanceError.InvalidSlot, "字幕槽位必须是 SC 或 TC。");
+        if (!InputRules.IsSubtitleSlot((int)slot)) return Reject(InputAcceptanceError.InvalidSlot, "字幕槽位必须是 SC 或 TC。");
         if (string.IsNullOrWhiteSpace(SlotPath(slot))) return Reject(InputAcceptanceError.MissingPath, "该槽位尚未添加 ASS。");
         SlotTrack(slot).IsIncluded = included;
         return AcceptMessage(included ? "字幕已加入本次输出。" : "字幕暂不加入；路径、名称与旗标已保留。");
@@ -371,28 +371,29 @@ public sealed partial class SingleMuxViewModel : ObservableObject
     private static bool SamePath(string left, string right)
     {
         if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) return left == right;
-        try { return string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)), StringComparison.OrdinalIgnoreCase); }
+        try { return InputRules.SameNormalizedPath(Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)), ignoreCase: true); }
         catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException) { return false; }
     }
     private InputAcceptanceResult? ValidateCandidate(InputCandidate candidate, InputOperation operation, out InputCandidate normalized)
     {
         normalized = candidate;
-        if (candidate.Kind == InputCandidateKind.NonLocal) return Reject(InputAcceptanceError.NonLocal, "只接受系统提供的本地文件或文件夹；URL 和纯文本路径不受支持。");
         var folder = operation is InputOperation.FontsDirectory or InputOperation.OutputDirectory;
-        if (candidate.Kind != (folder ? InputCandidateKind.LocalDirectory : InputCandidateKind.LocalFile)) return Reject(InputAcceptanceError.WrongType, folder ? "请选择单个本地文件夹。" : "这里只接受本地文件。");
+        var kindError = InputRules.CheckCandidateKind(candidate.LocationKind, folder);
+        if (kindError == InputKindError.NonLocal) return Reject(InputAcceptanceError.NonLocal, "只接受系统提供的本地文件或文件夹；URL 和纯文本路径不受支持。");
+        if (kindError == InputKindError.WrongType) return Reject(InputAcceptanceError.WrongType, folder ? "请选择单个本地文件夹。" : "这里只接受本地文件。");
         var path = candidate.Path;
         // 接纳使用 Windows 绝对路径；旧直接属性赋值仍允许 Smoke 的内部假路径。
-        if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path) || path.Contains("://", StringComparison.Ordinal) || path.StartsWith(@"\\?\", StringComparison.Ordinal) || path.StartsWith(@"\\.\", StringComparison.Ordinal))
+        if (!InputRules.AcceptsFixedSlotPath(path, path is not null && Path.IsPathFullyQualified(path)))
             return Reject(InputAcceptanceError.InvalidPath, "需要完整的 Windows 本地路径。");
         try
         {
             path = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
-            if (path.IndexOfAny(Path.GetInvalidPathChars()) >= 0 || path.AsSpan(2).Contains(':')) return Reject(InputAcceptanceError.InvalidPath, "路径含有无效字符或数据流标记。");
+            if (!InputRules.AcceptsNormalizedPathSyntax(path, path.IndexOfAny(Path.GetInvalidPathChars()) >= 0)) return Reject(InputAcceptanceError.InvalidPath, "路径含有无效字符或数据流标记。");
             if (folder ? !Directory.Exists(path) : !File.Exists(path)) return Reject(InputAcceptanceError.MissingPath, folder ? "文件夹不存在或不可访问。" : "文件不存在或不可访问。");
             if (!folder)
             {
                 var extension = Path.GetExtension(path);
-                if (operation == InputOperation.Video ? !(extension.Equals(".mkv", StringComparison.OrdinalIgnoreCase) || extension.Equals(".mp4", StringComparison.OrdinalIgnoreCase)) : !extension.Equals(".ass", StringComparison.OrdinalIgnoreCase))
+                if (!InputRules.AcceptsFixedSlotExtension(extension, operation == InputOperation.Video))
                     return Reject(InputAcceptanceError.WrongType, operation == InputOperation.Video ? "视频仅支持 MKV/MP4。" : "字幕仅支持 ASS。");
             }
         }
@@ -409,27 +410,27 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         var requiresConfirmation = false;
         if (operation == InputOperation.Subtitles)
         {
-            if (assignments.Count is < 1 or > 2) return Reject(InputAcceptanceError.InvalidCount, "一次接纳 1–2 个 ASS，并明确分配到 SC/TC。");
+            if (!InputRules.AcceptsSelectionCount(assignments.Count, subtitleSlots: true)) return Reject(InputAcceptanceError.InvalidCount, "一次接纳 1–2 个 ASS，并明确分配到 SC/TC。");
             foreach (var assignment in assignments)
             {
-                if (!Enum.IsDefined(assignment.Slot) || normalizedAssignments.Any(a => a.Slot == assignment.Slot)) return Reject(InputAcceptanceError.InvalidSlot, "每个 SC/TC 槽位只能分配一次。");
+                if (!InputRules.IsSubtitleSlotAvailable((int)assignment.Slot, normalizedAssignments.Select(a => (int)a.Slot))) return Reject(InputAcceptanceError.InvalidSlot, "每个 SC/TC 槽位只能分配一次。");
                 var error = ValidateCandidate(assignment.Candidate, operation, out var candidate);
                 if (error is not null) return error;
                 normalizedAssignments.Add(assignment with { Candidate = candidate });
-                requiresConfirmation |= !string.IsNullOrWhiteSpace(SlotPath(assignment.Slot)) && !SamePath(SlotPath(assignment.Slot), candidate.Path);
+                requiresConfirmation |= InputRules.RequiresReplacement(SlotPath(assignment.Slot), SamePath(SlotPath(assignment.Slot), candidate.Path));
             }
             // 与最终槽位集合比较；整组交换合法，不能拿将被替换的旧槽位误报重复。
             var finalSc = normalizedAssignments.FirstOrDefault(a => a.Slot == SubtitleSlot.Sc)?.Candidate.Path ?? ScSubtitle;
             var finalTc = normalizedAssignments.FirstOrDefault(a => a.Slot == SubtitleSlot.Tc)?.Candidate.Path ?? TcSubtitle;
-            if (!string.IsNullOrWhiteSpace(finalSc) && !string.IsNullOrWhiteSpace(finalTc) && SamePath(finalSc, finalTc)) return Reject(InputAcceptanceError.Duplicate, "同一 ASS 路径不能同时分配到 SC 和 TC。");
+            if (InputRules.SubtitlePathsConflict(finalSc, finalTc, SamePath(finalSc, finalTc))) return Reject(InputAcceptanceError.Duplicate, "同一 ASS 路径不能同时分配到 SC 和 TC。");
         }
         else
         {
-            if (candidates.Count != 1) return Reject(InputAcceptanceError.InvalidCount, operation == InputOperation.Video ? "一次只能接纳一个 MKV/MP4 视频。" : "一次只能接纳一个文件夹。");
+            if (!InputRules.AcceptsSelectionCount(candidates.Count, subtitleSlots: false)) return Reject(InputAcceptanceError.InvalidCount, operation == InputOperation.Video ? "一次只能接纳一个 MKV/MP4 视频。" : "一次只能接纳一个文件夹。");
             var error = ValidateCandidate(candidates[0], operation, out var candidate);
             if (error is not null) return error;
             normalizedCandidates.Add(candidate);
-            requiresConfirmation = operation == InputOperation.Video && !string.IsNullOrWhiteSpace(VideoPath) && !SamePath(VideoPath, candidate.Path);
+            requiresConfirmation = operation == InputOperation.Video && InputRules.RequiresReplacement(VideoPath, SamePath(VideoPath, candidate.Path));
         }
         return new(InputAcceptanceError.None, requiresConfirmation ? "将替换已有输入，请明确确认。" : "候选有效，等待提交。",
             new(this, operation, DraftRevision, normalizedCandidates, normalizedAssignments, requiresConfirmation));
