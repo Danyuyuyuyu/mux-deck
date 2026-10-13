@@ -24,18 +24,21 @@ dotnet run --project src/MuxDeck.Desktop -- --root E:\Video\mux-deck
 - 单个封装页按三张已确认布局稿实现：平面视频摘要、统一八列轨道表（纳入/ID/类型/语言/名称/默认/强制/编码，源/外加分组）、并排输出设置与固定 Action Bar；右侧 300 宽全高轨道属性栏贴窗口客户区右边与上下边缘，底部 300 高结果详情止于状态栏上缘，两者覆盖主内容并互斥，主布局不重排，默认列宽下普通 3 源轨 + SC/TC 在 1040×760 无整体滚动。列宽支持拖动、键盘调整和恢复默认，自动存于 v2 用户偏好，关闭再打开保留；加宽后仅表格内部横向滚动。外加行按首次添加顺序从 0 编号，旧草稿 SC/TC 业务身份不变，新导入使用独立轨道身份，空名称留空。目录菜单提供打开和清空，不恢复复制路径。源轨包含状态按策略只读投影，外加字幕可切换，字幕更换/移除在轨道属性面板完成；结果详情的成品计数来自成功结果配套的只读成品探测。面板打开时 Tab/Shift+Tab 跳过被遮挡区域、关闭后焦点回到当前行/入口，轨道清单支持 ↑/↓ 切轨与 Enter/Space 打开属性。工作区自动识别混合视频、音频、多 ASS/SRT 和字体目录；伴随文本不再误拒绝，视频替换保留确认，重复或无效批次整组不提交。
 - Core 单任务封装：源视频加多条 ASS/SRT 和音频；ASS 保留 AFS/PyFontTools 子集路径及显式字体目录，SRT/音频无需字体；逐轨元数据、字幕参考全文、音频 raw 数据和源 A/V QC，源字幕/附件替换、失败/取消不发布成品。
 - AFS 诊断按精确策略分类：仅已验证的 ASS 颜色高字节工具告警可继续，其他未知告警和致命诊断阻止发布。Core 另可在唯一 Regular face 满足合成条件时报告 `FONT_SYNTHETIC_BOLD`；也可在 ASS 明确引用完整/PostScript face、AFS 映射和源/子集元数据证明为同一唯一 native-bold face 时报告 `FONT_INTRINSIC_WEIGHT`。这两类 Core 提示都不扩大 AFS 告警白名单。规则见[工具诊断分类](docs/agents/diagnostics.md)。
-- 六项工具路径检测：便携 `bin/` 优先，随后 PATH，再回退 MKVToolNix 默认安装位置。
-- 工作区日志、重新检测环境。
+- 环境与组件页使用轻量分组列表和统一状态点，显示经过启动及必要依赖验证的状态、实际版本、来源、路径摘要和核心/扩展组件总览；组件目录优先，随后 PATH，再回退 MKVToolNix 默认安装位置。
+- Windows x64 下缺失的 MKVToolNix、FFmpeg、AssFontSubset、assfonts 均可在条目内安装，提供进度、取消、失败重试/详情和自动重新检测；AFS 已有主程序但缺后端时提供“安装依赖”。固定发布包经过大小、SHA-256、解压路径和启动验证后不覆盖地落位，安装日志与缓存使用配置的工作目录。
+- 配置组件目录中的手动副本与软件安装均可通过 ⋯ 菜单行内确认卸载，不增加安装归属记录；PATH/系统主程序不提供卸载。AFS 主程序删除随包依赖，独立 fonttools 单独管理并可在重装时复用；卸载后自动检测，失败可查看日志并重试。范围与验收见[组件卸载任务](docs/tasks/component-uninstall.md)。
+- 组件安装位置与工作目录可配置，安装版默认使用 `%LOCALAPPDATA%\MuxDeck\tools` 和 `%LOCALAPPDATA%\MuxDeck`，其下自动维护 `config`、`logs`、`cache`；便携 `--root` 继续使用工作区内的 `bin`/`data`。
+- 工作区日志、重新检测环境、路径设置持久化。
 - 可供后续工具调用复用的异步进程模块：参数列表传递、stdout/stderr 分流、Unicode 输出、有界捕获与受控子进程收尾。
 - 控制台冒烟与阶段一验收入口：真实子进程调用、取消、路径优先级、Avalonia 编译绑定、导航、状态保留、真实工具 fixture 与真实 UI 验收。
 
 Windows `Process.Start()` 和后续 Assign Job 之间存在非原子启动窗口。阶段一覆盖了当前同步 AFS/MKV 工具和受控进程取消/管道收尾场景，但未覆盖 launcher 在归属前快速创建后代或退出；不能据此承诺任意 launcher 的完整进程树终止。该启动竞态是阶段二 P2 可靠性事项。
 
-环境检测当前只确认文件位置，不执行工具或核验版本，不宣称所有依赖已满足。AFS 的 Python/fonttools 后端检测、版本检测及组件安装尚未迁移。
+环境检测验证 MKVToolNix 三个子工具和版本一致性、AssFontSubset 与 pyftsubset/ttx 后端、FFmpeg 的 subtitles 滤镜以及 assfonts 启动信息。绿色“可用”表示这些检查通过，实际素材仍由封装任务校验。AFS 完整安装携带独立 Python/fonttools，检测和封装共用其定位；不修改系统 PATH、注册表或用户 Python。assfonts 尚未接入 V2 封装备份后端，也未提供组件更新或覆盖修复。当前范围与验收见[补齐组件安装](docs/tasks/component-installation-complete.md)，首轮记录见[组件安装任务](docs/tasks/component-installation.md)。
 
 ## 后续阶段
 
-字幕自动匹配与体检、预设持久化、批量队列、字幕提取、预览、章节编辑、快速修补、自动安装与后处理命令。界面中的待迁移入口明确显示状态，没有模拟封装成功。
+字幕自动匹配与体检、预设持久化、批量队列、字幕提取、预览、章节编辑、快速修补、组件更新与后处理命令。界面中的待迁移入口明确显示状态，没有模拟封装成功。
 
 当前自动化验收的日期、计数与证据见[验证要求](docs/agents/verification.md#当前自动化能力)。严格 ASS transport 参考比较已通过最新[阶段一真实工具链报告](artifacts/phase1/20261010-015647-daefe8254a624279bdb71f726b161b95/report.json)；真实 UI 10/10 的[历史截图](artifacts/phase1/20261009-113607-f1ca9f2ec2694a72aa06fbdc0a31deb3/real-ui-success.png)来自 2026-10-09。
 
@@ -71,6 +74,22 @@ dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop-r
 dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --input-feedback
 # 工作台列宽、数字显示 ID、语言与目录菜单：
 dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --workbench-ui
+# 环境列表、路径保存和组件安装的受控行为与界面检查：
+dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --environment-ui
+dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --components
+dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-ui
+dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all
+# 组件卸载、依赖关系、操作互斥和行内确认界面：
+dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall
+dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui
+# 使用固定包缓存，在唯一临时目录执行真实安装/卸载循环（文件名见组件卸载任务）：
+dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-real '<固定包缓存目录>'
+# 可选联网验收：真实工具验证，并在唯一临时目录安装固定 assfonts 包：
+dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --components-real
+# 可传 workspace-root，只读取其 bin 工具；测试安装仍写入独立临时目录：
+# dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --components-real E:\Video\mux-deck
+# 真实下载三个组件、验证独立 Python/fonttools、执行真实 ASS 封装和 QC：
+dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all-real
 # 低成本真实 ffmpeg/AFS/MKVToolNix 颜色告警 fixture：
 dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-real
 # 真实 Regular-only 字体粗体请求 fixture，或附 task.log 对只读原始请求重放：

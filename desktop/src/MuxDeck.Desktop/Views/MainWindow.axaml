@@ -1,11 +1,70 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:MuxDeck.Desktop.ViewModels"
-        xmlns:core="using:MuxDeck.Core"
         xmlns:views="using:MuxDeck.Desktop.Views"
         x:Class="MuxDeck.Desktop.Views.MainWindow" x:Name="WindowRoot" x:DataType="vm:MainWindowViewModel"
         Title="Mux Deck · 桌面版" Width="1280" Height="900" MinWidth="1040" MinHeight="760"
         Background="{DynamicResource WorkspaceBackground}" FontFamily="{DynamicResource UiFontFamily}" FontSize="{DynamicResource FontBody}">
+  <Window.Resources>
+    <!-- 核心和扩展组件共用条目布局，状态列与三级路径信息保持一致。 -->
+    <DataTemplate x:Key="EnvironmentComponentTemplate" x:DataType="vm:EnvironmentComponentViewModel">
+      <Border Classes="component-entry">
+        <Grid ColumnDefinitions="*,104,96" RowDefinitions="Auto,Auto" ColumnSpacing="12">
+          <StackPanel Spacing="5">
+            <TextBlock Text="{Binding Name}" FontSize="{DynamicResource FontInspector}" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding Description}" Classes="muted caption" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding MetadataText}" Classes="muted caption" IsVisible="{Binding HasMetadata}" Margin="0,3,0,0" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding PartsText}" Classes="muted caption" IsVisible="{Binding HasParts}" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding PathSummary}" Classes="muted caption" IsVisible="{Binding HasMetadata}"
+                       FontFamily="{DynamicResource LogFontFamily}" TextTrimming="CharacterEllipsis"
+                       ToolTip.Tip="{Binding FullPath}" />
+            <TextBlock Text="{Binding MissingText}" Classes="muted caption" IsVisible="{Binding HasReason}" Margin="0,3,0,0" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding DependencySummary}" Classes="muted caption" IsVisible="{Binding HasIndependentDependencies}" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding ErrorSummary}" Classes="error caption" IsVisible="{Binding HasOperationError}" Margin="0,3,0,0" TextWrapping="Wrap" />
+          </StackPanel>
+          <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top" Orientation="Horizontal" Spacing="6" Margin="0,5,0,0" AutomationProperties.Name="{Binding StatusText}">
+            <Border Classes="env-dot" Classes.ok="{Binding IsHealthy}" Classes.warning="{Binding IsWarningStatus}" Classes.error="{Binding IsErrorStatus}" />
+            <TextBlock Text="{Binding StatusText}" Classes="env-status" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Top" Spacing="4">
+            <Button Content="{Binding InstallActionText}" Command="{Binding InstallCommand}" Classes="tiny" IsVisible="{Binding ShowInstall}" />
+            <Button Content="取消" Command="{Binding CancelCommand}" Classes="tiny" IsVisible="{Binding ShowCancel}" />
+            <Button Content="安装指南" Command="{Binding GuideCommand}" Classes="tiny" IsVisible="{Binding ShowGuide}" />
+            <Button Content="详情" Command="{Binding ToggleDetailsCommand}" Classes="quiet tiny" IsVisible="{Binding HasDetails}" />
+            <Button Content="重试卸载" Command="{Binding RetryRemovalCommand}" Classes="tiny" IsVisible="{Binding ShowRemovalRetry}" IsEnabled="{Binding CanChange}" />
+            <Button Content="⋯" Classes="quiet tiny" IsVisible="{Binding ShowManagementMenu}" IsEnabled="{Binding CanChange}" AutomationProperties.Name="组件管理操作">
+              <Button.Flyout>
+                <MenuFlyout>
+                  <MenuItem Header="卸载组件" Command="{Binding RequestRemoveComponentCommand}" IsVisible="{Binding CanRemoveComponent}" />
+                  <MenuItem Header="卸载独立依赖" Command="{Binding RequestRemoveDependenciesCommand}" IsVisible="{Binding CanRemoveDependencies}" />
+                </MenuFlyout>
+              </Button.Flyout>
+            </Button>
+          </StackPanel>
+          <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Spacing="8" Margin="0,8,0,0" IsVisible="{Binding ShowProgress}">
+            <TextBlock Text="{Binding ProgressText}" Classes="muted caption" />
+            <ProgressBar Value="{Binding ProgressValue}" IsIndeterminate="{Binding ProgressIndeterminate}" Height="3" />
+          </StackPanel>
+          <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Spacing="6" Margin="0,8,0,0" IsVisible="{Binding IsDetailsOpen}" PropertyChanged="RevealEnvironmentSection">
+            <TextBox Text="{Binding DetailsText, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="140" />
+            <TextBlock Text="{Binding GuideText}" Classes="muted caption" IsVisible="{Binding ShowGuide}" TextWrapping="Wrap" />
+            <Button Content="打开官方页面" Click="OpenComponentGuide" Classes="quiet tiny" IsVisible="{Binding ShowGuide}" />
+          </StackPanel>
+          <Border Classes="removal-confirmation" Grid.Row="1" Grid.ColumnSpan="3" Margin="0,10,0,0" Padding="12" BorderThickness="1" BorderBrush="{DynamicResource PanelBorder}" CornerRadius="4" IsVisible="{Binding IsConfirmingRemoval}" PropertyChanged="RevealEnvironmentSection">
+            <StackPanel Spacing="8">
+              <TextBlock Text="{Binding RemovalTitle}" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding RemovalDescription}" Classes="muted caption" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding RemovalDirectory}" Classes="muted caption" FontFamily="{DynamicResource LogFontFamily}" TextWrapping="Wrap" />
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Content="取消" Command="{Binding CancelRemovalConfirmationCommand}" Classes="tiny removal-cancel" />
+                <Button Content="确认卸载" Command="{Binding ConfirmRemovalCommand}" Classes="danger tiny" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </Grid>
+      </Border>
+    </DataTemplate>
+  </Window.Resources>
   <Window.Styles>
     <Style Selector="views|InteractionNotice">
       <Setter Property="Margin" Value="20,20,20,0" />
@@ -30,6 +89,74 @@
     <Style Selector="ListBoxItem">
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     </Style>
+    <Style Selector="TextBlock.env-status">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="{DynamicResource FontCaption}" />
+    </Style>
+    <Style Selector="Border.env-dot">
+      <Setter Property="Width" Value="6" />
+      <Setter Property="Height" Value="6" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Background" Value="{DynamicResource MutedText}" />
+    </Style>
+    <Style Selector="Border.env-dot.ok"><Setter Property="Background" Value="{DynamicResource SuccessText}" /></Style>
+    <Style Selector="Border.env-dot.warning"><Setter Property="Background" Value="{DynamicResource WarningText}" /></Style>
+    <Style Selector="Border.env-dot.error"><Setter Property="Background" Value="{DynamicResource DangerText}" /></Style>
+    <Style Selector="TextBlock.env-status.ok">
+      <Setter Property="Foreground" Value="{DynamicResource SuccessText}" />
+    </Style>
+    <Style Selector="TextBlock.env-status.warning">
+      <Setter Property="Foreground" Value="{DynamicResource WarningText}" />
+    </Style>
+    <Style Selector="TextBlock.env-status.missing">
+      <Setter Property="Foreground" Value="{DynamicResource DangerText}" />
+    </Style>
+    <Style Selector="Border.environment-overview">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Padding" Value="0,0,0,12" />
+    </Style>
+    <Style Selector="Button.environment-management-bar">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Padding" Value="10,8" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.environment-management-bar:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource HoverBackground}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.environment-management">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Padding" Value="0,0,0,14" />
+    </Style>
+    <Style Selector="TextBlock.environment-group">
+      <Setter Property="FontSize" Value="{DynamicResource FontCaption}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource MutedText}" />
+      <Setter Property="Margin" Value="0,2,0,2" />
+    </Style>
+    <Style Selector="Border.settings-divider">
+      <Setter Property="BorderBrush" Value="{DynamicResource SoftBorder}" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="Margin" Value="0,4,0,2" />
+    </Style>
+    <Style Selector="Border.component-entry">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Padding" Value="0,12,8,12" />
+    </Style>
   </Window.Styles>
   <Grid ColumnDefinitions="172,*" RowDefinitions="*,24">
     <Border Background="{DynamicResource SidebarBackground}" BorderBrush="{DynamicResource PanelBorder}" BorderThickness="0,0,1,0">
@@ -41,7 +168,7 @@
         <StackPanel Grid.Row="1" Spacing="6">
           <Button Classes="nav" Classes.active="{Binding IsSingle}" Content="单个封装" Command="{Binding ShowSingleCommand}" />
           <Button Classes="nav" Classes.active="{Binding IsBatch}" Content="批量队列 · 未实现" Command="{Binding ShowBatchCommand}" />
-          <Button Classes="nav" Classes.active="{Binding IsEnvironment}" Content="环境检测" Command="{Binding ShowEnvironmentCommand}" />
+          <Button Classes="nav" Classes.active="{Binding IsEnvironment}" Content="环境与组件" Command="{Binding ShowEnvironmentCommand}" />
         </StackPanel>
         <StackPanel Grid.Row="2" Spacing="6" Margin="10,0,0,0">
           <TextBlock Text="桌面版 · 单个封装" FontSize="{DynamicResource FontCaption}" />
@@ -49,45 +176,84 @@
         </StackPanel>
       </Grid>
     </Border>
-    <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="20,20,20,16" IsVisible="{Binding !IsSingle}">
-      <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,8">
-        <TextBlock Text="{Binding PageTitle}" FontSize="{DynamicResource FontPageTitle}" FontWeight="SemiBold" LineHeight="30" />
-        <TextBlock Grid.Column="1" Text="{Binding PageDescription}" Classes="muted" FontSize="{DynamicResource FontCaption}" VerticalAlignment="Center" Margin="18,0,0,0" TextWrapping="Wrap" />
-      </Grid>
-      <Border Grid.Row="1" Classes="panel" IsVisible="{Binding IsBatch}" VerticalAlignment="Top">
+    <Grid Grid.Column="1" RowDefinitions="*" Margin="20,16,20,16" IsVisible="{Binding !IsSingle}">
+      <Border Classes="panel" IsVisible="{Binding IsBatch}" VerticalAlignment="Top">
         <StackPanel Spacing="12">
           <TextBlock Text="批量队列尚未实现" FontSize="{DynamicResource FontCardTitle}" FontWeight="SemiBold" />
           <TextBlock Text="当前可以在单个封装中处理一个视频和简繁 ASS。" Classes="muted" TextWrapping="Wrap" />
         </StackPanel>
       </Border>
-      <Border Grid.Row="1" Classes="panel" IsVisible="{Binding IsSubtitle}" VerticalAlignment="Top">
+      <Border Classes="panel" IsVisible="{Binding IsSubtitle}" VerticalAlignment="Top">
         <TextBlock Text="字幕工具尚未实现" />
       </Border>
-      <ScrollViewer Grid.Row="1" IsVisible="{Binding IsEnvironment}" VerticalScrollBarVisibility="Auto">
+      <ScrollViewer x:Name="EnvironmentScroll" IsVisible="{Binding IsEnvironment}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <Grid x:Name="EnvironmentWidthHost" Margin="4,0,16,0">
+        <Grid x:Name="EnvironmentContent" Width="{Binding #EnvironmentWidthHost.Bounds.Width}" MaxWidth="960" HorizontalAlignment="Left">
         <StackPanel Spacing="12">
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Text="{Binding EnvironmentSummary}" VerticalAlignment="Center" />
-            <Button Grid.Column="1" Content="重新检测" Command="{Binding RefreshEnvironmentCommand}" />
-          </Grid>
-          <ItemsControl ItemsSource="{Binding Tools}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="core:ToolStatus">
-                <Border Classes="panel" Margin="0,0,0,8">
-                  <StackPanel Spacing="6">
-                    <Grid ColumnDefinitions="*,Auto">
-                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                      <TextBlock Grid.Column="1" Text="{Binding Status}" />
-                    </Grid>
-                    <TextBlock Text="{Binding Purpose}" Classes="muted" />
-                    <TextBlock Text="{Binding Location}" TextWrapping="Wrap" FontSize="{DynamicResource FontCaption}" Classes="muted" />
+          <Border Classes="environment-overview">
+            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto">
+              <StackPanel Spacing="5">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Border x:Name="EnvironmentSummaryDot" Classes="env-dot env-summary-dot" Width="8" Height="8" CornerRadius="4"
+                            Classes.ok="{Binding Environment.IsSummaryReady}" Classes.warning="{Binding Environment.IsSummaryNeedsAttention}" />
+                    <TextBlock Text="{Binding Environment.SummaryTitle}" FontSize="{DynamicResource FontCardTitle}" FontWeight="SemiBold" />
                   </StackPanel>
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-          <TextBlock Text="这里只检查工具路径；开始任务时验证实际工具与子集化后端。" Classes="muted" TextWrapping="Wrap" />
-          <TextBox Text="{Binding Log, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" Height="80" TextWrapping="Wrap" AutomationProperties.Name="环境日志" />
+                  <TextBlock Grid.Column="1" Text="{Binding Environment.LastChecked, StringFormat='最后检测：{0}'}" Classes="muted" VerticalAlignment="Center" />
+                </Grid>
+              </StackPanel>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
+                <Button Content="重新检测" Command="{Binding Environment.RefreshCommand}" IsEnabled="{Binding Environment.CanRefresh}" />
+              </StackPanel>
+              <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Environment.SummaryMetrics}" Classes="muted" Margin="0,6,0,0" />
+            </Grid>
+          </Border>
+
+          <Button x:Name="EnvironmentManagementToggle" Classes="environment-management-bar" Command="{Binding Environment.ToggleSettingsCommand}" AutomationProperties.Name="展开或收起组件管理">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+              <StackPanel Spacing="2">
+                <TextBlock Text="{Binding Environment.SettingsToggleText}" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding Environment.SettingsSummaryText}" Classes="muted" FontSize="{DynamicResource FontCaption}" />
+              </StackPanel>
+              <TextBlock Grid.Column="1" Text="{Binding Environment.SettingsToggleGlyph}" FontSize="20" Classes="muted" VerticalAlignment="Center" />
+            </Grid>
+          </Button>
+
+          <Border x:Name="EnvironmentManagement" Classes="environment-management" IsVisible="{Binding Environment.IsSettingsOpen}">
+            <StackPanel Spacing="10">
+              <TextBlock Text="工具和工作数据分开管理，保存后会立即重新检测组件。" Classes="muted caption" TextWrapping="Wrap" />
+              <Grid ColumnDefinitions="80,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="6" IsEnabled="{Binding Environment.CanChangePaths}">
+                <TextBlock Text="组件目录" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Grid.ColumnSpan="2" Text="用于存放 Mux Deck 管理的外部组件" Classes="muted caption" TextWrapping="Wrap" />
+                <TextBox x:Name="EnvironmentToolsInput" Grid.Row="1" Grid.Column="1" Text="{Binding Environment.ToolsDirectoryInput, Mode=TwoWay}" />
+                <Button Grid.Row="1" Grid.Column="2" Content="选择" Click="ChooseToolsDirectory" />
+              </Grid>
+              <Border Classes="settings-divider" />
+              <Grid ColumnDefinitions="80,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="6" IsEnabled="{Binding Environment.CanChangePaths}">
+                <TextBlock Text="工作目录" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Grid.ColumnSpan="2" Text="用于程序运行时的配置、日志和缓存" Classes="muted caption" TextWrapping="Wrap" />
+                <TextBox x:Name="EnvironmentWorkInput" Grid.Row="1" Grid.Column="1" Text="{Binding Environment.WorkDirectoryInput, Mode=TwoWay}" />
+                <Button Grid.Row="1" Grid.Column="2" Content="选择" Click="ChooseWorkDirectory" />
+              </Grid>
+              <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                <TextBlock Text="{Binding Environment.SettingsMessage}" Classes="muted" TextWrapping="Wrap" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                  <Button Content="恢复默认" Command="{Binding Environment.ResetSettingsCommand}" IsEnabled="{Binding Environment.CanChangePaths}" />
+                  <Button Content="保存路径" Command="{Binding Environment.SaveSettingsCommand}" Classes="primary" IsEnabled="{Binding Environment.CanChangePaths}" />
+                </StackPanel>
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <TextBlock Text="{Binding Environment.CoreSectionTitle}" Classes="group-title" Margin="0,6,0,0" />
+          <ItemsControl ItemsSource="{Binding Environment.CoreComponents}" ItemTemplate="{StaticResource EnvironmentComponentTemplate}" />
+
+          <TextBlock Text="{Binding Environment.ExtensionSectionTitle}" Classes="group-title" Margin="0,6,0,0" />
+          <ItemsControl ItemsSource="{Binding Environment.ExtensionComponents}" ItemTemplate="{StaticResource EnvironmentComponentTemplate}" />
+          <TextBlock Text="可用表示组件启动和必要依赖验证通过，实际素材仍在任务中校验。" Classes="muted caption" TextWrapping="Wrap" />
         </StackPanel>
+        </Grid>
+        </Grid>
       </ScrollViewer>
     </Grid>
     <Border Grid.Row="1" Grid.ColumnSpan="2" Background="{DynamicResource SidebarBackground}" Padding="12,5">

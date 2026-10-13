@@ -52,7 +52,11 @@ tests/                 自动化验证与测试素材生成入口
 
 `ViewModels/InputFeedback.cs` 拥有明确类型的单条通知与临时拖入投影；`ReportInteractionMessage` 保留原文本合同，同时发布类型，不用文案推断成功。`Views/InteractionNotice` 在右上角显示当前反馈，属性栏打开时向左避让；成功 5 秒、普通 4 秒隐藏，忙碌保持到结束，警告/错误等关闭或替换。可见重复不重启计时，旧修订计时不清新消息，视图脱离解除订阅和计时。取消接纳不遗留忙碌；底部 Action Bar 仍只显示持续的输入/任务状态。
 
-`ViewModels/MainWindowViewModel.cs` 保留四个页面状态（单个、批量、字幕工具、环境检测）和工具检测，并公开 `Single`；`MainWindow.axaml` 显示单个、批量、环境检测导航。字幕工具仍为未实现占位且没有可见导航入口。保留 `VideoPath`、`ScSubtitle`、`TcSubtitle`、`OutputDirectory` 转发属性。单个封装由 `Views/SingleMuxView.axaml` 承载，绑定根为 `SingleMuxViewModel`；旧 `VideoInput` 文本框已由视频摘要和 `PickVideoButton` 新入口替换，Smoke 用实际按钮键盘事件、接纳及 `VideoName` 编译绑定验证，不设置隐藏兼容控件。
+`ViewModels/MainWindowViewModel.cs` 保留四个页面状态（单个、批量、字幕工具、环境检测），并公开 `Single` 和 `Environment`；`MainWindow.axaml` 显示单个、批量、环境检测导航。字幕工具仍为未实现占位且没有可见导航入口。保留 `VideoPath`、`ScSubtitle`、`TcSubtitle`、`OutputDirectory` 转发属性。单个封装由 `Views/SingleMuxView.axaml` 承载，绑定根为 `SingleMuxViewModel`；旧 `VideoInput` 文本框已由视频摘要和 `PickVideoButton` 新入口替换，Smoke 用实际按钮键盘事件、接纳及 `VideoName` 编译绑定验证，不设置隐藏兼容控件。
+
+环境规则位于 Core `Components/`：`ComponentModels` 分开定义检测状态、安装阶段与能力；`ComponentVerifier` 复用 `ToolLocator` 和 `ProcessRunner`，验证启动、版本与必要依赖；`ComponentReleases` 维护固定版本、包布局、体积和哈希；`ComponentInstaller` 拥有四组件下载、校验、暂存验证、不覆盖提交、安装日志和取消清理，`AssfontsInstaller` 仅保留首轮兼容入口并共用并发守卫。`FontToolsLocator` 由检测和封装共用，优先管理目录内的独立后端，其次保留旧系统查找；安装暂存验证通过 `Workspace.FontToolsDirectoryOverride` 强制检查候选依赖。Desktop `EnvironmentViewModel` 保留稳定条目、检测修订与安装任务；`EnvironmentComponentViewModel` 投影状态点、行内动作和详情。`StoragePaths` 与 `StorageSettingsStore` 负责路径布局和持久化；MainWindow 仅接线操作互斥、目录选择、官方链接与关闭等待。实际封装参数和 QC 仍由原单任务流程决定，当前范围见[补齐组件安装](../tasks/component-installation-complete.md)。
+
+组件卸载以当前配置目录为管理边界：手动复制的组件也计为 Mux Deck 来源，不使用安装归属记录。Core `ComponentDirectories` 只生成固定直接子目录的计划并检查边界/链接，`ComponentUninstaller` 重新验证后逐项删除并记录日志，与安装器共用 `ComponentOperations.Gate`。AFS 的随包 Python 随主目录删除，独立 `fonttools` 保留并单独管理；重装可复用已验证的独立后端。Desktop 保存待确认计划、卸载任务和错误；MainWindow 结合单任务、导入与真实工具探测忙碌态禁止删除，关闭等待收尾。完整边界与证据见[组件卸载任务](../tasks/component-uninstall.md)。
 
 单任务交互由 `ViewModels/SingleMuxViewModel.cs` 持有；它构造 `MuxRequest` 快照并调用 `SingleMuxService`，包含 `StartAsync`、`CancelAndWaitAsync`、`RunTask`、`IsRunning`、`CanEdit`、`Tracks`、`SelectedTrack`、`Log`、`Result` 与 `StatusText`。`TrackRowViewModel` 表示内封来源轨道与外加字幕的展示行；SC/TC 外加字幕各自显式维护名称、语言、default 和 forced，输入组合变更时只应用一次 SC/TC 默认规则。`MainWindowViewModel` 继续负责导航和工具环境摘要。UI 不承担 QC，也不构造 AFS 或 mkvmerge 参数。
 

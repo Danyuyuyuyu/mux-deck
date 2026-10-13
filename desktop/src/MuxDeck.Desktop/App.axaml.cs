@@ -11,12 +11,16 @@ namespace MuxDeck.Desktop;
 public partial class App : Application
 {
     public static Workspace Workspace { get; set; } = Workspace.Discover();
+    public static StoragePaths Storage { get; set; } = StoragePaths.Default;
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            desktop.MainWindow = new MainWindow { DataContext = new MainWindowViewModel(Workspace, preferences: UserPreferencesStore.CreateDefault()) };
+            desktop.MainWindow = new MainWindow
+            {
+                DataContext = new MainWindowViewModel(Workspace, preferences: UserPreferencesStore.CreateDefault(Storage), storage: Storage)
+            };
         base.OnFrameworkInitializationCompleted();
     }
 }

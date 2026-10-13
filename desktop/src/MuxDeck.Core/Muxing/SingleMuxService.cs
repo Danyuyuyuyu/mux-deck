@@ -7,7 +7,7 @@ namespace MuxDeck.Core.Muxing;
 
 public sealed partial class SingleMuxService
 {
-    private readonly Workspace workspace;
+    private Workspace workspace;
     private readonly IMuxToolRunner runner;
 
     public SingleMuxService(Workspace workspace) : this(workspace, new MuxToolRunner()) { }
@@ -15,6 +15,13 @@ public sealed partial class SingleMuxService
     {
         this.workspace = workspace;
         this.runner = runner;
+    }
+
+    /// <summary>更新后续任务使用的工具和工作目录；当前运行中的任务仍持有自己的快照。</summary>
+    public void UpdateWorkspace(Workspace nextWorkspace)
+    {
+        if (string.IsNullOrWhiteSpace(nextWorkspace.Root)) throw new ArgumentException("工作区不能为空。", nameof(nextWorkspace));
+        workspace = nextWorkspace;
     }
 
     public async Task<MediaProbe> ProbeAsync(string videoPath, CancellationToken cancellationToken = default)
@@ -42,12 +49,13 @@ public sealed partial class SingleMuxService
             // 在任何进度回调和异步等待前复制集合，任务只消费本次提交的参数快照。
             ArgumentNullException.ThrowIfNull(request);
             request = request with { Subtitles = request.Subtitles?.ToArray()!, Audios = request.Audios?.ToArray()! };
-            var run = Path.Combine(workspace.Root, "desktop", "artifacts", "runs",
-                DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
+            var runId = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N");
+            var run = Path.Combine(workspace.TaskLogsDirectory, runId);
             Directory.CreateDirectory(run);
             logPath = Path.Combine(run, "task.log");
             log = new TaskLog(logPath);
-            work = Path.Combine(run, "work");
+            // 缓存与日志分离后仍保留拥有权明确的 work 子目录，与清理守卫一致。
+            work = Path.Combine(workspace.TaskCacheDirectory, runId, "work");
             Directory.CreateDirectory(work);
             Stage(MuxStage.Validating, "检查输入与真实工具依赖");
             var snapshot = Validate(request);
@@ -344,7 +352,7 @@ public sealed partial class SingleMuxService
     private void DeleteWorkDirectory(string directory)
     {
         var resolved = Path.GetFullPath(directory);
-        var ownedRoot = Path.GetFullPath(Path.Combine(workspace.Root, "desktop", "artifacts", "runs"))
+        var ownedRoot = Path.GetFullPath(workspace.TaskCacheDirectory)
             .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         if (!resolved.StartsWith(ownedRoot, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
             || Path.GetFileName(resolved) != "work")
@@ -352,21 +360,8 @@ public sealed partial class SingleMuxService
         Directory.Delete(resolved, recursive: true);
     }
 
-    private string LocateFontTools()
-    {
-        var candidates = new List<string>();
-        var subset = ToolLocator.FindOnPath("pyftsubset");
-        if (subset is not null) candidates.Add(Path.GetDirectoryName(subset)!);
-        var python = ToolLocator.FindOnPath("python");
-        if (python is not null) candidates.Add(Path.Combine(Path.GetDirectoryName(python)!, "Scripts"));
-        candidates.Add(Path.Combine(workspace.ToolsDirectory, "python", "Scripts"));
-        candidates.AddRange(Directory.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Python"))
-            ? Directory.EnumerateDirectories(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Python"))
-                .OrderDescending().Select(x => Path.Combine(x, "Scripts")) : []);
-        return candidates.Distinct().FirstOrDefault(path => File.Exists(Path.Combine(path, Executable("pyftsubset"))) &&
-            File.Exists(Path.Combine(path, Executable("ttx"))))
-            ?? throw new FileNotFoundException("找不到同目录的 pyftsubset 与 ttx，AFS 需要可运行的 fontTools 后端。");
-    }
+    private string LocateFontTools() => Components.FontToolsLocator.Find(workspace)
+        ?? throw new FileNotFoundException("找不到同目录的 pyftsubset 与 ttx，AFS 需要可运行的 fontTools 后端。");
 
     private async Task<ProcessResult> RunToolAsync(string executable, IReadOnlyList<string> args,
         string? work, TaskLog? log, CancellationToken token, TimeSpan timeout,

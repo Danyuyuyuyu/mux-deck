@@ -46,6 +46,7 @@ public sealed partial class SingleMuxViewModel
     {
         if (!CanEdit) return new(false, "当前任务已锁定，不能接纳输入。");
         var revision = DraftRevision;
+        BeginToolProbe();
         try
         {
             if (MediaInputError(candidates) is { } error) return new(false, error);
@@ -81,6 +82,7 @@ public sealed partial class SingleMuxViewModel
         }
         catch (OperationCanceledException) { return new(false, "识别已取消，原输入保持。"); }
         catch (Exception ex) { return new(false, "无法识别拖入文件，整批未接纳：" + ex.Message); }
+        finally { EndToolProbe(); }
     }
     private static string ImportedLanguage(string path, MediaTrack track)
     {

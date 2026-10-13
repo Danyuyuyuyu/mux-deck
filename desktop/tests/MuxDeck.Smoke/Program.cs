@@ -5,6 +5,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using MuxDeck.Core;
 using MuxDeck.Desktop;
+using MuxDeck.Desktop.Preferences;
 using MuxDeck.Desktop.ViewModels;
 using MuxDeck.Desktop.Views;
 
@@ -35,6 +36,23 @@ if (args.FirstOrDefault() == "--integration") return await Phase1Integration.Run
 if (args.FirstOrDefault() == "--single-mux-round1") return SingleMuxRound1Checks.Run();
 if (args.FirstOrDefault() == "--single-mux-ui-round1") return SingleMuxUiRound1Checks.Run();
 if (args.FirstOrDefault() == "--workbench-ui") return WorkbenchUiChecks.Run();
+if (args.FirstOrDefault() == "--environment-ui") return EnvironmentUiChecks.Run();
+if (args.FirstOrDefault() == "--components") return await ComponentChecks.RunAsync();
+if (args.FirstOrDefault() == "--components-real")
+{
+    if (args.Length > 2) throw new ArgumentException("用法：--components-real [workspace-root]");
+    return await ComponentChecks.RunAsync(real: true, workspaceRoot: args.ElementAtOrDefault(1));
+}
+if (args.FirstOrDefault() == "--component-install-ui") return ComponentInstallationUiChecks.Run();
+if (args.FirstOrDefault() == "--component-install-all") return await ComponentCompletionChecks.RunAsync();
+if (args.FirstOrDefault() == "--component-install-all-real") return await ComponentCompletionChecks.RunAsync(real: true);
+if (args.FirstOrDefault() == "--component-uninstall") return await ComponentUninstallChecks.RunAsync();
+if (args.FirstOrDefault() == "--component-uninstall-ui") return ComponentUninstallUiChecks.Run();
+if (args.FirstOrDefault() == "--component-uninstall-real")
+{
+    if (args.Length != 2) throw new ArgumentException("用法：--component-uninstall-real <固定发布包缓存目录>");
+    return await ComponentUninstallChecks.RunAsync(Path.GetFullPath(args[1]));
+}
 if (args.FirstOrDefault() == "--media-drop") return AutomaticMediaDropChecks.Run();
 if (args.FirstOrDefault() == "--input-feedback") return InputFeedbackChecks.Run();
 if (args.FirstOrDefault() == "--media-drop-real") return AutomaticMediaDropChecks.Run(real: true);
@@ -107,6 +125,37 @@ try
 }
 finally { Directory.Delete(fixture, recursive: true); }
 
+var environmentRoot = Path.Combine(smokeRun, "environment");
+var portableTools = Path.Combine(environmentRoot, "bin");
+Directory.CreateDirectory(Path.Combine(portableTools, "mkvtoolnix"));
+Directory.CreateDirectory(Path.Combine(portableTools, "assfontsubset"));
+Directory.CreateDirectory(Path.Combine(portableTools, "ffmpeg", "bin"));
+Directory.CreateDirectory(Path.Combine(portableTools, "assfonts"));
+foreach (var path in new[]
+{
+    Path.Combine(portableTools, "mkvtoolnix", "mkvmerge.exe"),
+    Path.Combine(portableTools, "mkvtoolnix", "mkvextract.exe"),
+    Path.Combine(portableTools, "mkvtoolnix", "mkvpropedit.exe"),
+    Path.Combine(portableTools, "assfontsubset", "AssFontSubset.Console.exe"),
+    Path.Combine(portableTools, "ffmpeg", "bin", "ffmpeg.exe"),
+    Path.Combine(portableTools, "assfonts", "assfonts.exe")
+}) File.WriteAllText(path, "fixture");
+var environmentStorePath = Path.Combine(environmentRoot, "settings.json");
+var environmentStorage = StoragePaths.ForRoot(Path.Combine(environmentRoot, "data"), portableTools);
+var environment = new EnvironmentViewModel(new Workspace(environmentRoot) { ToolsDirectoryOverride = portableTools },
+    environmentStorage, new StorageSettingsStore(environmentStorePath));
+Check(environment.CoreComponents.Count == 2 && environment.ExtensionComponents.Count == 2 && environment.Tools.Count == 6,
+    "环境页按组件分组并保留六项工具状态");
+var customTools = Path.Combine(environmentRoot, "custom-tools");
+var customWork = Path.Combine(environmentRoot, "custom-work");
+environment.ToolsDirectoryInput = customTools;
+environment.WorkDirectoryInput = customWork;
+environment.SaveSettingsCommand.Execute(null);
+Check(environment.Storage.ToolsDirectory == Path.GetFullPath(customTools) &&
+      environment.Storage.AppDataRoot == Path.GetFullPath(customWork) &&
+      Directory.Exists(Path.Combine(customWork, "config")) && File.Exists(environmentStorePath),
+    "组件安装位置与工作目录可保存并创建子目录");
+
 // All UI operations run on one STA thread after asynchronous core checks complete.
 Exception? uiError = null;
 var uiThread = new Thread(() =>
@@ -149,7 +198,7 @@ var uiThread = new Thread(() =>
         Check(!single.CanStart && !single.StartCommand.CanExecute(null), "缺少视频时不能开始任务");
         model.ShowEnvironmentCommand.Execute(null);
         Dispatcher.UIThread.RunJobs();
-        Check(model.IsEnvironment && model.Tools.Count == 6, "导航到真实环境检测");
+        Check(model.IsEnvironment && model.Tools.Count == 6, "导航到真实环境与组件");
         model.ShowSingleCommand.Execute(null);
         Dispatcher.UIThread.RunJobs();
         Check(model.IsSingle &&
@@ -170,9 +219,20 @@ var uiThread = new Thread(() =>
         single.VideoPath = "";
         Dispatcher.UIThread.RunJobs();
         Check(window.Bounds.Width >= 900 && window.Bounds.Height >= 700, "窗口布局与最小尺寸");
-        if (args.FirstOrDefault() == "--screenshot")
+        var screenshotEnvironment = args.FirstOrDefault() is "--environment-screenshot" or "--environment-management-screenshot";
+        if (screenshotEnvironment)
         {
-            var requested = args.Length == 2 ? args[1] : "window.png";
+            model.ShowEnvironmentCommand.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            if (args.FirstOrDefault() == "--environment-management-screenshot")
+                model.Environment.ToggleSettingsCommand.Execute(null);
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        }
+        if (args.FirstOrDefault() == "--screenshot" || screenshotEnvironment)
+        {
+            var requested = screenshotEnvironment
+                ? args.FirstOrDefault() == "--environment-management-screenshot" ? "environment-management.png" : "environment.png"
+                : args.Length == 2 ? args[1] : "window.png";
             var screenshot = Path.GetFullPath(Path.IsPathRooted(requested)
                 ? requested : Path.Combine(smokeRun, requested));
             var artifactPrefix = Path.GetFullPath(artifacts) + Path.DirectorySeparatorChar;

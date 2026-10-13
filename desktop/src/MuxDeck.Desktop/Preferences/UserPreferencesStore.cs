@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MuxDeck.Core;
 
 namespace MuxDeck.Desktop.Preferences;
 
@@ -6,8 +7,8 @@ namespace MuxDeck.Desktop.Preferences;
 public sealed class UserPreferencesStore(string path)
 {
     private readonly SemaphoreSlim writer = new(1, 1);
-    public static UserPreferencesStore CreateDefault() => new(Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MuxDeck", "v2", "preferences.json"));
+    public static UserPreferencesStore CreateDefault(StoragePaths? storage = null) => new(Path.Combine(
+        (storage ?? StoragePaths.Default).ConfigDirectory, "preferences.json"));
 
     public IReadOnlyDictionary<string, double> LoadTrackWidths()
     {

@@ -5,6 +5,7 @@ public sealed record ToolStatus(string Name, string Purpose, string? Path)
     public bool IsAvailable => Path is not null;
     public string Status => IsAvailable ? "已找到" : "未找到";
     public string Location => Path ?? "请安装组件，或将可执行文件加入 PATH";
+    public string Source { get; init; } = "未找到";
 }
 
 public sealed class ToolLocator(Workspace workspace)
@@ -23,13 +24,14 @@ public sealed class ToolLocator(Workspace workspace)
     {
         var bundled = Path.Combine(workspace.ToolsDirectory, relative.Replace('/', Path.DirectorySeparatorChar));
         var path = File.Exists(bundled) ? bundled : FindOnPath(executable);
+        var source = File.Exists(bundled) ? "Mux Deck" : path is not null ? "PATH" : "未找到";
         if (path is null && OperatingSystem.IsWindows() && name.StartsWith("mkv", StringComparison.Ordinal))
         {
             var installed = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                 "MKVToolNix", executable + ".exe");
-            if (File.Exists(installed)) path = installed;
+            if (File.Exists(installed)) { path = installed; source = "系统"; }
         }
-        return new ToolStatus(name, purpose, path);
+        return new ToolStatus(name, purpose, path) { Source = source };
     }
 
     public static string? FindOnPath(string executable)

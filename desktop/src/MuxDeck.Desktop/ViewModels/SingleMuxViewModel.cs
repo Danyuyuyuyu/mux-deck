@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using Avalonia.Threading;
+using MuxDeck.Core;
 using MuxDeck.Core.Muxing;
 using MuxDeck.Desktop.Preferences;
 
@@ -57,6 +58,8 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         }
     }
 
+    public void UpdateWorkspace(Workspace workspace) => service.UpdateWorkspace(workspace);
+
     public TrackRowViewModel ScTrack { get; } = new() { Id = "SC", Type = "字幕", Codec = "ASS", Source = "外加 · 简体", Language = "zh-Hans", Name = "SC", IsDefault = true, IsEditable = true, Policy = "新增", Detail = "子集化后新增 ASS；固定语言 zh-Hans。轨道名称、默认与强制旗标可编辑。" };
     public TrackRowViewModel TcTrack { get; } = new() { Id = "TC", Type = "字幕", Codec = "ASS", Source = "外加 · 繁体", Language = "zh-Hant", Name = "TC", IsEditable = true, Policy = "新增", Detail = "子集化后新增 ASS；固定语言 zh-Hant。仅选择繁体时默认启用默认旗标。" };
     public string VideoPath { get => videoPath; set { if (!CanEdit || !Set(ref videoPath, value)) return; sourceProbe = null; SelectedTrack = null; RebuildTracks(false); Raise(nameof(ResolvedOutputFileName)); NotifyVideoSummary(); MarkDraftChanged(); UpdateInputs(); _ = ProbeVideoAsync(); } }
@@ -69,11 +72,38 @@ public sealed partial class SingleMuxViewModel : ObservableObject
     public string ResolvedOutputFileName => string.IsNullOrWhiteSpace(OutputFileName) ? (string.IsNullOrWhiteSpace(VideoPath) ? "源文件名.muxed.mkv" : Path.GetFileNameWithoutExtension(VideoPath) + ".muxed.mkv") : OutputFileName;
     public bool IsRunning { get => isRunning; private set { if (!Set(ref isRunning, value)) return; NotifyEditability(); CancelCommand.NotifyCanExecuteChanged(); } }
     public bool IsProbing { get => isProbing; private set => Set(ref isProbing, value); }
-    public bool CanEdit => !IsRunning && !isClosing;
+    private int activeToolProbes;
+    public bool HasActiveToolProbes => Volatile.Read(ref activeToolProbes) > 0;
+    private void BeginToolProbe() { Interlocked.Increment(ref activeToolProbes); Raise(nameof(HasActiveToolProbes)); }
+    private void EndToolProbe() { Interlocked.Decrement(ref activeToolProbes); Raise(nameof(HasActiveToolProbes)); }
+    public bool CanEdit => !IsRunning && !isClosing && !IsComponentUninstalling;
     public bool RequiresFonts => externalOrder.Any(t => t.IsIncluded && t.IsSubtitle && MediaFileTypes.IsAss(t.InputPath));
     public bool HasEnabledExternal => externalOrder.Any(t => t.IsIncluded);
     public string FontCheckHint => RequiresFonts ? "开始封装时检查字体" : "仅 ASS 字幕需要字体目录";
-    public bool CanStart => CanEdit && !string.IsNullOrWhiteSpace(VideoPath) && HasEnabledExternal && (!RequiresFonts || !string.IsNullOrWhiteSpace(FontsDirectory)) && !string.IsNullOrWhiteSpace(OutputDirectory);
+    private bool componentInstalling;
+    private bool componentUninstalling;
+    public bool IsComponentUninstalling
+    {
+        get => componentUninstalling;
+        set
+        {
+            if (!Set(ref componentUninstalling, value)) return;
+            NotifyEditability();
+            Raise(nameof(ActionBarSummary));
+        }
+    }
+    public bool IsComponentInstalling
+    {
+        get => componentInstalling;
+        set
+        {
+            if (!Set(ref componentInstalling, value)) return;
+            Raise(nameof(CanStart));
+            Raise(nameof(ActionBarSummary));
+            StartCommand.NotifyCanExecuteChanged();
+        }
+    }
+    public bool CanStart => CanEdit && !IsComponentInstalling && !string.IsNullOrWhiteSpace(VideoPath) && HasEnabledExternal && (!RequiresFonts || !string.IsNullOrWhiteSpace(FontsDirectory)) && !string.IsNullOrWhiteSpace(OutputDirectory);
     public string InputHint => IsRunning ? "本次参数已锁定。可切换页面；取消后等待工具退出与清理。" : CanStart ? "输入已齐全。开始时检查文件、工具与字体，目标存在时拒绝覆盖。" : "请选择视频、启用字幕或音频及输出目录；ASS 另需字体目录。";
     public string Log { get => log; private set => Set(ref log, value); }
     public string StatusText { get => statusText; private set => Set(ref statusText, value); }
@@ -172,7 +202,7 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         string.IsNullOrWhiteSpace(OutputDirectory) ? "缺少输出目录" : null
     }.OfType<string>().ToArray();
     public string MissingInputDescription => string.Join(" · ", MissingInputs);
-    public string ActionBarSummary => State == SingleMuxState.Incomplete ? $"还有 {MissingInputs.Count} 项需要处理" : State == SingleMuxState.Ready ? "已准备好" : StateSummary;
+    public string ActionBarSummary => IsComponentUninstalling ? "组件卸载中，请等待完成" : IsComponentInstalling ? "组件安装中，请等待完成" : State == SingleMuxState.Incomplete ? $"还有 {MissingInputs.Count} 项需要处理" : State == SingleMuxState.Ready ? "已准备好" : StateSummary;
     public string ActionBarIcon => State switch
     {
         SingleMuxState.Ready or SingleMuxState.Succeeded => "✓",
@@ -486,6 +516,7 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         IsProbing = true;
         ProbeState = string.IsNullOrWhiteSpace(path) ? VideoProbeState.Empty : VideoProbeState.Probing;
         ProbeText = "正在读取源视频轨道…";
+        BeginToolProbe();
         try
         {
             // 路径输入稍作合并，旧探测的迟到结果不得覆盖新视频。
@@ -506,6 +537,7 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         {
             if (ReferenceEquals(probeCancellation, cancellation)) { probeCancellation = null; IsProbing = false; }
             cancellation.Dispose();
+            EndToolProbe();
         }
     }
 
@@ -524,6 +556,7 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         outputProbeCancellation?.Cancel();
         var cancellation = new CancellationTokenSource();
         outputProbeCancellation = cancellation;
+        BeginToolProbe();
         try
         {
             var probe = await Task.Run(() => service.ProbeAsync(path, cancellation.Token), cancellation.Token);
@@ -538,6 +571,7 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         {
             if (ReferenceEquals(outputProbeCancellation, cancellation)) outputProbeCancellation = null;
             cancellation.Dispose();
+            EndToolProbe();
         }
     }
     private void RaiseOutputCounts()

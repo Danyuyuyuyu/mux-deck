@@ -442,7 +442,7 @@ internal static class SingleMuxUiRound1Checks
                 throw new InvalidOperationException("Tab 遍历未形成稳定循环");
             }
             var sidebar = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("nav")).ToArray();
-            var environmentButton = sidebar.Single(b => Equals(b.Content, "环境检测"));
+            var environmentButton = sidebar.Single(b => Equals(b.Content, "环境与组件"));
             var singleButton = sidebar.Single(b => Equals(b.Content, "单个封装"));
             var listScroll = view.FindControl<ScrollViewer>("TrackListScroll")!;
             window.Width = 1040; window.Height = 760; listScroll.Offset = default; Dispatcher.UIThread.RunJobs();
