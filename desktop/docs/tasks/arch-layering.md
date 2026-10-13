@@ -225,7 +225,7 @@
 | [2b · `90fff6c`](https://github.com/Danyuyuyuyu/mux-deck/commit/90fff6c47d8a3fcef6c509fa81ec91f80425b865) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38393673757) | locked restore 10/10；Release 0 警告 / 0 错误；dotnet test 343/343；受控 13/13、656/656；接纳 89/89、自动导入 25/25 | InputRules 已落位；新增 Domain 134、架构 1，原 208 保留；IO 事实留边界，原入口差异不变；详见 2b 实施与验证。 |
 | [2c · `90fea6b`](https://github.com/Danyuyuyuyu/mux-deck/commit/90fea6b02e421105cd3c7bdb45c69c4c69d1df8e) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38400687784) | restore 10/10；Release 0 警告 / 0 错误；test 427/427；受控 13/13、656/656；warning-policy 57/57 | DiagnosticPolicy、OutputQcRules、AssDocument 已落位；新增 Domain 76、架构 3；原 348 保留，白名单未变。 |
 | [3a · `da0f334`](https://github.com/Danyuyuyuyu/mux-deck/commit/da0f3342f2b50bccfdcf31f19212ee3bb63e9f91) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38406784353) | locked restore 10/10；Release 0 警告 / 0 错误；test 485/485；受控 13/13、656/656；warning-policy 57/57 | 九个 Application 业务端口；Domain 统一 MediaTrackInfo，删除重复 TrackQcFacts；新增 29，原 456 全部保留；详见 3a 实施与验证。 |
-| 3b | 本地验收已通过，待推送与 CI | locked restore 11/11；Release 0 警告 / 0 错误；test 601/601；受控 13/13、656/656；真实 integration 121/121、media-drop-real 37/37 | 依用户批准保留 Desktop 直接依赖；Core → Infrastructure 过渡；新增 47，原 554 保留。 |
+| [3b · `a2b76d9`](https://github.com/Danyuyuyuyu/mux-deck/commit/a2b76d9588646265bfab68d0521928c8f881f94c) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38427342392) | locked restore 11/11；Release 0 警告 / 0 错误；test 601/601；受控 13/13、656/656；真实 integration 121/121、media-drop-real 37/37 | 依用户批准保留 Desktop 直接依赖；Core → Infrastructure 过渡；新增 47，原 554 保留。 |
 | 3c | 未开始 | | |
 | 3d | 未开始 | | |
 | 3e | 未开始 | | |
@@ -671,7 +671,7 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall` | 26/26 |
 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui` | 61/61 |
 
-实际计数见上表，CI 推送后追加；按已接受 ADR-0001 实施，不修改 ADR。
+实际命令与计数见上表，实现提交与通过的 Desktop CI 见本节开头记录；按已接受 ADR-0001 实施，不修改 ADR。
 
 ### 3b 实施与验证
 
@@ -700,7 +700,7 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --integration` | 121/121，失败 0 |
 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop-real` | 37/37，失败 0 |
 
-真实工具版本：MKVToolNix 100.0 / FFmpeg 8.1.1 / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10，与重构前基准相同。[integration 报告](../../artifacts/phase1/20261013-155956-4ebf5982d07a422cbf9eab2f789006ac/report.json)与[media-drop-real 报告](../../artifacts/automatic-drop/real-bd1ab50607484ac6b38d508b9401c2ad/report.json)保留在本机，分别 121/121、37/37，失败均为 0。按已接受的 ADR-0001 和本节明确授权的三项调整实施，不修改 ADR；实现提交与 CI 完成后追加链接。
+真实工具版本：MKVToolNix 100.0 / FFmpeg 8.1.1 / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10，与重构前基准相同。[integration 报告](../../artifacts/phase1/20261013-155956-4ebf5982d07a422cbf9eab2f789006ac/report.json)与[media-drop-real 报告](../../artifacts/automatic-drop/real-bd1ab50607484ac6b38d508b9401c2ad/report.json)保留在本机，分别 121/121、37/37，失败均为 0。按已接受的 ADR-0001 和本节明确授权的三项调整实施，不修改 ADR。实现提交 [a2b76d9](https://github.com/Danyuyuyuyu/mux-deck/commit/a2b76d9588646265bfab68d0521928c8f881f94c) 已在本地全部验证后 pull --rebase 并推送；[Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38427342392) 完成 success，head_sha 与实现提交一致，全部必需检查通过。2026-10-14（Asia/Shanghai）补录本节与结果表，3b 已完成；本步到此结束，后续 3c/4a 尚未实施。
 
 ## 发现的旧缺陷
 
