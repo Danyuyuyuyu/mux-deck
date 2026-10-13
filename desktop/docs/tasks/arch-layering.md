@@ -206,7 +206,7 @@
 | [1b · `aa85458`](https://github.com/Danyuyuyuyu/mux-deck/commit/aa85458a3caf7b11e76ae5f7d60317d3c862ffe8) | 已完成，已推送，Desktop CI 通过 | restore 10/10；Release 0 警告 / 0 错误；dotnet test 71/71（转换 26、Domain 8、架构 37）；受控 13/13 套件、656/656；契约两条故意违反均被拒绝 | 公共不可变契约、四个 Domain 值类型与 Core 兼容转换；旧调用方零改动；详见下方命令与计数。未重放真实工具链或原生 UI。 |
 | [2a · `34c4c18`](https://github.com/Danyuyuyuyu/mux-deck/commit/34c4c1827169270c715a955fe027a0bd6622509d) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38390147903) | locked restore 10/10；Release 0 警告 / 0 错误；dotnet test 208/208；受控 13/13、656/656 | TrackPolicy、LanguageRules、OutputNaming 已迁入 Domain；新增 Domain 69、架构 3，原 136 全部保留；详见 2a 实际验证。 |
 | [2b · `90fff6c`](https://github.com/Danyuyuyuyu/mux-deck/commit/90fff6c47d8a3fcef6c509fa81ec91f80425b865) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38393673757) | locked restore 10/10；Release 0 警告 / 0 错误；dotnet test 343/343；受控 13/13、656/656；接纳 89/89、自动导入 25/25 | InputRules 已落位；新增 Domain 134、架构 1，原 208 保留；IO 事实留边界，原入口差异不变；详见 2b 实施与验证。 |
-| 2c | 本地验证完成，待推送及 CI | restore 10/10；Release 0 警告 / 0 错误；test 427/427；受控 13/13、656/656；warning-policy 57/57 | DiagnosticPolicy、OutputQcRules、AssDocument 已落位；新增 Domain 76、架构 3；原 348 保留，白名单未变。 |
+| [2c · `90fea6b`](https://github.com/Danyuyuyuyu/mux-deck/commit/90fea6b02e421105cd3c7bdb45c69c4c69d1df8e) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38400687784) | restore 10/10；Release 0 警告 / 0 错误；test 427/427；受控 13/13、656/656；warning-policy 57/57 | DiagnosticPolicy、OutputQcRules、AssDocument 已落位；新增 Domain 76、架构 3；原 348 保留，白名单未变。 |
 | 3a | 未开始 | | |
 | 3b | 未开始 | | |
 | 3c | 未开始 | | |
@@ -495,7 +495,7 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 
 348 → 427，仅新增 79 项：Domain 76、架构 3；原 348 项全部保留，既有测试零修改。13/13 受控套件、656/656，与基准一致；告警策略明确重跑 57/57，白名单未变。日志：`artifacts/arch-corrections/2c/`，ASS/诊断/元数据拒绝通过公共旧服务回归核验。
 
-共享文件仅 `docs/agents/skeleton.md` 同步迁移现状、契约枚举与测试计数；本任务记录枚举修正及 2c 实测结果。未修改 sln、锁文件、props、ADR、步骤计划或 `diagnostics.md`。按已接受 ADR-0001 实施，工具参数与 QC 规则语义未改。未重放真实媒体工具链、原生选择器、Explorer、高 DPI 或播放器，真实工具链基准仍需在 3b 前重跑。2c 本地验证完成，推送后补入实现提交与 CI 链接。
+共享文件仅 `docs/agents/skeleton.md` 同步迁移现状、契约枚举与测试计数；本任务记录枚举修正及 2c 实测结果。未修改 sln、锁文件、props、ADR、步骤计划或 `diagnostics.md`。按已接受 ADR-0001 实施，工具参数与 QC 规则语义未改。未重放真实媒体工具链、原生选择器、Explorer、高 DPI 或播放器，真实工具链基准仍需在 3b 前重跑。实现提交 [`90fea6b`](https://github.com/Danyuyuyuyu/mux-deck/commit/90fea6b02e421105cd3c7bdb45c69c4c69d1df8e) 已在本地完整验证后执行 `git pull --rebase origin v2/avalonia-rewrite` 并推送。[Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38400687784) 已完成，workflow 与 desktop job 的 conclusion 均为 success，head_sha 与实现提交一致；locked restore、build、单元/架构测试、Smoke 及全部 12 个带参数受控回归均通过，包括 warning-policy；失败产物上传按预期跳过。随后只补充提交与 CI 链接的文档提交，按 paths 排除规则不重复触发构建。
 
 ## 发现的旧缺陷
 
