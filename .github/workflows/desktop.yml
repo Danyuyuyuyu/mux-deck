@@ -3,27 +3,103 @@ name: Desktop
 on:
   push:
     branches: [main, 'v2/avalonia-rewrite']
-    paths: ['desktop/**', '.github/workflows/desktop.yml', 'start_mux_desktop.bat']
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/desktop.yml'
+      - 'start_mux_desktop.bat'
+      # 仅文档改动不触发构建；排除规则须位于包含规则之后。
+      - '!desktop/docs/**'
+      - '!desktop/**/*.md'
   pull_request:
-    paths: ['desktop/**', '.github/workflows/desktop.yml', 'start_mux_desktop.bat']
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/desktop.yml'
+      - 'start_mux_desktop.bat'
+      - '!desktop/docs/**'
+      - '!desktop/**/*.md'
+  workflow_dispatch:
 
 jobs:
   desktop:
     runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: desktop
+        shell: pwsh
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
+
       - name: Restore locked packages
-        working-directory: desktop
         run: dotnet restore MuxDeck.sln --locked-mode
+
       - name: Build desktop
-        working-directory: desktop
         run: dotnet build MuxDeck.sln --no-restore -c Release
+
       - name: Layer and architecture tests
-        working-directory: desktop
         run: dotnet test MuxDeck.sln --no-build -c Release
+
       - name: Core and headless UI smoke
-        working-directory: desktop
         run: dotnet run --project tests/MuxDeck.Smoke --no-build -c Release
+
+      # 以下为受控回归：使用假 runner / 假下载，不启动真实媒体工具、不联网。
+      # 前一步失败后仍继续执行，便于一次看到全部失败项；真实工具链套件（*-real、--integration、--ui-integration）只在本地运行。
+      - name: Warning policy
+        if: ${{ !cancelled() }}
+        run: dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-policy
+
+      - name: Single mux acceptance (round 1 A)
+        if: ${{ !cancelled() }}
+        run: dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-round1
+
+      - name: Single mux UI (round 1 B)
+        if: ${{ !cancelled() }}
+        run: dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-ui-round1
+
+      - name: Workbench UI
+        if: ${{ !cancelled() }}
+        run: dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --workbench-ui
+
+      - name: Input feedback
+        if: ${{ !cancelled() }}
+        run: dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --input-feedback
+
+      - name: Media drop (controlled)
+        if: ${{ !cancelled() }}
+        run: dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop
+
+      - name: Environment UI
+        if: ${{ !cancelled() }}
+        run: dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --environment-ui
+
+      - name: Components (controlled)
+        if: ${{ !cancelled() }}
+        run: dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --components
+
+      - name: Component install UI
+        if: ${{ !cancelled() }}
+        run: dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-ui
+
+      - name: Component install all (controlled)
+        if: ${{ !cancelled() }}
+        run: dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all
+
+      - name: Component uninstall (controlled)
+        if: ${{ !cancelled() }}
+        run: dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall
+
+      - name: Component uninstall UI
+        if: ${{ !cancelled() }}
+        run: dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui
+
+      - name: Upload test artifacts on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-artifacts-${{ github.run_id }}
+          path: desktop/artifacts/
+          retention-days: 7
+          if-no-files-found: ignore
