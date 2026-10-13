@@ -39,22 +39,7 @@ public sealed class ContractBoundaryTests
     {
         var assembly = Assembly.Load("MuxDeck.Application");
         foreach (var type in assembly.GetTypes().Where(type =>
-                     ArchitectureScope.InNamespace(type.Namespace, "MuxDeck.Contracts") && !type.IsInterface && !type.IsEnum && !(type.IsAbstract && type.IsSealed)))
-        {
-            Assert.NotNull(type.GetMethod("<Clone>$"));
-            Assert.DoesNotContain(type.GetFields(BindingFlags.Public | BindingFlags.Instance),
-                field => !field.IsInitOnly);
-            foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-            {
-                if (property.SetMethod is { } setter)
-                    Assert.Contains(setter.ReturnParameter.GetRequiredCustomModifiers(),
-                        modifier => modifier.FullName == "System.Runtime.CompilerServices.IsExternalInit");
-                var propertyType = property.PropertyType;
-                Assert.False(propertyType.IsArray, $"{type.Name}.{property.Name} 不得暴露可变数组。");
-                Assert.False(propertyType.IsGenericType && new[] { typeof(List<>), typeof(IList<>),
-                    typeof(ICollection<>), typeof(IReadOnlyList<>) }.Contains(propertyType.GetGenericTypeDefinition()),
-                    $"{type.Name}.{property.Name} 必须使用不可变集合快照。");
-            }
-        }
+                     ArchitectureScope.InNamespace(type.Namespace, "MuxDeck.Contracts")))
+            Assert.Null(ContractDataRule.Failure(type));
     }
 }

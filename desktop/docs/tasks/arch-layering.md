@@ -234,6 +234,33 @@
 
 三层生产项目为空，命名空间护栏会在 1b 及后续迁移中继续生效；本轮不声称已完成业务分层或真实媒体工具链验收。CI 的最新结果见 [PR #3 检查](https://github.com/Danyuyuyuyu/mux-deck/pull/3/checks)。
 
+#### 修正 C：收紧架构护栏
+
+Application / Contracts 禁止 System.IO、System.Diagnostics.Process、System.Net；Domain 额外禁止 Console / Environment，Infrastructure 禁止 Avalonia。NoCurrentTimeRule 保留原规则并增加 Guid.NewGuid、Stopwatch（含泛型引用）、TickCount / TickCount64，同时检查 Domain / Application / Contracts 与编译生成的 lambda / async 嵌套类型。契约集合属性及公开集合字段采用 EquatableArray 白名单，string 与 static 类按用户规则处理；可写 setter / 字段仍拒绝。CompositionEntryRule 同时核对类型与 PDB 源码路径，可参数化根目录；缺 PDB、映射为 /_/ 或无法读取源码时返回明确失败原因，生产架构断言显示原因，不抛出未处理异常。
+
+82 → 136，仅新增架构 54：生产护栏 3、时间/ID 15、禁止命名空间与纯数据反例 12、集合/可写数据与允许类型反例 13、装配/PDB 路径反例 11。原 82 项全部保留，Architecture 37 → 91，Domain 15 / Application 4 / Core 26 不变；没有跳过、删除或放宽原有用例。受控 13/13、656/656。提交与 CI 链接推送确认后补充。
+
+| 实际命令（desktop/） | 结果 |
+|---|---|
+| `dotnet restore MuxDeck.sln --locked-mode` | 10/10 成功 |
+| `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false` | 0 警告 / 0 错误 |
+| `dotnet test MuxDeck.sln --no-build -c Release` | 136/136（Domain 15、Application 4、Core 26、Architecture 91），失败/跳过 0 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release` | 28/28 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-policy` | 57/57 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-round1` | 89/89 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-ui-round1` | 176/176 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --workbench-ui` | 38/38 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --input-feedback` | 24/24 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop` | 25/25 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --environment-ui` | 23/23 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --components` | 31/31 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-ui` | 37/37 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all` | 41/41 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall` | 26/26 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui` | 61/61 |
+
+本机日志：`artifacts/arch-corrections/C/`。反例位于测试程序集，装配 fixture 与便携 PDB 只在本测试唯一 artifacts 子目录内生成并清理。共享文件仅骨架与本任务验证记录；ADR、步骤计划、sln、锁文件、props、生产代码均不变。
+
 ### 1b 实际验证（2026-10-13）
 
 输入：分支头 `93a2c9b`、现有旧模型与已接受 ADR-0001。输出：Domain 四个值类型、Application 公共不可变契约、Core 新增转换类、转换/值类型/契约护栏测试；现有调用方零改动。失败行为：新规格若超出旧请求表达能力则明确拒绝；旧检查文案不猜测判定，旧失败不猜测阶段。验收场景包括双向往返、字幕/音频、全部 default/forced 组合、原语言、空输出名、成功/失败/取消、集合快照与无法表达的数据拒绝。
@@ -294,7 +321,7 @@ Desktop 全部 C# 源码检索仅发现 App 的一处未限定基类，已改为
 
 Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读取/枚举/元素相等/哈希中视为空，复制可变输入。所有契约集合与用例返回集合使用该类型；LanguageTag 按 Value 比较，default 等于空字符串且哈希一致；探测旗标存在性必须显式传入；ErrorCodes 为 static 常量类。旧转换的显式初始化校验仍保留，原转换测试不变。仅为用户指定的 static ErrorCodes 同步豁免 static 类记录检查，集合白名单在修正 C 收紧。
 
-计数 71 → 82，仅新增 Domain 7（集合 6、语言 1）、Application 4（spec/result 内容相等、default 空集合、旗标必须显式）；原 71 个用例全部保留，Core 26 和 Architecture 37 不变。受控 13/13、656/656。提交与 CI 链接推送确认后补充。
+计数 71 → 82，仅新增 Domain 7（集合 6、语言 1）、Application 4（spec/result 内容相等、default 空集合、旗标必须显式）；原 71 个用例全部保留，Core 26 和 Architecture 37 不变。受控 13/13、656/656。提交 [899dec5](https://github.com/Danyuyuyuyu/mux-deck/commit/899dec5b1e39b0311aa3f3afc95aebb66b59067d)，[Desktop CI 已通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38384423798)。
 
 | 实际命令（desktop/） | 结果 |
 |---|---|

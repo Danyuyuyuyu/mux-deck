@@ -20,10 +20,11 @@ Domain ← Application ← Infrastructure
            Desktop ───────────┘（仅 Program 与 Composition/）
 ```
 
-- Domain 不引用任何项目或第三方包。
-- Application 只引用 Domain，不引用 Avalonia、Infrastructure 或具体工具。
-- Infrastructure 引用 Application（实现其端口）与 Domain，不引用 Desktop。
+- Domain 不引用任何项目或第三方包，禁用文件、进程、网络、Console 和 Environment API。
+- Application 只引用 Domain，不引用 Avalonia、Infrastructure 或具体工具；Application / Contracts 禁用 System.IO、System.Diagnostics.Process、System.Net。
+- Infrastructure 引用 Application（实现其端口）与 Domain，不引用 Desktop 或 Avalonia。
 - Desktop 引用 Application 与 Infrastructure；`ViewModels/` 与 `Views/` 只使用 `MuxDeck.Contracts` 命名空间、Domain 值类型和用例接口，不构造 Infrastructure 类型。只有 `Program.cs` 与 `Composition/` 可使用 Infrastructure 命名空间。
+- Domain / Application / Contracts 禁止直接读取当前时间或生成 ID（DateTime / DateTimeOffset 当前值、TimeProvider.System、Guid.NewGuid、Stopwatch、Environment.TickCount / TickCount64），lambda / async 状态机同样受检查。
 - 测试项目只引用其验证的生产项目。上述规则由架构测试固定，违反即测试失败。
 
 1a 已建立 Domain、Application、Infrastructure 三个生产项目；1b 已在 Domain/Application 定义值类型与契约，Infrastructure 仍为空，旧流程与调用方仍位于 Core 与 Desktop，按[架构分层重构](../tasks/arch-layering.md)逐步搬迁。过渡期的实际项目引用如下（目标依赖仍以上述规则为准）：
@@ -86,7 +87,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 - `MuxJobSpec.Tools` 显式携带工具、日志、缓存及独立 fonttools 后端配置；Core 的 `Muxing/LegacyMuxContractConverter.cs` 提供 `ToSpec(MuxRequest, Workspace/ToolConfiguration)`、`ToLegacyRequest(MuxJobSpec)` 与 `ToResult(MuxResult)`。旧入口与调用方尚未接入这些转换，保持原行为。
 - 旧请求的字幕与音频各自保留顺序，新规格先列字幕、再列音频；空输出名与 null 分别原样往返。旧模型无法表达的源轨选择、跨类型交错顺序、字幕来源轨号或无来源轨号的音频，转换回旧请求时明确拒绝，不丢弃字段。
 - 旧检查文本使用唯一过渡码 `ErrorCodes.LegacyCheck`（`MUX_LEGACY_CHECK`），原文完整保存在 `CheckResult.Actual`，状态为 `NotEvaluated`，不根据文案判定成败；旧失败码为 `MUX_LEGACY_FAILURE`，取消码为 `MUX_CANCELLED`。旧结果未记录失败阶段，暂为 `JobStage.Unknown`。上述过渡检查/失败映射在第 3 步替换为真实结构化信息。
-- 旧 warnings 的 code、message、出现次数及顺序原样转换；成品、日志路径及 nullable 失败消息保留。工具诊断白名单仍只由 `diagnostics.md` 维护。契约的 public、归属、依赖、不可变数据与无友元程序集规则由架构测试检查；依赖与可见性两条护栏已通过本地故意违反确认。
+- 旧 warnings 的 code、message、出现次数及顺序原样转换；成品、日志路径及 nullable 失败消息保留。工具诊断白名单仍只由 `diagnostics.md` 维护。契约的 public、归属、依赖、不可变数据与无友元程序集规则由架构测试检查；除 string 外公开集合只能是 EquatableArray<T>，拒绝其他集合及可写 setter，static 常量类豁免数据形状检查；依赖与可见性两条护栏已通过本地故意违反确认。
 
 ## 职责与落位
 

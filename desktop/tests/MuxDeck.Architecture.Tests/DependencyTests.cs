@@ -84,7 +84,7 @@ public sealed class NamespaceDependencyTests
     public void Infrastructure_assembly_does_not_depend_on_desktop_or_legacy_core()
     {
         ArchitectureScope.AssertSuccess(Types.InAssembly(Assembly.Load("MuxDeck.Infrastructure"))
-            .ShouldNot().HaveDependencyOnAny("MuxDeck.Desktop", "MuxDeck.Core").GetResult());
+            .ShouldNot().HaveDependencyOnAny("MuxDeck.Desktop", "MuxDeck.Core", "Avalonia").GetResult());
     }
 
     // Core 中先改命名空间再搬迁的类型也必须接受同样的依赖检查。
@@ -110,7 +110,7 @@ public sealed class NamespaceDependencyTests
     {
         ArchitectureScope.AssertSuccess(ArchitectureScope.ProductionTypes().That()
             .ResideInNamespace("MuxDeck.Infrastructure").ShouldNot()
-            .HaveDependencyOnAny("MuxDeck.Desktop", "MuxDeck.Core").GetResult());
+            .HaveDependencyOnAny("MuxDeck.Desktop", "MuxDeck.Core", "Avalonia").GetResult());
     }
 
     [Fact]
@@ -122,8 +122,9 @@ public sealed class NamespaceDependencyTests
     }
 
     [Theory]
-    [InlineData("MuxDeck.Domain", new[] { "System.IO", "System.Diagnostics.Process", "System.Net", "Avalonia" })]
-    [InlineData("MuxDeck.Application", new[] { "Avalonia", "MuxDeck.Infrastructure", "MuxDeck.Desktop", "MuxDeck.Core" })]
+    [InlineData("MuxDeck.Domain", new[] { "System.IO", "System.Diagnostics.Process", "System.Net", "Avalonia", "System.Console", "System.Environment" })]
+    [InlineData("MuxDeck.Application", new[] { "Avalonia", "MuxDeck.Infrastructure", "MuxDeck.Desktop", "MuxDeck.Core", "System.IO", "System.Diagnostics.Process", "System.Net" })]
+    [InlineData("MuxDeck.Contracts", new[] { "System.IO", "System.Diagnostics.Process", "System.Net" })]
     public void Inner_namespaces_do_not_use_side_effects_or_outer_layers(string layer, string[] forbidden)
     {
         ArchitectureScope.AssertSuccess(ArchitectureScope.ProductionTypes().That()
@@ -157,11 +158,23 @@ public sealed class NamespaceDependencyTests
             .ResideInNamespace(layer).ShouldNot().HaveDependencyOn("MuxDeck.Application").GetResult());
     }
 
+
+    [Theory]
+    [InlineData("MuxDeck.Application")]
+    [InlineData("MuxDeck.Contracts")]
+    public void Application_and_contracts_do_not_read_time_or_generate_ids(string layer)
+    {
+        ArchitectureScope.AssertSuccess(ArchitectureScope.ProductionTypes().That()
+            .ResideInNamespace(layer).Should().MeetCustomRule(new NoCurrentTimeRule()).GetResult());
+    }
+
     [Fact]
     public void Only_program_and_composition_can_use_infrastructure()
     {
-        ArchitectureScope.AssertSuccess(Types.InAssembly(Assembly.Load("MuxDeck.Desktop")).That()
-            .HaveDependencyOn("MuxDeck.Infrastructure").Should().MeetCustomRule(new CompositionEntryRule()).GetResult());
+        var rule = new CompositionEntryRule();
+        var result = Types.InAssembly(Assembly.Load("MuxDeck.Desktop")).That()
+            .HaveDependencyOn("MuxDeck.Infrastructure").Should().MeetCustomRule(rule).GetResult();
+        ArchitectureScope.AssertSuccess(result, rule.FailureReason);
     }
 }
 
@@ -180,9 +193,9 @@ internal static class ArchitectureScope
     internal static bool InNamespace(string? actual, string expected) =>
         actual == expected || actual?.StartsWith(expected + ".", StringComparison.Ordinal) == true;
 
-    internal static void AssertSuccess(NetArchTest.Rules.TestResult result) =>
+    internal static void AssertSuccess(NetArchTest.Rules.TestResult result, string? detail = null) =>
         Assert.True(result.IsSuccessful, "依赖规则违反：" +
-            string.Join(", ", result.FailingTypeNames ?? []));
+            string.Join(", ", result.FailingTypeNames ?? []) + " " + detail);
 
     private static string FindRoot()
     {
@@ -190,60 +203,5 @@ internal static class ArchitectureScope
             if (File.Exists(Path.Combine(folder.FullName, "MuxDeck.sln")))
                 return folder.FullName;
         throw new DirectoryNotFoundException("找不到 desktop/MuxDeck.sln；架构测试需要在仓库 checkout 内运行。");
-    }
-}
-
-internal sealed class CompositionEntryRule : ICustomRule
-{
-    public bool MeetsRule(TypeDefinition type)
-    {
-        while (type.DeclaringType != null)
-            type = type.DeclaringType;
-        if (!((type.Namespace == "MuxDeck.Desktop" && type.Name == "Program") ||
-              ArchitectureScope.InNamespace(type.Namespace, "MuxDeck.Desktop.Composition")))
-            return false;
-
-        // 同时检查源码归属，避免只把 Views 中的类型改名为 Composition 来绕过装配边界。
-        using var module = ModuleDefinition.ReadModule(type.Module.FileName, new ReaderParameters { ReadSymbols = true });
-        var sourceType = module.GetType(type.FullName);
-        var documents = SourceDocuments(sourceType).Distinct().ToArray();
-        var desktop = Path.Combine(ArchitectureScope.Root, "src", "MuxDeck.Desktop");
-        var program = Path.Combine(desktop, "Program.cs");
-        var composition = Path.Combine(desktop, "Composition") + Path.DirectorySeparatorChar;
-        return documents.Length > 0 && documents.All(document =>
-        {
-            var path = Path.GetFullPath(document);
-            return string.Equals(path, program, StringComparison.OrdinalIgnoreCase) ||
-                   path.StartsWith(composition, StringComparison.OrdinalIgnoreCase);
-        });
-    }
-
-    private static IEnumerable<string> SourceDocuments(TypeDefinition type)
-    {
-        foreach (var method in type.Methods)
-        foreach (var point in method.DebugInformation.SequencePoints.Where(point => !point.IsHidden))
-            yield return point.Document.Url;
-        foreach (var nested in type.NestedTypes)
-        foreach (var document in SourceDocuments(nested))
-            yield return document;
-    }
-}
-
-internal sealed class NoCurrentTimeRule : ICustomRule
-{
-    public bool MeetsRule(TypeDefinition type)
-    {
-        foreach (var method in type.Methods.Where(method => method.HasBody))
-        foreach (var instruction in method.Body.Instructions)
-        {
-            if (instruction.Operand is not MethodReference call)
-                continue;
-            if (call.DeclaringType.FullName is "System.DateTime" or "System.DateTimeOffset" &&
-                call.Name is "get_Now" or "get_UtcNow" or "get_Today")
-                return false;
-            if (call.DeclaringType.FullName == "System.TimeProvider" && call.Name == "get_System")
-                return false;
-        }
-        return type.NestedTypes.All(MeetsRule);
     }
 }
