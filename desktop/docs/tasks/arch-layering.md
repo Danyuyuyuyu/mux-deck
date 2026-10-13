@@ -203,7 +203,7 @@
 | PR | 状态 | 验证 | 备注 |
 |---|---|---|---|
 | [1a · PR #3](https://github.com/Danyuyuyuyu/mux-deck/pull/3) | 已合并（`c4f932e`） | 锁定 restore：9/9 项目；Release build：0 警告 / 0 错误；dotnet test：32/32（架构规则 27 + 扫描反例 5），失败/跳过 0；Smoke：28/28 | 三个空生产项目、三个 xUnit 测试项目、过渡引用、NetArchTest 护栏、CI test 步骤与全部新增项目锁文件；按已接受 ADR-0001 实施，未移动代码、定义契约或修改行为。Domain/Application 业务测试 0；未重放真实工具链或原生 UI。 |
-| 1b | 已实现，本地验收通过，待 CI | restore 10/10；Release 0 警告 / 0 错误；dotnet test 71/71（转换 26、Domain 8、架构 37）；受控 13/13 套件、656/656；契约两条故意违反均被拒绝 | 公共不可变契约、四个 Domain 值类型与 Core 兼容转换；旧调用方零改动；详见下方命令与计数。未重放真实工具链或原生 UI。 |
+| [1b · `aa85458`](https://github.com/Danyuyuyuyu/mux-deck/commit/aa85458a3caf7b11e76ae5f7d60317d3c862ffe8) | 已完成，已推送，Desktop CI 通过 | restore 10/10；Release 0 警告 / 0 错误；dotnet test 71/71（转换 26、Domain 8、架构 37）；受控 13/13 套件、656/656；契约两条故意违反均被拒绝 | 公共不可变契约、四个 Domain 值类型与 Core 兼容转换；旧调用方零改动；详见下方命令与计数。未重放真实工具链或原生 UI。 |
 | 2a | 未开始 | | |
 | 2b | 未开始 | | |
 | 2c | 未开始 | | |
@@ -261,7 +261,9 @@
 
 计数由 1a 的 32 增至 71，仅新增用例：Core 转换 26、Domain 8、架构 5（Core.Tests 项目依赖 1、契约护栏 4）；原 32 项保留。受控套件 13/13、656/656，与基准一致。两个可构建的临时反例（非允许命名空间依赖、internal 契约）运行 `dotnet test tests/MuxDeck.Architecture.Tests --no-build -c Release --filter 'FullyQualifiedName~ContractBoundaryTests.Contracts_have_only_system_domain_and_contract_dependencies|FullyQualifiedName~ContractBoundaryTests.All_contract_types_are_public'`，如预期 2/2 拒绝；移除后最终全套 71/71 通过，未留例外、跳过或临时反例。
 
-共享文件变更：`MuxDeck.sln` 增加只引用 Core 的转换测试项目；新增该项目锁文件，其他锁文件和 `Directory.Build.props` 无改动；`docs/agents/skeleton.md` 同步已落位契约与兼容约束。Core.Tests 随第 5 步移除旧转换时处理。未移动业务实现、改变旧调用方/工具参数/QC/诊断白名单；本轮未重放真实媒体工具链或原生 UI。推送后的 Desktop CI 结果随后补充。
+共享文件变更：`MuxDeck.sln` 增加只引用 Core 的转换测试项目；新增该项目锁文件，其他锁文件和 `Directory.Build.props` 无改动；`docs/agents/skeleton.md` 同步已落位契约与兼容约束。Core.Tests 随第 5 步移除旧转换时处理。未移动业务实现、改变旧调用方/工具参数/QC/诊断白名单；本轮未重放真实媒体工具链或原生 UI。
+
+实现提交 [`aa85458`](https://github.com/Danyuyuyuyu/mux-deck/commit/aa85458a3caf7b11e76ae5f7d60317d3c862ffe8) 已按约定在本地验证后 `git pull --rebase origin v2/avalonia-rewrite` 并推送。[Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38380994829) 的唯一 desktop job 已完成且 conclusion 为 success：locked restore、build、分层/架构测试、Smoke 及全部 12 个带参数受控回归步骤均通过，失败产物上传步骤按预期跳过。此处 CI 证据对应实现提交；随后只补充结果链接的文档提交按工作流 paths 排除规则不重复触发构建。
 
 ## 发现的旧缺陷
 
