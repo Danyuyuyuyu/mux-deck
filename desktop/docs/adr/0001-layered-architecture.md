@@ -1,6 +1,6 @@
 # ADR-0001：按职责、依赖与契约分层
 
-- 状态：提议（2026-10-13）
+- 状态：已接受（2026-10-13，经 [PR #1](https://github.com/Danyuyuyuyu/mux-deck/pull/1) 评审合并）
 - 范围：`desktop/` 下的 v2
 - 规则位置：分层、依赖与契约规则以[代码骨架](../agents/skeleton.md)为准；迁移步骤与完成条件以[开发流程](../agents/migration.md#架构分层重构)为准。本文只记录背景、决策与取舍。
 
