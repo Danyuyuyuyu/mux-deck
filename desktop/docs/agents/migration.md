@@ -57,7 +57,7 @@ v2 重新实现主程序，按单个封装、可靠性、批量、扩展能力�
 
 ## 架构分层重构
 
-决策见 [ADR-0001](../adr/0001-layered-architecture.md)，分层、依赖与契约规则见[代码骨架](skeleton.md)。本阶段在阶段二进程归属竞态修复和阶段三批量之前完成；不改变用户可见行为、工具参数和 QC 判定，每一步独立可合并。
+决策见 [ADR-0001](../adr/0001-layered-architecture.md)，分层、依赖与契约规则见[代码骨架](skeleton.md)。本阶段在阶段二进程归属竞态修复和阶段三批量之前完成；不改变用户可见行为、工具参数和 QC 判定，每一步独立可合并。逐 PR 计划与实施记录见[架构分层重构任务](../tasks/arch-layering.md)。
 
 1. **契约与护栏**：建立 `MuxDeck.Domain`、`MuxDeck.Application`、`MuxDeck.Infrastructure` 及按层测试项目，确定测试框架并提交锁文件；架构测试覆盖骨架中的依赖规则。定义目标契约，与旧模型并存并提供转换。
 2. **抽取 Domain 规则**：SC/TC 默认轨、纳入策略、文件名语言推断、命名模板、接纳校验、`MediaFileTypes`、AFS 诊断分类与 QC 判定移入 Domain，补单元测试；ViewModel 与 `SingleMuxService` 改为调用。
