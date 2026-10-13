@@ -50,7 +50,9 @@ namespace MuxDeck.Architecture.Tests
             var types = Types.InAssembly(typeof(GuardrailCounterexampleTests).Assembly).That().HaveName(type.Name);
             var result = dependency == "System.Environment"
                 ? types.Should().MeetCustomRule(new NoEnvironmentSideEffectsRule()).GetResult()
-                : types.ShouldNot().HaveDependencyOn(dependency).GetResult();
+                : dependency == "System.IO"
+                    ? types.Should().MeetCustomRule(new PurePathMembersRule()).GetResult()
+                    : types.ShouldNot().HaveDependencyOn(dependency).GetResult();
             Assert.Equal(expected, result.IsSuccessful);
             if (!expected) Assert.Contains(type.FullName!, result.FailingTypeNames);
         }

@@ -21,7 +21,7 @@ Domain ← Application ← Infrastructure
 ```
 
 - Domain 不引用任何项目或第三方包，禁用文件、进程、网络和 Console；Environment 按成员禁止 `GetEnvironmentVariable`、`GetEnvironmentVariables`、`SetEnvironmentVariable`、`ExpandEnvironmentVariables`、`MachineName`、`UserName`、`UserDomainName`、`CurrentDirectory`（读/写）、`GetFolderPath`、`GetCommandLineArgs`、`CommandLine`、`Exit`、`FailFast`、`ProcessId`、`ProcessPath`，由成员级 IL 护栏检查。经用户明确授权，放行 `CurrentManagedThreadId`、`NewLine`、`ProcessorCount` 等只读成员及 yield 状态机；`TickCount` / `TickCount64` 仍由下方时间护栏禁止。
-- Application 只引用 Domain，不引用 Avalonia、Infrastructure 或具体工具；Application / Contracts 禁用 System.IO、System.Diagnostics.Process、System.Net。
+- Application 只引用 Domain，不引用 Avalonia、Infrastructure 或具体工具；Application / Contracts 禁用 System.Diagnostics.Process、System.Net；经用户明确授权，System.IO 改为成员级白名单，仅放行 Path.Combine、Join、GetFileName、GetFileNameWithoutExtension、GetExtension、GetDirectoryName、ChangeExtension、HasExtension、DirectorySeparatorChar、AltDirectorySeparatorChar。Path 未列出的成员（含 GetFullPath、GetTempPath、GetTempFileName、GetRandomFileName）以及 System.IO 其他所有类型（含 File、Directory、FileInfo、DirectoryInfo、Stream 及其派生类、InvalidDataException）仍禁用；签名、局部变量、调用和 lambda/async 状态机均检查。Domain 的 System.IO 整命名空间禁令不变。
 - Infrastructure 引用 Application（实现其端口）与 Domain，不引用 Desktop 或 Avalonia。
 - Desktop 引用 Application 与 Infrastructure；`ViewModels/` 与 `Views/` 只使用 `MuxDeck.Contracts` 命名空间、Domain 值类型和用例接口，不构造 Infrastructure 类型。只有 `Program.cs` 与 `Composition/` 可使用 Infrastructure 命名空间。
 - Domain / Application / Contracts 禁止直接读取当前时间或生成 ID（DateTime / DateTimeOffset 当前值、TimeProvider.System、Guid.NewGuid、Stopwatch、Environment.TickCount / TickCount64），lambda / async 状态机同样受检查。
