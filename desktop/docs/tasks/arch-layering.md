@@ -238,7 +238,7 @@
 
 Application / Contracts 禁止 System.IO、System.Diagnostics.Process、System.Net；Domain 额外禁止 Console / Environment，Infrastructure 禁止 Avalonia。NoCurrentTimeRule 保留原规则并增加 Guid.NewGuid、Stopwatch（含泛型引用）、TickCount / TickCount64，同时检查 Domain / Application / Contracts 与编译生成的 lambda / async 嵌套类型。契约集合属性及公开集合字段采用 EquatableArray 白名单，string 与 static 类按用户规则处理；可写 setter / 字段仍拒绝。CompositionEntryRule 同时核对类型与 PDB 源码路径，可参数化根目录；缺 PDB、映射为 /_/ 或无法读取源码时返回明确失败原因，生产架构断言显示原因，不抛出未处理异常。
 
-82 → 136，仅新增架构 54：生产护栏 3、时间/ID 15、禁止命名空间与纯数据反例 12、集合/可写数据与允许类型反例 13、装配/PDB 路径反例 11。原 82 项全部保留，Architecture 37 → 91，Domain 15 / Application 4 / Core 26 不变；没有跳过、删除或放宽原有用例。受控 13/13、656/656。提交与 CI 链接推送确认后补充。
+82 → 136，仅新增架构 54：生产护栏 3、时间/ID 15、禁止命名空间与纯数据反例 12、集合/可写数据与允许类型反例 13、装配/PDB 路径反例 11。原 82 项全部保留，Architecture 37 → 91，Domain 15 / Application 4 / Core 26 不变；没有跳过、删除或放宽原有用例。受控 13/13、656/656。提交 [7ed9493](https://github.com/Danyuyuyuyu/mux-deck/commit/7ed9493b8d649d3086ff031f91d6851f4124b638)，[Desktop CI 已通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38385963643)。
 
 | 实际命令（desktop/） | 结果 |
 |---|---|
