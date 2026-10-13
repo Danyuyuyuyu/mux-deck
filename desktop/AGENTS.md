@@ -9,7 +9,7 @@
 ## 按任务读取
 
 - **代码变更**：在新增、修改、移动或删除代码前，读取 [代码骨架](docs/agents/skeleton.md)，先确定代码所属层（Domain / Application / Infrastructure / Desktop）、依赖方向、契约和文件归属；迁移期间新代码按骨架的过渡规则落位。
-- **结构决策**：新增或拆分项目、改变依赖方向、拆分 Contracts 时，先读取并新增或修订 [ADR](docs/adr/)，再改骨架与代码。
+- **结构决策**：新增或拆分项目、改变依赖方向、拆分 Contracts 时，先读取 [ADR](docs/adr/)。按已接受的 ADR 实施时只需在提交与 PR 中引用，不修订 ADR；超出已接受 ADR 的结构变更，先新增或修订 ADR 并经用户确认，再改骨架与代码。
 - **进行中的任务**：开始前查看 [任务文档](docs/tasks/) 中对应的文件，按其范围与粒度实施；架构分层重构按 [任务计划](docs/tasks/arch-layering.md) 逐 PR 执行。
 - **功能开发**：读取 [开发流程](docs/agents/migration.md)，确认当前阶段、输入输出、范围和完成条件；涉及旧版行为时核对对应旧代码。
 - **验证与交付**：读取 [验证要求](docs/agents/verification.md)，按改动选择检查并记录结果。
