@@ -13,7 +13,12 @@ public sealed class ToolFailureException : Exception
         .Select(field => (string)field.GetRawConstantValue()!)
         .ToHashSet(StringComparer.Ordinal);
 
-    public ToolFailureException(string code, string message, string? detail = null) : base(message)
+    public ToolFailureException(string code, string message, string? detail = null)
+        : this(code, message, detail, null) { }
+
+    // 保留原始异常与堆栈，适配边界不把系统错误压成不可追溯的文案。
+    public ToolFailureException(string code, string message, string? detail, Exception? innerException)
+        : base(message, innerException)
     {
         if (!KnownCodes.Contains(code))
             throw new ArgumentOutOfRangeException(nameof(code), code, "端口错误码必须来自 Contracts.ErrorCodes。");

@@ -20,7 +20,12 @@ public sealed class PortFailureBoundaryTests
         Assert.Equal("MuxDeck.Application.Ports.Failures", type.Namespace);
         Assert.True(type.IsPublic && type.IsSealed);
         Assert.Equal(typeof(Exception), type.BaseType);
-        var constructor = Assert.Single(type.GetConstructors());
+        Assert.Equal(2, type.GetConstructors().Length);
+        var constructor = Assert.Single(type.GetConstructors(), item => item.GetParameters().Length == 3);
+        var innerConstructor = Assert.Single(type.GetConstructors(), item => item.GetParameters().Length == 4);
+        Assert.Equal(new[] { "code", "message", "detail", "innerException" },
+            innerConstructor.GetParameters().Select(parameter => parameter.Name));
+        Assert.Equal(typeof(Exception), innerConstructor.GetParameters()[3].ParameterType);
         Assert.Equal(new[] { "code", "message", "detail" }, constructor.GetParameters().Select(parameter => parameter.Name));
         Assert.Equal(typeof(string), type.GetProperty("Code")!.PropertyType);
         Assert.Equal(typeof(string), type.GetProperty("Detail")!.PropertyType);
@@ -89,15 +94,15 @@ public sealed class PortFailureBoundaryTests
     {
         var type = typeof(IMediaProber).Assembly.GetType("MuxDeck.Application.Ports." + name)!;
         var documents = ReadPortDocuments();
-        AssertFailureDocumentation(Assert.Single(documents, item =>
+        Assert.Empty(Assert.Single(documents, item =>
             item.Declaration.Contains("public interface " + name, StringComparison.Ordinal) &&
-            Regex.IsMatch(item.Declaration, @"\b" + name + @"\b")).Document);
+            Regex.IsMatch(item.Declaration, @"\b" + name + @"\b")).Document.Elements("exception"));
         foreach (var method in type.GetMethods().Where(method => !method.IsSpecialName))
             AssertFailureDocumentation(Assert.Single(documents, item =>
                 Regex.IsMatch(item.Declaration, @"\b" + method.Name + @"\s*\(")).Document);
         foreach (var property in type.GetProperties())
-            AssertFailureDocumentation(Assert.Single(documents, item =>
-                Regex.IsMatch(item.Declaration, @"\b" + property.Name + @"\s*\{")).Document);
+            Assert.Empty(Assert.Single(documents, item =>
+                Regex.IsMatch(item.Declaration, @"\b" + property.Name + @"\s*\{")).Document.Elements("exception"));
     }
 
     [Theory]

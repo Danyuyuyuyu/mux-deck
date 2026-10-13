@@ -629,6 +629,33 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 
 六项命令与日期汇总、stdout、原生报告路径保存在 `artifacts/arch-corrections/real-baseline/`；源输入只读，输出、下载和暂存隔离。本轮真实 UI 为已有 headless 控件与真实 Core/工具流程，不替代原生选择器、Explorer、DPI 或播放器验收。本提交仅修订任务文档及其对照表，不改 ADR、步骤计划、骨架、生产代码、测试、sln、props、锁文件或诊断白名单；按已接受 ADR-0001 实施。按用户要求，六项全部通过后只做一笔纯文档提交、pull --rebase 并推送；工作流明确排除纯文档，不触发新的 Desktop CI。**3b 未开始，提交后停止等待用户确认。**
 
+#### 3a 修正：端口失败约定补全
+
+输入：dbe9f56，六项真实基准已完成。输出：失败/取消 XML 只保留在外部操作方法；类型与纯属性不重复说明。新增目标已存在与工作区 IO 失败集中码；ToolFailureException 增加保留原异常的四参构造，原三参调用保持兼容。失败行为：未知码拒绝、原文与 InnerException 保留，取消仍抛 OperationCanceledException。验收：原有全部测试保留，端口 XML 测试只按用户授权调整检查范围，其他归属/只读/工作文件/契约断言不放宽；严格构建、全部单元/架构及 13 套受控回归通过后才提交，CI 通过后才开始 3b。
+
+实际验证（desktop/）：549 → 554，仅新增 Application 5（新集中码自动覆盖 2、原异常/堆栈/空异常兼容/未知码补充 3），原 549 项保留；Architecture 192 不变，原 XML 十组用例按用户授权限定到操作方法，类型/属性要求无异常说明；其他断言不放宽。受控 13/13、656/656。日志 `artifacts/arch-corrections/3a-failure-complete/`，CI 待此提交推送后补入。
+
+| 实际命令 | 结果 |
+|---|---|
+| `dotnet restore MuxDeck.sln --locked-mode` | 10/10 |
+| `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false` | 0 警告 / 0 错误 |
+| `dotnet test MuxDeck.sln --no-build -c Release` | 554/554（Domain 298、Application 27、Core 37、Architecture 192）；失败/跳过 0 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release` | 28/28 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-policy` | 57/57 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-round1` | 89/89 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-ui-round1` | 176/176 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --workbench-ui` | 38/38 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --input-feedback` | 24/24 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop` | 25/25 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --environment-ui` | 23/23 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --components` | 31/31 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-ui` | 37/37 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all` | 41/41 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall` | 26/26 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui` | 61/61 |
+
+实际计数见上表，CI 推送后追加；按已接受 ADR-0001 实施，不修改 ADR。
+
 ## 发现的旧缺陷
 
 （已修复：修正 A；提交 c636e91，Desktop CI 38383347658 已通过。以下保留发现背景。）`Desktop/App.axaml.cs` 将未限定的 `Application` 用作 Avalonia 基类；当目标程序集首次包含 `MuxDeck.Application` 命名空间的业务类型时，编译器会优先解析同名命名空间并报 CS0118。首个反例因此未计为架构护栏验收，改用独立禁止命名空间后两条护栏均确认失败。1b 只定义 `MuxDeck.Contracts`，没有触发该冲突；该缺陷已由修正 A 的 c636e91 修复，并经临时同名类型与完整 CI 验证。

@@ -55,4 +55,38 @@ public sealed class ToolFailureContractTests
         Assert.Equal(new WorkFile("work/font.ttf"), Assert.Single(result.Fonts));
         Assert.False(typeof(OutputArtifact).IsAssignableFrom(typeof(WorkFile)));
     }
+
+    [Fact]
+    public void Original_exception_and_stack_are_preserved_without_changing_the_payload()
+    {
+        static Exception Capture()
+        {
+            try { throw new IOException("原始磁盘错误"); }
+            catch (IOException original) { return original; }
+        }
+        var original = Capture();
+        var failure = new ToolFailureException(ErrorCodes.WorkspaceIoFailed, "工作区写入失败", "path=work", original);
+        Assert.Same(original, failure.InnerException);
+        Assert.NotNull(failure.InnerException!.StackTrace);
+        Assert.Contains("原始磁盘错误", failure.ToString());
+        Assert.Equal(ErrorCodes.WorkspaceIoFailed, failure.Code);
+        Assert.Equal("工作区写入失败", failure.Message);
+        Assert.Equal("path=work", failure.Detail);
+    }
+
+    [Fact]
+    public void Explicit_null_inner_exception_keeps_the_existing_constructor_behavior()
+    {
+        var failure = new ToolFailureException(ErrorCodes.TargetAlreadyExists, "目标已存在", null, null);
+        Assert.Null(failure.InnerException);
+        Assert.Null(failure.Detail);
+        Assert.Equal("目标已存在", failure.Message);
+    }
+
+    [Fact]
+    public void Inner_exception_constructor_still_rejects_unregistered_codes()
+    {
+        var original = new IOException("原因");
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ToolFailureException("UNKNOWN", "错误", null, original));
+    }
 }

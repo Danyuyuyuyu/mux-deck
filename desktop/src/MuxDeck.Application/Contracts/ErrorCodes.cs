@@ -10,4 +10,6 @@ public static class ErrorCodes
     public const string ToolExitFailed = "MUX_TOOL_EXIT_FAILED";
     public const string ToolOutputInvalid = "MUX_TOOL_OUTPUT_INVALID";
     public const string ToolFatalDiagnostic = "MUX_TOOL_FATAL_DIAGNOSTIC";
+    public const string TargetAlreadyExists = "MUX_TARGET_ALREADY_EXISTS";
+    public const string WorkspaceIoFailed = "MUX_WORKSPACE_IO_FAILED";
 }
