@@ -26,7 +26,17 @@ Domain ← Application ← Infrastructure
 - Desktop 引用 Application 与 Infrastructure；`ViewModels/` 与 `Views/` 只使用 `MuxDeck.Contracts` 命名空间、Domain 值类型和用例接口，不构造 Infrastructure 类型。只有 `Program.cs` 与 `Composition/` 可使用 Infrastructure 命名空间。
 - 测试项目只引用其验证的生产项目。上述规则由架构测试固定，违反即测试失败。
 
-当前仍为 `MuxDeck.Core` 与 `MuxDeck.Desktop` 两个项目，按[架构分层重构](migration.md#架构分层重构)逐步搬迁。对应项目建立前，新代码先放入 Core 内与目标层同名的命名空间（`MuxDeck.Domain`、`MuxDeck.Contracts`、`MuxDeck.Application`、`MuxDeck.Infrastructure`），遵守同样的依赖规则，搬迁时只移动文件。每完成一步，在同一改动中更新本节与下方“迁移前现状”。
+1a 已建立 Domain、Application、Infrastructure 三个空生产项目；现有代码仍位于 Core 与 Desktop，按[架构分层重构](../tasks/arch-layering.md)逐步搬迁。过渡期的实际项目引用如下（目标依赖仍以上述规则为准）：
+
+| 项目 | 1a 直接项目引用 |
+|---|---|
+| Domain | 无 |
+| Application | Domain |
+| Infrastructure | Application、Domain |
+| Core | Domain、Application |
+| Desktop | Core、Application |
+
+Desktop → Core 保留到既有入口迁移完成；Desktop → Infrastructure 在集中装配接入时建立。上述过渡引用不豁免目标命名空间规则：Core 内先改为 `MuxDeck.Domain`、`MuxDeck.Contracts`、`MuxDeck.Application`、`MuxDeck.Infrastructure` 的类型与对应新项目一起接受架构测试，搬迁时只移动文件。每完成一步，在同一改动中更新本节与下方“迁移前现状”。
 
 测试按层划分：
 
@@ -38,7 +48,9 @@ Domain ← Application ← Infrastructure
 | `tests/MuxDeck.Architecture.Tests` | 项目引用与命名空间依赖规则 |
 | `tests/MuxDeck.Smoke` | 保留为验收入口与 headless UI 检查 |
 
-测试框架与架构测试实现方式在重构第一步确定，固定版本并提交锁文件后写入本节。
+1a 选定并固定测试依赖：`xunit.v3` **3.2.2**、`xunit.runner.visualstudio` **3.1.4**、`Microsoft.NET.Test.Sdk` **17.14.1**；架构测试使用 `NetArchTest.Rules` **1.3.2**。所有新增项目提交 `packages.lock.json`，继续使用 `dotnet restore MuxDeck.sln --locked-mode`。
+
+Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Application；Architecture.Tests 验证全部生产项目（过渡期包含 Core），Smoke 仍只直接引用 Desktop。Domain/Application 目前没有业务类型与业务测试，后续按任务补充，不添加占位通过用例。架构测试检查 restore 后的实际直接项目引用、Domain 包依赖、程序集与命名空间依赖、Views/ViewModels 的契约与接口边界，以及 Infrastructure 只能由 Program/Composition 使用的装配边界（含源码路径）。字段、泛型、构造调用和异步方法反例验证 NetArchTest 的扫描能力。
 
 ## 契约
 

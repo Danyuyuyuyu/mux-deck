@@ -21,6 +21,9 @@ jobs:
       - name: Build desktop
         working-directory: desktop
         run: dotnet build MuxDeck.sln --no-restore -c Release
+      - name: Layer and architecture tests
+        working-directory: desktop
+        run: dotnet test MuxDeck.sln --no-build -c Release
       - name: Core and headless UI smoke
         working-directory: desktop
         run: dotnet run --project tests/MuxDeck.Smoke --no-build -c Release
