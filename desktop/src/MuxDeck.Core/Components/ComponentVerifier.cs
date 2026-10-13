@@ -1,3 +1,5 @@
+using MuxDeck.Infrastructure.Components;
+using MuxDeck.Infrastructure;
 using System.Text.RegularExpressions;
 
 namespace MuxDeck.Core.Components;
@@ -27,7 +29,7 @@ public sealed class ComponentVerifier(IComponentProbeRunner? probeRunner = null,
             }
             if (component.Id == "afs")
             {
-                var backend = (fontToolsLocator ?? FontToolsLocator.Find)(workspace);
+                var backend = (fontToolsLocator ?? (value => FontToolsLocator.Find(value)))(workspace);
                 if (backend is null) return new(ComponentState.DependencyMissing, parts, version, "缺少 fonttools 后端：需要同目录且可运行的 pyftsubset 与 ttx。");
                 await ProbeAsync(Path.Combine(backend, Executable("pyftsubset")), ["--help"], cancellationToken).ConfigureAwait(false);
                 await ProbeAsync(Path.Combine(backend, Executable("ttx")), ["--version"], cancellationToken).ConfigureAwait(false);

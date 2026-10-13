@@ -1,3 +1,5 @@
+using MuxDeck.Contracts;
+
 namespace MuxDeck.Core;
 
 public sealed record Workspace(string Root)
@@ -10,6 +12,10 @@ public sealed record Workspace(string Root)
     public string ToolsDirectory => ToolsDirectoryOverride ?? Path.Combine(Root, "bin");
     public string TaskLogsDirectory => StorageOverride?.LogsDirectory ?? Path.Combine(Root, "desktop", "artifacts", "runs");
     public string TaskCacheDirectory => StorageOverride?.CacheDirectory ?? Path.Combine(Root, "desktop", "artifacts", "runs");
+
+    // 3b 过渡：旧调用方仍持有 Workspace，Infrastructure 只接收 Application 配置。
+    public static implicit operator ToolConfiguration(Workspace value) => new(value.ToolsDirectory,
+        value.TaskLogsDirectory, value.TaskCacheDirectory, value.FontToolsDirectoryOverride);
 
     public static Workspace Discover(string? explicitRoot = null)
     {

@@ -1,3 +1,6 @@
+using MuxDeck.Infrastructure;
+using MuxDeck.Infrastructure.Muxing;
+using MuxDeck.Infrastructure.Components;
 using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;

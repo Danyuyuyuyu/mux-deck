@@ -2,5 +2,6 @@
   <ItemGroup>
     <ProjectReference Include="../MuxDeck.Domain/MuxDeck.Domain.csproj" />
     <ProjectReference Include="../MuxDeck.Application/MuxDeck.Application.csproj" />
+    <ProjectReference Include="../MuxDeck.Infrastructure/MuxDeck.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
-namespace MuxDeck.Core;
+namespace MuxDeck.Infrastructure;
 
 /// <summary>Windows 作业对象约束工具后代生命周期；父进程先退出时也能结束持管道的子进程。</summary>
 internal sealed class WindowsProcessJob(SafeFileHandle handle) : IDisposable

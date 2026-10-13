@@ -173,11 +173,19 @@
         "type": "Project",
         "dependencies": {
           "MuxDeck.Application": "[1.0.0, )",
-          "MuxDeck.Domain": "[1.0.0, )"
+          "MuxDeck.Domain": "[1.0.0, )",
+          "MuxDeck.Infrastructure": "[1.0.0, )"
         }
       },
       "muxdeck.domain": {
         "type": "Project"
+      },
+      "muxdeck.infrastructure": {
+        "type": "Project",
+        "dependencies": {
+          "MuxDeck.Application": "[1.0.0, )",
+          "MuxDeck.Domain": "[1.0.0, )"
+        }
       }
     }
   }

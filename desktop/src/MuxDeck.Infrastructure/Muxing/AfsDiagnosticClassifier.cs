@@ -1,6 +1,6 @@
 using MuxDeck.Domain;
 
-namespace MuxDeck.Core.Muxing;
+namespace MuxDeck.Infrastructure.Muxing;
 
 public enum AfsDiagnosticKind { LogOnly, Warning, Fatal }
 public sealed record AfsDiagnostic(AfsDiagnosticKind Kind, string Code, string Message);

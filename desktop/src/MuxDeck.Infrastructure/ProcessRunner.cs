@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 
-namespace MuxDeck.Core;
+namespace MuxDeck.Infrastructure;
 
 public sealed record ProcessRequest(string Executable, IReadOnlyList<string> Arguments,
     string? WorkingDirectory = null, Encoding? OutputEncoding = null,

@@ -13,12 +13,13 @@ public sealed class ProjectDependencyTests
     [InlineData("src/MuxDeck.Domain", new string[0])]
     [InlineData("src/MuxDeck.Application", new[] { "MuxDeck.Domain" })]
     [InlineData("src/MuxDeck.Infrastructure", new[] { "MuxDeck.Application", "MuxDeck.Domain" })]
-    [InlineData("src/MuxDeck.Core", new[] { "MuxDeck.Application", "MuxDeck.Domain" })]
+    [InlineData("src/MuxDeck.Core", new[] { "MuxDeck.Application", "MuxDeck.Domain", "MuxDeck.Infrastructure" })]
     [InlineData("src/MuxDeck.Desktop", new[] { "MuxDeck.Application", "MuxDeck.Core" })]
     [InlineData("tests/MuxDeck.Core.Tests", new[] { "MuxDeck.Core" })]
     [InlineData("tests/MuxDeck.Domain.Tests", new[] { "MuxDeck.Domain" })]
     [InlineData("tests/MuxDeck.Application.Tests", new[] { "MuxDeck.Application" })]
     [InlineData("tests/MuxDeck.Architecture.Tests", new[] { "MuxDeck.Application", "MuxDeck.Core", "MuxDeck.Desktop", "MuxDeck.Domain", "MuxDeck.Infrastructure" })]
+    [InlineData("tests/MuxDeck.Infrastructure.IntegrationTests", new[] { "MuxDeck.Infrastructure" })]
     [InlineData("tests/MuxDeck.Smoke", new[] { "MuxDeck.Desktop" })]
     public void Projects_reference_only_the_layers_they_verify_or_use(string project, string[] expected)
     {
@@ -78,6 +79,22 @@ public sealed class NamespaceDependencyTests
         ArchitectureScope.AssertSuccess(Types.InAssembly(Assembly.Load("MuxDeck.Application"))
             .Should().OnlyHaveDependenciesOn("System", "MuxDeck.Domain", "MuxDeck.Contracts", "MuxDeck.Application")
             .GetResult());
+    }
+
+    [Fact]
+    public void Every_external_port_has_an_infrastructure_implementation()
+    {
+        var ports = new[]
+        {
+            typeof(MuxDeck.Application.Ports.IMediaProber), typeof(MuxDeck.Application.Ports.IFontSubsetter),
+            typeof(MuxDeck.Application.Ports.IMuxer), typeof(MuxDeck.Application.Ports.IMediaExtractor),
+            typeof(MuxDeck.Application.Ports.IFontInspector), typeof(MuxDeck.Application.Ports.IArtifactPublisher),
+            typeof(MuxDeck.Application.Ports.ITaskWorkspaceFactory), typeof(MuxDeck.Application.Ports.IToolCatalog),
+            typeof(MuxDeck.Application.Ports.IClock), typeof(MuxDeck.Application.Ports.ITaskWorkspace)
+        };
+        var implementations = Assembly.Load("MuxDeck.Infrastructure").GetTypes();
+        foreach (var port in ports)
+            Assert.Contains(implementations, type => type.IsClass && !type.IsAbstract && port.IsAssignableFrom(type));
     }
 
     [Fact]

@@ -27,17 +27,17 @@ Domain ← Application ← Infrastructure
 - Domain / Application / Contracts 禁止直接读取当前时间或生成 ID（DateTime / DateTimeOffset 当前值、TimeProvider.System、Guid.NewGuid、Stopwatch、Environment.TickCount / TickCount64），lambda / async 状态机同样受检查。
 - 测试项目只引用其验证的生产项目。上述规则由架构测试固定，违反即测试失败。
 
-1a 已建立 Domain、Application、Infrastructure 三个生产项目；1b 已在 Domain/Application 定义值类型与契约，Infrastructure 仍为空，旧流程与调用方仍位于 Core 与 Desktop，按[架构分层重构](../tasks/arch-layering.md)逐步搬迁。过渡期的实际项目引用如下（目标依赖仍以上述规则为准）：
+1a 已建立 Domain、Application、Infrastructure 三个生产项目；1b 已在 Domain/Application 定义值类型与契约，3b 已迁出 Infrastructure 工具/进程/文件适配，旧流程与调用方仍位于 Core 与 Desktop，按[架构分层重构](../tasks/arch-layering.md)逐步搬迁。过渡期的实际项目引用如下（目标依赖仍以上述规则为准）：
 
-| 项目 | 1a 直接项目引用 |
+| 项目 | 过渡期实际直接项目引用 |
 |---|---|
 | Domain | 无 |
 | Application | Domain |
 | Infrastructure | Application、Domain |
-| Core | Domain、Application |
+| Core | Domain、Application、Infrastructure（3b 用户批准过渡，第 5 步移除） |
 | Desktop | Core、Application |
 
-Desktop → Core 保留到既有入口迁移完成；Desktop → Infrastructure 在集中装配接入时建立。上述过渡引用不豁免目标命名空间规则：Core 内先改为 `MuxDeck.Domain`、`MuxDeck.Contracts`、`MuxDeck.Application`、`MuxDeck.Infrastructure` 的类型与对应新项目一起接受架构测试，搬迁时只移动文件。每完成一步，在同一改动中更新本节与下方“迁移前现状”。
+Core → Infrastructure 为 3b 用户批准的单向过渡，到第 5 步移除；Infrastructure 不引用 Core 的护栏不变。StoragePaths、ToolLocator、Workspace 及任务文档列出的 Desktop 直接依赖本步留 Core，4a 替换直接依赖与装配。Desktop → Core 保留到既有入口迁移完成；Desktop → Infrastructure 在集中装配接入时建立。上述过渡引用不豁免目标命名空间规则：Core 内先改为 `MuxDeck.Domain`、`MuxDeck.Contracts`、`MuxDeck.Application`、`MuxDeck.Infrastructure` 的类型与对应新项目一起接受架构测试，搬迁时只移动文件。每完成一步，在同一改动中更新本节与下方“迁移前现状”。
 
 测试按层划分：
 
@@ -52,7 +52,7 @@ Desktop → Core 保留到既有入口迁移完成；Desktop → Infrastructure 
 
 1a 选定并固定测试依赖：`xunit.v3` **3.2.2**、`xunit.runner.visualstudio` **3.1.4**、`Microsoft.NET.Test.Sdk` **17.14.1**；架构测试使用 `NetArchTest.Rules` **1.3.2**。所有新增项目提交 `packages.lock.json`，继续使用 `dotnet restore MuxDeck.sln --locked-mode`。
 
-Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Application；Architecture.Tests 验证全部生产项目（过渡期包含 Core），Smoke 仍只直接引用 Desktop。1b 初始新增 Domain 值类型测试 8 项、Core 旧模型转换测试 26 项；修正 B 后 Domain 为 15 项、Application 契约值相等测试 4 项，修正 C 后架构测试 91 项；2a 后 Domain 84 / 架构 94，2b 后 Domain 218 / 架构 95；输入位置枚举合并后 Application 9；2c 后 Domain 294 / 架构 98；Environment 经授权修正后架构 127，原有 427 项全部保留，新增 29 项成员护栏。3a 后 Domain 298 / Application 10 / Core 37 / 架构 140，共 485 项，仅新增 29，原 456 项保留。Application 流程尚未迁移，当前流程用例 0。Core.Tests 只直接引用 Core，不放宽既有分层测试依赖。架构测试检查 restore 后的实际直接项目引用、Domain 包依赖、程序集与命名空间依赖、Views/ViewModels 的契约与接口边界，以及 Infrastructure 只能由 Program/Composition 使用的装配边界（含源码路径）。字段、泛型、构造调用和异步方法反例验证 NetArchTest 的扫描能力。
+Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Application；Architecture.Tests 验证全部生产项目（过渡期包含 Core），Smoke 仍只直接引用 Desktop；Infrastructure.IntegrationTests 只直接引用 Infrastructure。1b 初始新增 Domain 值类型测试 8 项、Core 旧模型转换测试 26 项；修正 B 后 Domain 为 15 项、Application 契约值相等测试 4 项，修正 C 后架构测试 91 项；2a 后 Domain 84 / 架构 94，2b 后 Domain 218 / 架构 95；输入位置枚举合并后 Application 9；2c 后 Domain 294 / 架构 98；Environment 经授权修正后架构 127，原有 427 项全部保留，新增 29 项成员护栏。3a 后 Domain 298 / Application 10 / Core 37 / 架构 140，共 485 项，仅新增 29，原 456 项保留。Application 流程尚未迁移，当前流程用例 0。Core.Tests 只直接引用 Core，不放宽既有分层测试依赖。架构测试检查 restore 后的实际直接项目引用、Domain 包依赖、程序集与命名空间依赖、Views/ViewModels 的契约与接口边界，以及 Infrastructure 只能由 Program/Composition 使用的装配边界（含源码路径）。字段、泛型、构造调用和异步方法反例验证 NetArchTest 的扫描能力。
 
 ## 契约
 
@@ -112,7 +112,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 - 端口接口定义在 Application，实现位于 Infrastructure，测试替身位于测试项目。
 - Application/Ports/Failures 的 ToolFailureException(Code, Message, Detail) 是端口统一失败类型：工具退出码异常、输出解析失败或出现 Fatal 级诊断都抛该类型；取消抛 OperationCanceledException。XML 失败与取消约定只写在执行外部工具或文件操作的方法上；接口类型与只读属性不重复声明。当前失败码集中在 Contracts.ErrorCodes（MUX_TOOL_EXIT_FAILED、MUX_TOOL_OUTPUT_INVALID、MUX_TOOL_FATAL_DIAGNOSTIC、MUX_TARGET_ALREADY_EXISTS、MUX_WORKSPACE_IO_FAILED），构造拒绝未知码，并支持保留 InnerException；不另立诊断白名单，Detail 保留原始原因。
 - 中间文件使用 Application/Ports 的 WorkFile(Path)：修正字幕、子集字体、提取目标与临时封装产物都不使用 OutputArtifact。IArtifactPublisher 接受 WorkFile，只有不覆盖发布成功才返回 Contracts.OutputArtifact，作为交给界面的最终成品。失败异常按 Exception 专门检查，所有端口数据继续为不可变 record/EquatableArray；既有 Contracts 与 Ports 数据护栏保持不变。
-- 现有 `IMuxToolRunner` 是进程边界，迁移后成为 Infrastructure 内部依赖。`--warning-policy` 等依赖它的回归改为替换工具端口后再收紧其可见性。
+- `IMuxToolRunner` 已随 3b 迁入 Infrastructure；Core 过渡引用与原有 Smoke 注入仍需 public 可见性，后续入口迁移完成后成为 Infrastructure 内部依赖。`--warning-policy` 等依赖它的回归改为替换工具端口后再收紧其可见性。
 
 ### 单任务流水线
 
@@ -144,25 +144,26 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 
 #### 2c 诊断、QC 与 ASS 解析已迁入 Domain
 
-- `DiagnosticPolicy.cs` 维护唯一 AFS 物理行分类实现，ANSI、精确颜色白名单、未知级别/诊断与原 code/message 保持不变。Core `AfsDiagnosticClassifier` 只转接旧数据形状；有界分块重组、流复核和 warning 合并仍由旧收集器完成。
+- `DiagnosticPolicy.cs` 维护唯一 AFS 物理行分类实现，ANSI、精确颜色白名单、未知级别/诊断与原 code/message 保持不变。Infrastructure `AfsDiagnosticClassifier` 只转接数据形状；有界分块重组、流复核和 warning 合并由同层收集器完成。
 - `OutputQcRules.cs` 负责保留源 A/V 的已知元数据、新增字幕/音频规格、真实音轨 ID 及已声明 A/V 时长比较；输入为 `OutputQcFacts.cs` 的不可变事实。结果保留按原顺序通过的检查项及失败文案，旧边界先追加检查项，再抛原数据异常。
 - 字幕全文比较也由 `OutputQcRules` 负责，只归一 CRLF/LF；同工具 transport 参考生成、提取和文件读取仍在旧边界。Dialogue 文本、时序、Style、字体、事件顺序与末尾空格不能丢弃或放宽。
-- `AssDocument.cs` 负责必要节、样式、字体/粗斜体覆盖、绘图忽略、Unicode 码点与 AFS mapping 解析，返回不可变使用/映射集合；动画字体切换、未知样式、非标准字重等原拒绝保持不变。UTF-8/BOM 文件读取、ttx 读取及字体候选/字形/固有粗体证明仍在 Core，IO 适配随 3b 搬迁。
+- `AssDocument.cs` 负责必要节、样式、字体/粗斜体覆盖、绘图忽略、Unicode 码点与 AFS mapping 解析，返回不可变使用/映射集合；动画字体切换、未知样式、非标准字重等原拒绝保持不变。UTF-8/BOM 文件读取、ttx 读取及字体候选/字形/固有粗体证明已随 3b 迁入 Infrastructure，纯规则仍由 Domain 维护。
 - Domain 的解析拒绝使用无 IO 依赖的 `MediaRuleException`，旧边界转换为原 `InvalidDataException` 文案；不把文件、进程、时间、有副作用的 Environment 成员或具体工具类型带入 Domain。原 `diagnostics.md` 白名单未修改。
 
 #### 阶段一单任务职责
 
-阶段一尚未迁出的业务编排与媒体工具代码位于 `src/MuxDeck.Core/Muxing/`。下表路径相对于 `src/MuxDeck.Core/`；进程技术适配位于 Core 根目录，不拆出额外生产项目：
+3b 后，旧编排和兼容模型仍在 Core，进程与工具适配位于 Infrastructure。下表路径相对于 src/：
 
-| 职责 | 相对 Core 的文件 | 约束 |
+| 职责 | 文件 | 约束 |
 |---|---|---|
-| 旧请求、结果、状态、进度、轨道探测模型；1b 兼容转换 | `Muxing/MuxModels.cs`、`Muxing/LegacyMuxContractConverter.cs`（新增） | 以不可变业务数据表达；字幕输入保留路径、名字、语言和 default/forced 选择 |
-| 单任务整流程、AFS/mkvmerge/mkvextract 参数与 JSON 探测 | `Muxing/SingleMuxService.cs`、`Muxing/ExternalMedia.cs` | 一个 `RunAsync` 入口拥有任务日志/临时目录、进度、取消与清理；固定 PyFontTools；按检查、探测、子集化、封装、QC、不覆盖落位排序 |
-| AFS 诊断分类与结果 warning | `Muxing/AfsDiagnosticClassifier.cs`、`Muxing/MuxModels.cs`、`Muxing/SingleMuxService.cs` | 分类调用 Domain `DiagnosticPolicy`，旧入口只转换数据形状；白名单、未知诊断与可继续告警行为以[工具诊断分类](diagnostics.md)为准；流程返回结构化 warning |
-| ASS 字形使用解析及子集字体校验 | `Muxing/AssGlyphValidator.cs` | 读取 UTF-8 后调用 Domain `AssDocument` 解析样式、覆盖字体和对白码点；Core 保留 ttx `name`/`cmap` 读取及字体候选/字形核验 |
-| 可替换的外部进程边界 | `Muxing/IMuxToolRunner.cs` | `IMuxToolRunner` 只包住外部进程执行；默认 `MuxToolRunner` 复用 `ProcessRunner`，测试注入保持在这个具体边界 |
-| QC 判定 | `Muxing/SingleMuxService.cs` 调用 Domain `OutputQcRules`；`Muxing/AssGlyphValidator.cs` 保留字体 IO 核验 | Domain 对比源视频与音轨，逐轨验证新增 ASS 名称/语言/default/forced；验证附件身份、大小、类型、提取 SHA-256 和 ASS 内容；不能仅按语言找到任意轨即通过。ASS 以同一 MKVToolNix 将每条修正 ASS 单独封装、提取为参考，与真实成品提取全文比较；仅统一 CRLF/LF，Dialogue 文本、时序、Style、字体、事件顺序和文本边缘空格均须一致 |
-| 文件、进程与日志支持 | `ProcessRunner.cs`、`WindowsProcessJob.cs` 与 `Muxing/SingleMuxService.cs` | 运行级临时目录和完整任务日志；已归属 Job 的工具进程用取消/父退出收尾；`Process.Start()` 到 Assign Job 存在未覆盖竞态，不能承诺任意 launcher 的后代全终止；目标用同目录临时文件及不覆盖 rename 落位 |
+| 旧请求、结果、状态、进度、探测模型与兼容转换 | Core/Muxing/MuxModels.cs、LegacyMuxContractConverter.cs | 旧入口转换模型，保持 Desktop 调用行为；3d/5 处理兼容入口 |
+| 旧单任务编排与 QC 接线 | Core/Muxing/SingleMuxService.cs、ExternalMedia.cs | 阶段顺序、检查文案、参考往返、哈希和提交后取消保持；3c 迁移流水线，不再重复进程/工具/发布实现 |
+| AFS 诊断与字体文件校验 | Infrastructure/Muxing/AfsDiagnosticClassifier.cs、AfsDiagnosticCollector.cs、AssGlyphValidator.cs | 分类调用 Domain DiagnosticPolicy；ASS 规则调用 Domain AssDocument；保留诊断计数、实时输出与字体来源证明 |
+| 可替换进程边界 | Infrastructure/Muxing/IMuxToolRunner.cs；Infrastructure/ProcessRunner.cs、WindowsProcessJob.cs | 进程与 Job 整体搬迁；旧受控回归继续注入同一 runner，不更改测试逻辑；Start 到 Assign Job 的已知竞态仍未覆盖 |
+| 探测、子集化、封装、提取、字体表 | Infrastructure/Muxing/MkvmergeProber.cs、AfsSubsetter.cs、MkvmergeMuxer.cs、MkvextractExtractor.cs、TtxFontInspector.cs、ToolExecutor.cs | 实现 Application 端口；列表参数、双流完整日志、UTF-8、超时和取消；失败统一 ToolFailureException，取消保留 OperationCanceledException |
+| 工作区、日志与不覆盖发布 | Infrastructure/FileTaskWorkspace.cs、NoOverwritePublisher.cs | 独占 cache/run-id/work，异步释放等待清理；日志保留；同目录暂存、刷盘、最后取消检查与不覆盖 rename；提交后不取消已完成成品 |
+| QC 判定 | Core/Muxing/SingleMuxService.cs 调用 Domain OutputQcRules；Infrastructure/Muxing/AssGlyphValidator.cs 保留字体 IO 核验 | 对比源视频与音轨，逐轨验证新增 ASS 名称/语言/default/forced；验证附件身份、大小、类型、提取 SHA-256 和 ASS 内容；不能仅按语言找到任意轨即通过。ASS 以同一 MKVToolNix 将每条修正 ASS 单独封装、提取为参考，与真实成品提取全文比较；仅统一 CRLF/LF，Dialogue 文本、时序、Style、字体、事件顺序和文本边缘空格均须一致 |
+| 工具配置与定位 | Infrastructure/ToolCatalog.cs、ToolPathLookup.cs、Components/FontToolsLocator.cs；Core/ToolLocator.cs、StoragePaths.cs、Workspace.cs | Infrastructure 不使用 Core；Desktop 直接依赖按用户批准留 Core 到 4a，共用路径查找和 fontTools 后端已迁出 |
 
 新增的多轨与自动导入范围以 [自动拖放任务](../tasks/automatic-media-drop.md) 为准：`SubtitleText` 统一 ASS/SRT 的 UTF-8 与结构校验，ASS 继续使用 `AssGlyphValidator`；外加音频包含真实输入 Track ID，`ExternalMedia` 构建选择参数；编码、声道、采样率与元数据的 QC 调用 Domain `OutputQcRules`。字幕采用同工具往返全文参考，音频采用同工具参考的 `--fullraw`（含 CodecPrivate）SHA-256，任一不符阻止发布。只在 A/V 输入时长均已声明时检查总时长，不以字幕尾时间替代未知容器数据。
 
@@ -171,7 +172,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 
 #### 3a 端口与统一轨道事实已定义
 
-- `src/MuxDeck.Application/Ports/` 定义九个端口，接口均为 public；真实实现留待 3b，流水线接入留待 3c。端口数据为不可变 record，集合为 EquatableArray，不建立通用仓储、事件总线、中介者或万能执行接口。
+- `src/MuxDeck.Application/Ports/` 定义九个端口，接口均为 public；真实实现已随下方 3b 迁出，流水线接入留待 3c。端口数据为不可变 record，集合为 EquatableArray，不建立通用仓储、事件总线、中介者或万能执行接口。
 - 原 Contracts `MediaTrackInfo` 归入 Domain，作为唯一的轨道事实类型，使用 TrackKind / LanguageTag / TrackId / TrackFlags。MediaProbeResult、ImportedTrackSpec 与 Domain MediaQcFacts 共用它；重复的 TrackQcFacts 已删除。保留 RawType、nullable IETF、HasDefaultFlag / HasForcedFlag，传统语言严格按原值比较，IETF 保留原大小写无关规则。
 - Core LegacyMuxContractConverter 的 ToTrackInfo / ToProbeResult 只负责模型转换与不可变快照；旧 SingleMuxService 的 QC 边界调用同一转换后交给 OutputQcRules，不保留第二套轨道事实判定。旧工具参数、流水线、进度、失败文案与行为保持不变。
 - 所有外部操作接受 CancellationToken；TaskWorkspace 通过 IAsyncDisposable 负责独占工作目录清理与日志生命周期，不向 Contracts 暴露工作区接口；IClock 只声明注入的 UTC 值，不读取当前时间。
@@ -187,6 +188,12 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 | ITaskWorkspaceFactory | 创建任务独占工作区，异步释放后清理完成、保留日志 |
 | IToolCatalog | 按业务能力定位工具，返回不可变描述 |
 | IClock | 提供注入的 UTC 时间 |
+
+#### 3b Infrastructure 适配已迁出
+
+九个业务端口与 ITaskWorkspace 均有 Infrastructure 实现；Core → Infrastructure 为用户批准的过渡引用，第 5 步移除。Infrastructure 始终不引用 Core、Desktop、Avalonia。StoragePaths、ToolLocator、Workspace 及任务文档列出的 Desktop 直接依赖留 Core，4a 替换调用与装配。
+
+tests/MuxDeck.Infrastructure.IntegrationTests 只直接引用 Infrastructure，固定 xUnit v3 3.2.2 / runner 3.1.4 / Test SDK 17.14.1，并提交 packages.lock.json。新增 45 项，使用测试程序集子进程与隔离文件验证六个工具适配的参数、UTF-8 双流、退出码与取消，另验证 JSON/XML 失败、AFS Fatal、超时、Job 后代进程、工具定位、工作区与不覆盖发布。CI 不要求本机媒体工具；真实媒体回归仍由 Smoke 的仅本地入口运行。Architecture 新增两项（直接引用、全部端口实现），原 554 项保留，共 601 项：Domain 298 / Application 27 / Core 37 / Architecture 194 / Infrastructure 45。受控入口与基准计数不变。
 
 #### 阶段一 Desktop 单任务约定
 

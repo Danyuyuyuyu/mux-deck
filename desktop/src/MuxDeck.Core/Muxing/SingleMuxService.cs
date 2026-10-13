@@ -1,8 +1,10 @@
+using MuxDeck.Infrastructure.Muxing;
+using MuxDeck.Infrastructure;
 using MuxDeck.Domain;
+using MuxDeck.Application.Ports;
+using MuxDeck.Contracts;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace MuxDeck.Core.Muxing;
 
@@ -37,12 +39,11 @@ public sealed partial class SingleMuxService
         CancellationToken cancellationToken = default)
     {
         var checks = new List<string>();
-        var warnings = new List<MuxWarning>();
+        var warnings = new List<Diagnostic>();
         var sourceMetadataCache = new Dictionary<(string Path, int Index), string>();
         string? logPath = null;
         string? work = null;
-        string? prepared = null;
-        TaskLog? log = null;
+        FileTaskWorkspace? log = null;
         var committed = false;
         string? destination = null;
         try
@@ -50,14 +51,10 @@ public sealed partial class SingleMuxService
             // 在任何进度回调和异步等待前复制集合，任务只消费本次提交的参数快照。
             ArgumentNullException.ThrowIfNull(request);
             request = request with { Subtitles = request.Subtitles?.ToArray()!, Audios = request.Audios?.ToArray()! };
-            var runId = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N");
-            var run = Path.Combine(workspace.TaskLogsDirectory, runId);
-            Directory.CreateDirectory(run);
-            logPath = Path.Combine(run, "task.log");
-            log = new TaskLog(logPath);
-            // 缓存与日志分离后仍保留拥有权明确的 work 子目录，与清理守卫一致。
-            work = Path.Combine(workspace.TaskCacheDirectory, runId, "work");
-            Directory.CreateDirectory(work);
+            log = (FileTaskWorkspace)await new FileTaskWorkspaceFactory().CreateAsync(workspace, cancellationToken).ConfigureAwait(false);
+            logPath = log.Log.Path;
+            work = log.WorkDirectory;
+            var context = new ToolCallContext(workspace, log);
             Stage(MuxStage.Validating, "检查输入与真实工具依赖");
             var snapshot = Validate(request);
             destination = Path.Combine(snapshot.OutputDirectory, snapshot.OutputFileName!);
@@ -98,61 +95,14 @@ public sealed partial class SingleMuxService
                     continue;
                 }
                 Stage(MuxStage.Subsetting, $"子集化字幕 {i + 1}/{snapshot.Subtitles.Count}");
-                var input = Path.Combine(work, $"input-{i}", Path.GetFileName(snapshot.Subtitles[i].Path));
-                Directory.CreateDirectory(Path.GetDirectoryName(input)!);
-                File.Copy(snapshot.Subtitles[i].Path, input);
-                var originalUsage = AssGlyphValidator.ReadUsage(AssGlyphValidator.ReadAss(input));
-                var output = Path.Combine(work, $"afs-{i}");
-                await RunToolAsync(afs,
-                    [input, "--fonts", snapshot.FontsDirectory, "--output", output,
-                     "--subset-backend", "PyFontTools", "--bin-path", fontTools], work,
-                    log, cancellationToken, TimeSpan.FromMinutes(20), rejectDiagnostics: true,
-                    warnings: warnings).ConfigureAwait(false);
-                var fixedAss = Path.Combine(output, Path.GetFileName(input));
-                if (!File.Exists(fixedAss)) throw new InvalidDataException("AFS 未产出修正 ASS。");
-                var text = AssGlyphValidator.ReadAss(fixedAss);
-                if (!text.Contains("; Font Subset:", StringComparison.Ordinal))
-                    throw new InvalidDataException("AFS 未写入字体子集映射，不能确认是真实子集化结果。");
-                var generated = Directory.EnumerateFiles(output).Where(IsFont).Order().ToArray();
-                if (generated.Length == 0 || generated.Any(x => new FileInfo(x).Length == 0))
-                    throw new InvalidDataException("AFS 子集字体产物不全。");
-                var xmlFiles = new List<string>();
-                foreach (var font in generated)
-                {
-                    var xml = font + ".xml";
-                    await RunToolAsync(Path.Combine(fontTools, Executable("ttx")),
-                        ["-q", "-t", "name", "-t", "cmap", "-t", "OS/2", "-o", xml, font], work,
-                        log, cancellationToken, TimeSpan.FromMinutes(2)).ConfigureAwait(false);
-                    if (!File.Exists(xml)) throw new InvalidDataException("无法读取子集字体的 name/cmap 表。");
-                    xmlFiles.Add(xml);
-                }
-                var usage = AssGlyphValidator.ReadUsage(text);
-                var intrinsicProofs = new Dictionary<string, AssGlyphValidator.IntrinsicFaceProof>();
-                foreach (var needed in AssGlyphValidator.GetIntrinsicFaceRequests(usage, xmlFiles, text, originalUsage))
-                {
-                    var sourceFont = LocateSourceFont(snapshot.FontsDirectory, needed.SourceFileName);
-                    var collection = Path.GetExtension(sourceFont).ToLowerInvariant() is ".ttc" or ".otc";
-                    if (!collection && needed.FaceIndex != 0)
-                        throw new InvalidDataException("独立源字体的 faceIndex 必须为 0。");
-                    var cacheKey = (sourceFont, needed.FaceIndex);
-                    if (!sourceMetadataCache.TryGetValue(cacheKey, out var metadataXml))
-                    {
-                        metadataXml = Path.Combine(work, $"source-names-{sourceMetadataCache.Count}.xml");
-                        var metadataArgs = new List<string> { "-q", "-t", "name", "-t", "OS/2" };
-                        if (collection) metadataArgs.AddRange(["-y", needed.FaceIndex.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
-                        metadataArgs.AddRange(["-o", metadataXml, sourceFont]);
-                        await RunToolAsync(Path.Combine(fontTools, Executable("ttx")), metadataArgs, work,
-                            log, cancellationToken, TimeSpan.FromMinutes(2)).ConfigureAwait(false);
-                        if (!File.Exists(metadataXml)) throw new InvalidDataException("未产出源字体 name/OS2 元数据。");
-                        sourceMetadataCache.Add(cacheKey, metadataXml);
-                    }
-                    intrinsicProofs[needed.Token] = new AssGlyphValidator.IntrinsicFaceProof(
-                        needed.OriginalName, sourceFont, metadataXml);
-                }
-                AssGlyphValidator.Validate(usage, xmlFiles, warnings, intrinsicProofs);
-                checks.Add($"字幕 {i + 1}：修正 ASS 与 {generated.Length} 个子集字体的引用、字形完整性通过");
-                corrected.Add(fixedAss);
-                fonts.AddRange(generated);
+                var subtitle = snapshot.Subtitles[i];
+                var result = await new AfsSubsetter(runner, subtitleIndex: i, diagnostics: warnings, metadataCache: sourceMetadataCache)
+                    .SubsetAsync(new(new ExternalTrackSpec(subtitle.Path, TrackKind.Subtitle, null, subtitle.Name,
+                        new(subtitle.Language), new(subtitle.IsDefault, subtitle.IsForced)), new(snapshot.FontsDirectory)),
+                        context, cancellationToken: cancellationToken).ConfigureAwait(false);
+                checks.Add($"字幕 {i + 1}：修正 ASS 与 {result.Fonts.Length} 个子集字体的引用、字形完整性通过");
+                corrected.Add(result.CorrectedSubtitle.Path);
+                fonts.AddRange(result.Fonts.Select(font => font.Path));
             }
             if (warnings.Count > 0)
                 Stage(MuxStage.Subsetting, "子集化注意提示：" + string.Join("；", warnings.Select(w =>
@@ -161,21 +111,13 @@ public sealed partial class SingleMuxService
             // 附件名与字幕序号关联，两个字幕生成同名字体时也不产生身份歧义。
             var attachmentNames = fonts.Select((font, i) => $"{i + 1:D3}-{Path.GetFileName(font)}").ToArray();
             var temporaryMkv = Path.Combine(work, "result.mkv");
-            var args = new List<string> { "-o", temporaryMkv, "--no-subtitles", "--no-attachments", snapshot.VideoPath };
-            for (var i = 0; i < corrected.Count; i++)
-            {
-                var subtitle = snapshot.Subtitles[i];
-                args.AddRange(["--sub-charset", "0:UTF-8", "--language", "0:" + subtitle.Language, "--track-name", "0:" + subtitle.Name,
-                    "--default-track-flag", "0:" + (subtitle.IsDefault ? "1" : "0"),
-                    "--forced-display-flag", "0:" + (subtitle.IsForced ? "1" : "0"), corrected[i]]);
-            }
-            foreach (var audio in snapshot.Audios) args.AddRange(AudioArguments(audio));
-            for (var i = 0; i < fonts.Count; i++)
-                args.AddRange(["--attachment-name", attachmentNames[i], "--attachment-mime-type",
-                    Path.GetExtension(fonts[i]).Equals(".otf", StringComparison.OrdinalIgnoreCase)
-                        ? "font/otf" : "font/ttf", "--attach-file", fonts[i]]);
+            var spec = LegacyMuxContractConverter.ToSpec(snapshot, workspace);
+            var muxTracks = spec.ExternalTracks.Select((track, index) => track.Kind == TrackKind.Subtitle
+                ? track with { Path = corrected[index] } : track).ToEquatableArray();
             Stage(MuxStage.Muxing, "保留视频和音轨，嵌入新增字幕与子集字体");
-            await RunToolAsync(mkvmerge, args, work, log, cancellationToken, TimeSpan.FromHours(2)).ConfigureAwait(false);
+            await new MkvmergeMuxer(runner).MuxAsync(new(snapshot.VideoPath, muxTracks,
+                fonts.Select(path => new WorkFile(path)).ToEquatableArray(), new(temporaryMkv)), context,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
             Stage(MuxStage.Checking, "核验轨道、旗标、字体附件和成品可读性");
             if (!File.Exists(temporaryMkv) || new FileInfo(temporaryMkv).Length == 0)
                 throw new InvalidDataException("封装工具未产出有效 MKV。");
@@ -192,10 +134,10 @@ public sealed partial class SingleMuxService
             var extracted = Path.Combine(work, "extracted");
             Directory.CreateDirectory(extracted);
             var subtitleTracks = outputProbe.Tracks.Where(t => t.Type == "subtitles").ToArray();
-            var trackArgs = new List<string> { temporaryMkv, "tracks" };
-            for (var i = 0; i < subtitleTracks.Length; i++)
-                trackArgs.Add($"{subtitleTracks[i].Id}:{Path.Combine(extracted, $"subtitle-{i}" + Path.GetExtension(corrected[i]))}");
-            if (subtitleTracks.Length > 0) await RunToolAsync(mkvextract, trackArgs, work, log, cancellationToken, TimeSpan.FromMinutes(10)).ConfigureAwait(false);
+            var extractor = new MkvextractExtractor(runner);
+            await extractor.ExtractTracksAsync(temporaryMkv, subtitleTracks.Select((track, i) => new TrackExtraction(
+                new(track.Id), new(Path.Combine(extracted, $"subtitle-{i}" + Path.GetExtension(corrected[i]))),
+                TrackExtractionFormat.ContainerDefault)).ToEquatableArray(), context, cancellationToken).ConfigureAwait(false);
             for (var i = 0; i < corrected.Count; i++)
             {
                 // ASS 在 Matroska 中由头部和带 ReadOrder/时序的 Dialogue 块组成；
@@ -207,18 +149,17 @@ public sealed partial class SingleMuxService
                     cancellationToken, TimeSpan.FromMinutes(10)).ConfigureAwait(false);
                 if (!File.Exists(referenceMks) || new FileInfo(referenceMks).Length == 0)
                     throw new InvalidDataException($"新增字幕 {i + 1} 未产出有效 ASS 校验参考容器。");
-                await RunToolAsync(mkvextract, [referenceMks, "tracks", $"0:{referenceAss}"], work, log,
-                    cancellationToken, TimeSpan.FromMinutes(10)).ConfigureAwait(false);
+                await extractor.ExtractTracksAsync(referenceMks, [new(new(0), new(referenceAss),
+                    TrackExtractionFormat.ContainerDefault)], context, cancellationToken).ConfigureAwait(false);
                 if (!File.Exists(referenceAss) || new FileInfo(referenceAss).Length == 0)
                     throw new InvalidDataException($"新增字幕 {i + 1} 未产出有效 ASS 校验参考字幕。");
                 if (!OutputQcRules.SubtitleContentEquals(SubtitleText.Read(referenceAss),
                     SubtitleText.Read(Path.Combine(extracted, $"subtitle-{i}" + Path.GetExtension(corrected[i])))))
                     throw new InvalidDataException($"新增字幕 {i + 1} 提取后内容与同工具字幕参考不符。");
             }
-            var attachmentArgs = new List<string> { temporaryMkv, "attachments" };
-            for (var i = 0; i < fonts.Count; i++)
-                attachmentArgs.Add($"{outputProbe.Attachments[i].Id}:{Path.Combine(extracted, attachmentNames[i])}");
-            if (fonts.Count > 0) await RunToolAsync(mkvextract, attachmentArgs, work, log, cancellationToken, TimeSpan.FromMinutes(10)).ConfigureAwait(false);
+            await extractor.ExtractAttachmentsAsync(temporaryMkv, fonts.Select((_, i) => new AttachmentExtraction(
+                outputProbe.Attachments[i].Id, new(Path.Combine(extracted, attachmentNames[i])))).ToEquatableArray(),
+                context, cancellationToken).ConfigureAwait(false);
             for (var i = 0; i < fonts.Count; i++)
                 if (!HashFile(fonts[i]).SequenceEqual(HashFile(Path.Combine(extracted, attachmentNames[i]))))
                     throw new InvalidDataException($"字体附件 {i + 1} 提取后校验不一致。");
@@ -232,31 +173,20 @@ public sealed partial class SingleMuxService
                 var referenceTrack = referenceProbe.Tracks.Single(t => t.Type == "audio");
                 var actual = outputProbe.Tracks.Where(t => t.Type == "audio").Skip(source.Tracks.Count(t => t.Type == "audio")).ElementAt(i);
                 var beforeRaw = Path.Combine(extracted, $"audio-reference-{i}.raw"); var afterRaw = Path.Combine(extracted, $"audio-output-{i}.raw");
-                await RunToolAsync(mkvextract, [reference, "tracks", "--fullraw", $"{referenceTrack.Id}:{beforeRaw}"], work, log, cancellationToken, TimeSpan.FromMinutes(20)).ConfigureAwait(false);
-                await RunToolAsync(mkvextract, [temporaryMkv, "tracks", "--fullraw", $"{actual.Id}:{afterRaw}"], work, log, cancellationToken, TimeSpan.FromMinutes(20)).ConfigureAwait(false);
+                await extractor.ExtractTracksAsync(reference, [new(new(referenceTrack.Id), new(beforeRaw),
+                    TrackExtractionFormat.FullRaw)], context, cancellationToken).ConfigureAwait(false);
+                await extractor.ExtractTracksAsync(temporaryMkv, [new(new(actual.Id), new(afterRaw),
+                    TrackExtractionFormat.FullRaw)], context, cancellationToken).ConfigureAwait(false);
                 if (!HashFile(beforeRaw).SequenceEqual(HashFile(afterRaw))) throw new InvalidDataException($"外加音频 {i + 1} 数据与参考不符。");
                 checks.Add($"外加音频 {i + 1} 原始数据及 CodecPrivate SHA-256 一致");
             }
 
             Stage(MuxStage.Installing, "在输出目录准备成品并拒绝覆盖地提交");
-            Directory.CreateDirectory(snapshot.OutputDirectory);
-            prepared = Path.Combine(snapshot.OutputDirectory, ".muxdeck-" + Guid.NewGuid().ToString("N") + ".partial");
-            await using (var from = new FileStream(temporaryMkv, FileMode.Open, FileAccess.Read, FileShare.Read))
-            await using (var to = new FileStream(prepared, FileMode.CreateNew, FileAccess.Write, FileShare.None,
-                128 * 1024, FileOptions.Asynchronous | FileOptions.WriteThrough))
-            {
-                await from.CopyToAsync(to, cancellationToken).ConfigureAwait(false);
-                await to.FlushAsync(cancellationToken).ConfigureAwait(false);
-                to.Flush(flushToDisk: true);
-            }
-            cancellationToken.ThrowIfCancellationRequested();
-            // 最后一次取消检查之后进入提交点；同盘 rename 且不覆盖期间新出现的目标。
-            File.Move(prepared, destination, overwrite: false);
+            await new NoOverwritePublisher().PublishNoOverwriteAsync(new(temporaryMkv), destination, cancellationToken).ConfigureAwait(false);
             committed = true;
-            prepared = null;
             log.Write("成功提交 " + destination);
             SafeReport(new MuxProgress(MuxStage.Completed, "封装完成", 100));
-            return new MuxResult(MuxStatus.Succeeded, destination, null, logPath, checks.ToArray()) { Warnings = warnings.ToArray() };
+            return new MuxResult(MuxStatus.Succeeded, destination, null, logPath, checks.ToArray()) { Warnings = warnings.Select(warning => new MuxWarning(warning.Code, warning.Message, warning.Occurrences)).ToArray() };
 
             async Task<MediaProbe> ProbeLogged(string path)
             {
@@ -280,18 +210,19 @@ public sealed partial class SingleMuxService
         catch (OperationCanceledException) when (!committed && cancellationToken.IsCancellationRequested)
         {
             log?.Write("任务已取消");
-            return new MuxResult(MuxStatus.Cancelled, null, "任务已取消", logPath, checks.ToArray()) { Warnings = warnings.ToArray() };
+            return new MuxResult(MuxStatus.Cancelled, null, "任务已取消", logPath, checks.ToArray()) { Warnings = warnings.Select(warning => new MuxWarning(warning.Code, warning.Message, warning.Occurrences)).ToArray() };
         }
         catch (Exception ex) when (!committed)
         {
             log?.Write("失败 " + ex);
-            return new MuxResult(MuxStatus.Failed, null, ex.Message, logPath, checks.ToArray()) { Warnings = warnings.ToArray() };
+            return new MuxResult(MuxStatus.Failed, null, ex.Message, logPath, checks.ToArray()) { Warnings = warnings.Select(warning => new MuxWarning(warning.Code, warning.Message, warning.Occurrences)).ToArray() };
         }
         finally
         {
-            if (prepared is not null) TryDelete(() => File.Delete(prepared), log);
-            if (work is not null) TryDelete(() => DeleteWorkDirectory(work), log);
-            log?.Dispose();
+            if (log is not null)
+                try { await log.DisposeAsync().ConfigureAwait(false); }
+                catch (MuxDeck.Application.Ports.Failures.ToolFailureException) { }
+
         }
     }
 
@@ -338,94 +269,26 @@ public sealed partial class SingleMuxService
     private string RequireTool(string name) => new ToolLocator(workspace).Inspect().First(x => x.Name == name).Path
         ?? throw new FileNotFoundException("找不到工具：" + name);
 
-    private static string LocateSourceFont(string directory, string subsetSourceName)
-    {
-        var candidates = Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories).Where(IsFont)
-            .Where(path => string.Equals(Path.GetFileName(path), subsetSourceName, StringComparison.OrdinalIgnoreCase) ||
-                ((Path.GetExtension(path).ToLowerInvariant() is ".ttc" or ".otc") &&
-                 string.Equals(Path.GetFileNameWithoutExtension(path), Path.GetFileNameWithoutExtension(subsetSourceName), StringComparison.OrdinalIgnoreCase)))
-            .ToArray();
-        if (candidates.Length != 1)
-            throw new InvalidDataException("固有字重的源字体文件不存在或不唯一，不能推测源 face 身份：" + subsetSourceName);
-        return candidates[0];
-    }
-
-    private void DeleteWorkDirectory(string directory)
-    {
-        var resolved = Path.GetFullPath(directory);
-        var ownedRoot = Path.GetFullPath(workspace.TaskCacheDirectory)
-            .TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        if (!resolved.StartsWith(ownedRoot, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
-            || Path.GetFileName(resolved) != "work")
-            throw new IOException("拒绝清理任务目录以外的路径：" + resolved);
-        Directory.Delete(resolved, recursive: true);
-    }
-
-    private string LocateFontTools() => Components.FontToolsLocator.Find(workspace)
+    private string LocateFontTools() => MuxDeck.Infrastructure.Components.FontToolsLocator.Find(workspace)
         ?? throw new FileNotFoundException("找不到同目录的 pyftsubset 与 ttx，AFS 需要可运行的 fontTools 后端。");
 
-    private async Task<ProcessResult> RunToolAsync(string executable, IReadOnlyList<string> args,
-        string? work, TaskLog? log, CancellationToken token, TimeSpan timeout,
-        bool json = false, bool rejectDiagnostics = false, List<MuxWarning>? warnings = null)
-    {
-        log?.Write("工具 " + executable + " " + JsonSerializer.Serialize(args));
-        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(token);
-        lifetime.CancelAfter(timeout);
-        var diagnostics = rejectDiagnostics ? new AfsDiagnosticCollector(warnings) : null;
-        var sink = new InlineProgress<ProcessLine>(line =>
-        {
-            log?.Write((line.IsError ? "stderr " : "stdout ") + line.Text);
-            diagnostics?.Observe(line);
-        });
-        try
-        {
-            IReadOnlyDictionary<string, string>? environment = work is null ? null :
-                new Dictionary<string, string> { ["TEMP"] = work, ["TMP"] = work };
-            var result = await runner.RunAsync(new ProcessRequest(executable, args, work, Encoding.UTF8,
-                environment, json ? 8 * 1024 * 1024 : 1024 * 1024), sink, lifetime.Token).ConfigureAwait(false);
-            diagnostics?.Complete(result);
-            if (result.ExitCode != 0 || diagnostics?.FirstFatal is not null)
-                throw new InvalidDataException($"{Path.GetFileName(executable)} " +
-                    (result.ExitCode == 0 ? "诊断阻止封装" : "执行失败") + $"（退出码 {result.ExitCode}）：" +
-                    (diagnostics?.FirstFatal?.Message ?? Tail(result.StandardError + result.StandardOutput)));
-            if (json && result.CaptureLimitExceeded) throw new InvalidDataException("探测 JSON 超出 8 MiB 限制，未使用截断内容判定。");
-            return result;
-        }
-        catch (OperationCanceledException) when (!token.IsCancellationRequested)
-        {
-            throw new TimeoutException($"工具 {Path.GetFileName(executable)} 超时（{timeout}）。");
-        }
-    }
+    // 旧入口保留编排；真实进程、超时、诊断和失败映射只有 Infrastructure 一份实现。
+    private Task<ProcessResult> RunToolAsync(string executable, IReadOnlyList<string> args,
+        string? work, FileTaskWorkspace? log, CancellationToken token, TimeSpan timeout,
+        bool json = false, bool rejectDiagnostics = false, List<Diagnostic>? warnings = null) =>
+        new ToolExecutor(runner).RunAsync(executable, args, work, log is null ? null : log.Write,
+            token, timeout, json, rejectDiagnostics, warnings);
 
     private static MediaProbe ParseProbe(string path, string json)
     {
-        using var document = JsonDocument.Parse(json);
-        var root = document.RootElement;
-        if (root.TryGetProperty("errors", out var errors) && errors.GetArrayLength() != 0)
-            throw new InvalidDataException("mkvmerge 探测报告错误：" + errors);
-        if (root.TryGetProperty("container", out var container) &&
-            container.TryGetProperty("recognized", out var recognized) && !recognized.GetBoolean())
-            throw new InvalidDataException("文件容器不可识别。");
-        var tracks = new List<MediaTrack>();
-        foreach (var track in root.GetProperty("tracks").EnumerateArray())
-        {
-            var p = track.GetProperty("properties");
-            tracks.Add(new MediaTrack(track.GetProperty("id").GetInt32(), String(track, "type"), String(track, "codec"),
-                OptionalString(p, "codec_id"), String(p, "language"), OptionalString(p, "language_ietf"),
-                String(p, "track_name"), Bool(p, "default_track"), Bool(p, "forced_track"),
-                OptionalString(p, "pixel_dimensions"), (int?)Number(p, "audio_channels"), Number(p, "audio_sampling_frequency"),
-                p.TryGetProperty("default_track", out _), p.TryGetProperty("forced_track", out _)));
-        }
-        var attachments = new List<MediaAttachment>();
-        if (root.TryGetProperty("attachments", out var attached))
-            foreach (var a in attached.EnumerateArray())
-                attachments.Add(new MediaAttachment(a.GetProperty("id").GetInt32(), String(a, "file_name"),
-                    String(a, "content_type"), Number(a, "size") ?? 0));
-        var duration = root.TryGetProperty("container", out container) && container.TryGetProperty("properties", out var properties)
-            ? Number(properties, "duration") : null;
-        return new MediaProbe(Path.GetFullPath(path), tracks.ToArray(), attachments.ToArray(), duration);
+        var probe = MkvmergeProber.Parse(path, json);
+        return new(probe.Path, probe.Tracks.Select(track => new MediaTrack(track.Id.Value,
+            track.RawType, track.Codec, track.CodecId, track.Language.Value, track.LanguageIetf?.Value,
+            track.Name, track.Flags.IsDefault, track.Flags.IsForced, track.PixelDimensions,
+            track.AudioChannels, track.AudioSamplingFrequency, track.HasDefaultFlag, track.HasForcedFlag)).ToArray(),
+            probe.Attachments.Select(attachment => new MediaAttachment(attachment.Id, attachment.FileName,
+                attachment.ContentType, attachment.Size)).ToArray(), probe.DurationNanoseconds);
     }
-
     private static void CheckTracks(MediaProbe source, MediaProbe output, MuxRequest request, List<string> checks, IReadOnlyList<MediaProbe> audioSources)
     {
         var subtitles = new EquatableArray<SubtitleQcFacts>(request.Subtitles.Select(input =>
@@ -447,33 +310,4 @@ public sealed partial class SingleMuxService
     private static string Executable(string name) => name + (OperatingSystem.IsWindows() ? ".exe" : "");
     private static bool SamePath(string a, string b) =>
         InputRules.SameNormalizedPath(Path.GetFullPath(a), Path.GetFullPath(b), OperatingSystem.IsWindows());
-    private static string Tail(string value) => value.Length <= 600 ? value.Trim() : value[^600..].Trim();
-    private static string String(JsonElement element, string key) => OptionalString(element, key) ?? "";
-    private static string? OptionalString(JsonElement element, string key) => element.TryGetProperty(key, out var value) ? value.GetString() : null;
-    private static bool Bool(JsonElement element, string key) => element.TryGetProperty(key, out var value) && value.GetBoolean();
-    private static long? Number(JsonElement element, string key) => element.TryGetProperty(key, out var value) && value.TryGetInt64(out var number) ? number : null;
-    private static void TryDelete(Action action, TaskLog? log) { try { action(); } catch (Exception ex) { log?.Write("临时资源清理失败：" + ex.Message); } }
-
-    private sealed class InlineProgress<T>(Action<T> action) : IProgress<T>
-    {
-        public void Report(T value) => action(value);
-    }
-    private sealed class TaskLog(string path) : IDisposable
-    {
-        private readonly StreamWriter writer = new(path, append: false, new UTF8Encoding(false)) { AutoFlush = true };
-        private readonly object gate = new();
-        // 日志磁盘异常不能推翻已完成的原子提交，也不能在清理时掩盖原始失败。
-        public void Write(string text)
-        {
-            lock (gate)
-                try { writer.WriteLine(DateTimeOffset.Now.ToString("O") + " " + text); }
-                catch (Exception ex) when (ex is IOException or ObjectDisposedException) { }
-        }
-        public void Dispose()
-        {
-            lock (gate)
-                try { writer.Dispose(); }
-                catch (IOException) { }
-        }
-    }
 }

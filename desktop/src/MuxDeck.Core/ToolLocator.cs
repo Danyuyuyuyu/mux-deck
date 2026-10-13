@@ -1,3 +1,4 @@
+using MuxDeck.Infrastructure;
 namespace MuxDeck.Core;
 
 public sealed record ToolStatus(string Name, string Purpose, string? Path)
@@ -34,19 +35,5 @@ public sealed class ToolLocator(Workspace workspace)
         return new ToolStatus(name, purpose, path) { Source = source };
     }
 
-    public static string? FindOnPath(string executable)
-    {
-        var file = executable + (OperatingSystem.IsWindows() ? ".exe" : "");
-        foreach (var directory in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator))
-        {
-            if (string.IsNullOrWhiteSpace(directory)) continue;
-            try
-            {
-                var candidate = Path.GetFullPath(Path.Combine(directory.Trim('"'), file));
-                if (File.Exists(candidate)) return candidate;
-            }
-            catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException) { }
-        }
-        return null;
-    }
+    public static string? FindOnPath(string executable) => ToolPathLookup.FindOnPath(executable);
 }

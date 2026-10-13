@@ -1,3 +1,4 @@
+using MuxDeck.Contracts;
 using System.Text;
 using MuxDeck.Domain;
 using FontFace = MuxDeck.Domain.AssDocument.FontFace;
@@ -5,12 +6,12 @@ using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 
-namespace MuxDeck.Core.Muxing;
+namespace MuxDeck.Infrastructure.Muxing;
 
-internal static partial class AssGlyphValidator
+public static partial class AssGlyphValidator
 {
-    internal sealed record IntrinsicFaceRequest(string Token, string SourceFileName, int FaceIndex, string OriginalName);
-    internal sealed record IntrinsicFaceProof(string OriginalName, string SourceFontPath, string SourceXmlPath);
+    public sealed record IntrinsicFaceRequest(string Token, string SourceFileName, int FaceIndex, string OriginalName);
+    public sealed record IntrinsicFaceProof(string OriginalName, string SourceFontPath, string SourceXmlPath);
     private sealed record FontCandidate(HashSet<string> Names, bool Bold, bool Italic,
         int? Weight, string SourceName, int? FaceIndex, HashSet<int> Glyphs);
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
@@ -30,7 +31,7 @@ internal static partial class AssGlyphValidator
     }
 
     public static void Validate(Dictionary<FontFace, HashSet<int>> usage, IReadOnlyList<string> xmlFiles,
-        List<MuxWarning>? warnings = null, IReadOnlyDictionary<string, IntrinsicFaceProof>? intrinsicProofs = null)
+        List<Diagnostic>? warnings = null, IReadOnlyDictionary<string, IntrinsicFaceProof>? intrinsicProofs = null)
     {
         var fonts = new Dictionary<FontFace, HashSet<int>>();
         var candidates = ReadCandidates(xmlFiles);
@@ -157,7 +158,7 @@ internal static partial class AssGlyphValidator
         return candidates;
     }
 
-    private static XDocument ReadXml(string file)
+    public static XDocument ReadXml(string file)
     {
         using var reader = XmlReader.Create(file, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit });
         return XDocument.Load(reader);
@@ -170,10 +171,10 @@ internal static partial class AssGlyphValidator
         .Replace(" ", ""), 2);
     private static int? ReadWeight(XDocument xml) => int.TryParse(xml.Descendants("usWeightClass")
         .SingleOrDefault()?.Attribute("value")?.Value, out var weight) ? weight : null;
-    private static void AddWarning(List<MuxWarning> warnings, string code, string message)
+    private static void AddWarning(List<Diagnostic> warnings, string code, string message)
     {
         var index = warnings.FindIndex(warning => warning.Code == code && warning.Message == message);
-        if (index < 0) warnings.Add(new MuxWarning(code, message, 1));
+        if (index < 0) warnings.Add(new Diagnostic(code, DiagnosticSeverity.Warning, message, 1));
         else warnings[index] = warnings[index] with { Occurrences = checked(warnings[index].Occurrences + 1) };
     }
 

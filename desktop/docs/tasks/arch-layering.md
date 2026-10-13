@@ -63,7 +63,24 @@
 
 ### 3b Infrastructure 适配（大）
 
-- 整体移动：`ProcessRunner`、`WindowsProcessJob`、`ToolLocator`、`StoragePaths`、`IMuxToolRunner`/`MuxToolRunner`、`AfsDiagnosticCollector`、`FontToolsLocator`。
+- **用户已批准的 3b 调整**（先记录，再实施）：
+  1. 新增过渡引用 Core → Infrastructure，第 5 步移除；同步 skeleton 过渡表与 ProjectDependencyTests。Infrastructure 不引用 Core / Desktop / Avalonia 的护栏保持不变。
+  2. 下表列出的 Desktop 直接依赖在本步留在 Core，标记为 **4a 迁移**（4a 替换 Desktop 的直接依赖与装配；旧单任务模型的兼容入口仍按 3d/5 处理，不把 Core 模型反向引入 Infrastructure）。其余进程/工具能力按本节迁入 Infrastructure；AfsDiagnosticClassifier 和字体 XML/字形校验辅助随其适配器搬迁，纯规则仍调用 Domain。
+  3. Smoke **仅改命名空间引用**，不改测试逻辑、断言、用例或预期计数；旧 ProcessRunner / WindowsProcessJob 进程树用例完整保留。
+
+| Desktop 装配入口外仍直接使用的 Core 类型 | 检索位置（src/MuxDeck.Desktop） | 本步处置 |
+|---|---|---|
+| StoragePaths | App.axaml.cs、Preferences/UserPreferencesStore.cs、StorageSettingsStore.cs、ViewModels/MainWindowViewModel.cs、EnvironmentViewModel.cs、EnvironmentComponentViewModel.cs | 留 Core，4a 迁移 |
+| ToolLocator、ToolStatus | ViewModels/EnvironmentViewModel.cs、EnvironmentComponentViewModel.cs、MainWindowViewModel.cs | 留 Core，4a 迁移；共用路径查找辅助移入 Infrastructure |
+| Workspace | App.axaml.cs、ViewModels/MainWindowViewModel.cs、EnvironmentViewModel.cs、SingleMuxViewModel.cs | 留 Core，4a 迁移；向已存在 ToolConfiguration 做过渡转换 |
+| ComponentInstaller/Verifier/Uninstaller、IComponentInstaller/Verifier/Uninstaller、ComponentDirectories/Catalog | ViewModels/EnvironmentViewModel.cs、EnvironmentComponentViewModel.cs | 留 Core，4a 迁移其 Desktop 依赖 |
+| ComponentState/InstallPhase/Definition/Inspection/InstallProgress/RemovalKind/RemovalPlan/RemovalProgress/InstallException/RemovalException | ViewModels/EnvironmentViewModel.cs、EnvironmentComponentViewModel.cs | 留 Core，4a 迁移其 Desktop 依赖 |
+| SingleMuxService、MuxRequest/Result/Status/Stage/Progress、SubtitleInput、AudioInput、MediaProbe/Track/Attachment | ViewModels/MainWindowViewModel.cs、SingleMuxViewModel.cs、MediaImport.cs、Views/SingleMuxInteractions.cs、SingleMuxView.axaml.cs | 本步留 Core，4a 替换直接依赖；旧入口/模型兼容按 3d/5 |
+| MediaFileTypes、SubtitleText | ViewModels/MediaImport.cs、SingleMuxViewModel.cs | 本步留 Core，4a 替换直接依赖 |
+
+
+
+- 整体移动：`ProcessRunner`、`WindowsProcessJob`、`IMuxToolRunner`/`MuxToolRunner`、`AfsDiagnosticCollector`、`FontToolsLocator`；原计划的 `ToolLocator`、`StoragePaths` 依上述用户批准调整留 Core，到 4a 处理。
 - 从 `SingleMuxService` 私有方法拆出：
 
 | 来源 | 适配 |
@@ -208,7 +225,7 @@
 | [2b · `90fff6c`](https://github.com/Danyuyuyuyu/mux-deck/commit/90fff6c47d8a3fcef6c509fa81ec91f80425b865) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38393673757) | locked restore 10/10；Release 0 警告 / 0 错误；dotnet test 343/343；受控 13/13、656/656；接纳 89/89、自动导入 25/25 | InputRules 已落位；新增 Domain 134、架构 1，原 208 保留；IO 事实留边界，原入口差异不变；详见 2b 实施与验证。 |
 | [2c · `90fea6b`](https://github.com/Danyuyuyuyu/mux-deck/commit/90fea6b02e421105cd3c7bdb45c69c4c69d1df8e) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38400687784) | restore 10/10；Release 0 警告 / 0 错误；test 427/427；受控 13/13、656/656；warning-policy 57/57 | DiagnosticPolicy、OutputQcRules、AssDocument 已落位；新增 Domain 76、架构 3；原 348 保留，白名单未变。 |
 | [3a · `da0f334`](https://github.com/Danyuyuyuyu/mux-deck/commit/da0f3342f2b50bccfdcf31f19212ee3bb63e9f91) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38406784353) | locked restore 10/10；Release 0 警告 / 0 错误；test 485/485；受控 13/13、656/656；warning-policy 57/57 | 九个 Application 业务端口；Domain 统一 MediaTrackInfo，删除重复 TrackQcFacts；新增 29，原 456 全部保留；详见 3a 实施与验证。 |
-| 3b | 未开始 | | |
+| 3b | 本地验收已通过，待推送与 CI | locked restore 11/11；Release 0 警告 / 0 错误；test 601/601；受控 13/13、656/656；真实 integration 121/121、media-drop-real 37/37 | 依用户批准保留 Desktop 直接依赖；Core → Infrastructure 过渡；新增 47，原 554 保留。 |
 | 3c | 未开始 | | |
 | 3d | 未开始 | | |
 | 3e | 未开始 | | |
@@ -633,7 +650,7 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 
 输入：dbe9f56，六项真实基准已完成。输出：失败/取消 XML 只保留在外部操作方法；类型与纯属性不重复说明。新增目标已存在与工作区 IO 失败集中码；ToolFailureException 增加保留原异常的四参构造，原三参调用保持兼容。失败行为：未知码拒绝、原文与 InnerException 保留，取消仍抛 OperationCanceledException。验收：原有全部测试保留，端口 XML 测试只按用户授权调整检查范围，其他归属/只读/工作文件/契约断言不放宽；严格构建、全部单元/架构及 13 套受控回归通过后才提交，CI 通过后才开始 3b。
 
-实际验证（desktop/）：549 → 554，仅新增 Application 5（新集中码自动覆盖 2、原异常/堆栈/空异常兼容/未知码补充 3），原 549 项保留；Architecture 192 不变，原 XML 十组用例按用户授权限定到操作方法，类型/属性要求无异常说明；其他断言不放宽。受控 13/13、656/656。日志 `artifacts/arch-corrections/3a-failure-complete/`，CI 待此提交推送后补入。
+实际验证（desktop/）：549 → 554，仅新增 Application 5（新集中码自动覆盖 2、原异常/堆栈/空异常兼容/未知码补充 3），原 549 项保留；Architecture 192 不变，原 XML 十组用例按用户授权限定到操作方法，类型/属性要求无异常说明；其他断言不放宽。受控 13/13、656/656。日志 `artifacts/arch-corrections/3a-failure-complete/`，实现提交 [7a7a585](https://github.com/Danyuyuyuyu/mux-deck/commit/7a7a585b2a7cbb2b4a8884ee5491b58e1a03b0a3) 已在本地完整验证后 pull --rebase 并推送；[Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38422029153) 完成 success，head_sha 核对一致，CI 通过后才开始 3b。
 
 | 实际命令 | 结果 |
 |---|---|
@@ -655,6 +672,35 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui` | 61/61 |
 
 实际计数见上表，CI 推送后追加；按已接受 ADR-0001 实施，不修改 ADR。
+
+### 3b 实施与验证
+
+输入：7a7a585 的 Desktop CI 已通过，六项真实工具链基准均通过；用户批准的三项调整与 Desktop 直接依赖清单已先写入 3b 计划。输出：Infrastructure 工具/进程适配、独占工作区与不覆盖落位、单向过渡 Core → Infrastructure、新 Infrastructure 集成测试与锁文件。失败行为：适配边界统一 ToolFailureException，取消仍抛 OperationCanceledException；旧 Core 边界保留原文案、诊断和 QC 行为。Smoke 只改 using/命名空间引用。验收：每个适配的参数、输出、退出码、取消、文件生命周期反例；原进程树/全部受控回归保留；本地真实 integration 121/121、media-drop-real 37/37 必须与基准一致；失败不推送，CI 通过后才完成 3b。本步不实施 3c 流水线或 4a 装配，不修改 ADR、诊断白名单或其他步骤计划。
+
+实际验证（desktop/）：2026-10-13 23:58 至 2026-10-14 00:01（Asia/Shanghai；artifacts run-id 使用 UTC 日期）。554 → 601，仅新增 Infrastructure 45、架构 2（新增测试项目的直接引用与全部端口的 Infrastructure 实现），原 554 项全部保留，失败/跳过 0。受控 13/13、656/656；Smoke 的 .cs diff 只有命名空间 using，未改逻辑、断言或计数。ProcessRunner/WindowsProcessJob 原文件除命名空间外保持，原进程树回归通过。新项目只直接引用 Infrastructure；NuGet restore 成功，新项目锁文件及过渡引用锁图均已提交。日志 `artifacts/arch-corrections/3b/`，真实重放与初始基准严格一致。
+
+| 实际命令 | 结果 |
+|---|---|
+| `dotnet restore MuxDeck.sln --locked-mode` | 11/11 |
+| `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false` | 0 警告 / 0 错误 |
+| `dotnet test MuxDeck.sln --no-build -c Release` | 601/601（Domain 298、Application 27、Core 37、Architecture 194、Infrastructure 45）；失败/跳过 0 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release` | 28/28 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-policy` | 57/57 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-round1` | 89/89 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-ui-round1` | 176/176 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --workbench-ui` | 38/38 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --input-feedback` | 24/24 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop` | 25/25 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --environment-ui` | 23/23 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --components` | 31/31 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-ui` | 37/37 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all` | 41/41 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall` | 26/26 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui` | 61/61 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --integration` | 121/121，失败 0 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop-real` | 37/37，失败 0 |
+
+真实工具版本：MKVToolNix 100.0 / FFmpeg 8.1.1 / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10，与重构前基准相同。[integration 报告](../../artifacts/phase1/20261013-155956-4ebf5982d07a422cbf9eab2f789006ac/report.json)与[media-drop-real 报告](../../artifacts/automatic-drop/real-bd1ab50607484ac6b38d508b9401c2ad/report.json)保留在本机，分别 121/121、37/37，失败均为 0。按已接受的 ADR-0001 和本节明确授权的三项调整实施，不修改 ADR；实现提交与 CI 完成后追加链接。
 
 ## 发现的旧缺陷
 

@@ -1,9 +1,10 @@
+using MuxDeck.Contracts;
 using System.Text;
 
-namespace MuxDeck.Core.Muxing;
+namespace MuxDeck.Infrastructure.Muxing;
 
 /// <summary>按真实行边界重组有界进程块；完整日志另行保存，不能靠截断尾部猜测告警。</summary>
-internal sealed class AfsDiagnosticCollector(List<MuxWarning>? warnings)
+internal sealed class AfsDiagnosticCollector(List<Diagnostic>? warnings)
 {
     private const int MaximumLineLength = 64 * 1024;
     private readonly StringBuilder[] lines = [new(), new()];
@@ -122,7 +123,7 @@ internal sealed class AfsDiagnosticCollector(List<MuxWarning>? warnings)
     {
         if (warnings is null) return;
         var index = warnings.FindIndex(warning => warning.Code == key.Code && warning.Message == key.Message);
-        if (index < 0) warnings.Add(new MuxWarning(key.Code, key.Message, occurrences));
+        if (index < 0) warnings.Add(new Diagnostic(key.Code, DiagnosticSeverity.Warning, key.Message, occurrences));
         else warnings[index] = warnings[index] with { Occurrences = checked(warnings[index].Occurrences + occurrences) };
     }
 
