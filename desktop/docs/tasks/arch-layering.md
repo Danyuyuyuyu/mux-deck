@@ -207,7 +207,7 @@
 | [2a · `34c4c18`](https://github.com/Danyuyuyuyu/mux-deck/commit/34c4c1827169270c715a955fe027a0bd6622509d) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38390147903) | locked restore 10/10；Release 0 警告 / 0 错误；dotnet test 208/208；受控 13/13、656/656 | TrackPolicy、LanguageRules、OutputNaming 已迁入 Domain；新增 Domain 69、架构 3，原 136 全部保留；详见 2a 实际验证。 |
 | [2b · `90fff6c`](https://github.com/Danyuyuyuyu/mux-deck/commit/90fff6c47d8a3fcef6c509fa81ec91f80425b865) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38393673757) | locked restore 10/10；Release 0 警告 / 0 错误；dotnet test 343/343；受控 13/13、656/656；接纳 89/89、自动导入 25/25 | InputRules 已落位；新增 Domain 134、架构 1，原 208 保留；IO 事实留边界，原入口差异不变；详见 2b 实施与验证。 |
 | [2c · `90fea6b`](https://github.com/Danyuyuyuyu/mux-deck/commit/90fea6b02e421105cd3c7bdb45c69c4c69d1df8e) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38400687784) | restore 10/10；Release 0 警告 / 0 错误；test 427/427；受控 13/13、656/656；warning-policy 57/57 | DiagnosticPolicy、OutputQcRules、AssDocument 已落位；新增 Domain 76、架构 3；原 348 保留，白名单未变。 |
-| 3a | 未开始 | | |
+| 3a | 本地完成，待推送核对 CI | locked restore 10/10；Release 0 警告 / 0 错误；test 485/485；受控 13/13、656/656；warning-policy 57/57 | 九个 Application 业务端口；Domain 统一 MediaTrackInfo，删除重复 TrackQcFacts；新增 29，原 456 全部保留；详见 3a 实施与验证。 |
 | 3b | 未开始 | | |
 | 3c | 未开始 | | |
 | 3d | 未开始 | | |
@@ -267,7 +267,7 @@ Application / Contracts 禁止 System.IO、System.Diagnostics.Process、System.N
 
 
 
-实际验证（在 desktop/）：427 → 456，仅新增 29 项，原 427 项全部保留；Architecture 98 → 127，新增整程序集扫描 1 项、成员反例 22 项、放行样例 4 项、保留时间禁令样例 2 项。受控 13/13 套件、656/656，与基准一致。日志：`artifacts/arch-corrections/1a-environment/`。CI 待实现提交推送后核对，并在后续记录补入链接。
+实际验证（在 desktop/）：427 → 456，仅新增 29 项，原 427 项全部保留；Architecture 98 → 127，新增整程序集扫描 1 项、成员反例 22 项、放行样例 4 项、保留时间禁令样例 2 项。受控 13/13 套件、656/656，与基准一致。日志：`artifacts/arch-corrections/1a-environment/`。实现提交 [ab01d98](https://github.com/Danyuyuyuyu/mux-deck/commit/ab01d987332b954eade08c7a15a2c78388c88caa) 已在本地完整验证后 pull --rebase 并推送；[Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38404977003) 完成 success，workflow、desktop job 及全部验证步骤通过，head_sha 已核对一致。确认通过后才开始 3a。
 
 | 实际命令 | 结果 |
 |---|---|
@@ -527,3 +527,33 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 ## 发现的旧缺陷
 
 （已修复：修正 A；提交 c636e91，Desktop CI 38383347658 已通过。以下保留发现背景。）`Desktop/App.axaml.cs` 将未限定的 `Application` 用作 Avalonia 基类；当目标程序集首次包含 `MuxDeck.Application` 命名空间的业务类型时，编译器会优先解析同名命名空间并报 CS0118。首个反例因此未计为架构护栏验收，改用独立禁止命名空间后两条护栏均确认失败。1b 只定义 `MuxDeck.Contracts`，没有触发该冲突；该缺陷已由修正 A 的 c636e91 修复，并经临时同名类型与完整 CI 验证。
+
+
+### 3a 实施与验证（2026-10-13）
+
+输入：ab01d98 的 Desktop CI 已通过，原有轨道与 QC 事实重复。输出：Application 九个业务能力端口及不可变输入输出、Domain 统一 MediaTrackInfo（TrackKind、LanguageTag、TrackFlags、TrackId），Contracts 探测结果与 QC 共用该类型，删除 TrackQcFacts。旧 Core 边界只转换轨道事实并调用 Domain，原工具调用与流水线不迁移。失败行为：原 QC 拒绝、检查文案、未知字段与语言比较保持一致，端口取消令牌与工作区异步释放约束明示；构建或既有回归失败不推送，CI 通过后完成本步。验收：端口全部归 Application、无外层依赖，转换覆盖原始字符串、未知类型、null/空 IETF、元数据存在性与集合快照，全部原有测试保留。按已接受 ADR-0001 实施，不修改 ADR；3b 前仍需重跑真实工具链基准。
+
+实际命令均在 `desktop/` 执行，日志为 `artifacts/arch-corrections/3a/`：
+
+| 实际命令 | 结果 |
+|---|---|
+| `dotnet restore MuxDeck.sln --locked-mode` | 10/10 |
+| `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false` | 0 警告 / 0 错误 |
+| `dotnet test MuxDeck.sln --no-build -c Release` | 485/485（Domain 298、Application 10、Core 37、Architecture 140）；失败/跳过 0 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release` | 28/28 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-policy` | 57/57 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-round1` | 89/89 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-ui-round1` | 176/176 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --workbench-ui` | 38/38 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --input-feedback` | 24/24 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop` | 25/25 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --environment-ui` | 23/23 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --components` | 31/31 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-ui` | 37/37 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all` | 41/41 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall` | 26/26 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui` | 61/61 |
+
+456 → 485，仅新增 29 项：Domain 4（值相等、IETF 缺失/空区别、传统语言严格比较、未知类型）、Application 1（探测与 QC 共用事实）、Core 11（原标签/未知类型、字段存在性、null/空 IETF、集合快照）、Architecture 13（九个端口归属、异步资源生命周期、不可变数据与契约边界、唯一事实类型、可取消操作与注入时钟）。原 456 项全部保留，原 OutputQcRulesTests 的 41 项仅同步值类型与旗标表达，测试方法及 Fact/Theory/InlineData 声明逐项对比一致，拒绝断言未放宽。受控 13/13、656/656 等于基准，包括 warning-policy 57/57。
+
+共享文件仅 `docs/agents/skeleton.md`，同步端口、契约归属与迁移现状；任务文档更新 1a 修正 CI 与 3a 实测结果。sln、props、全部锁文件、ADR、步骤计划及 diagnostics.md 不变。原 Core 仅在 QC 事实边界换用统一转换，工具调用、参数与旧流水线保持不变。未重放真实工具链或原生选择器、Explorer、高 DPI 与播放器；本步未实现端口适配或假端口流水线，真实工具链基准仍须在 3b 前重跑。CI 待实现提交推送后核对并补入链接。

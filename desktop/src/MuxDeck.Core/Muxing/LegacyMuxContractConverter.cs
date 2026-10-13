@@ -3,9 +3,34 @@ using MuxDeck.Domain;
 
 namespace MuxDeck.Core.Muxing;
 
-/// <summary>只转换旧模型；1b 尚不接入旧入口，不能在这里重新判定检查文案或执行工具。</summary>
+/// <summary>只转换旧模型与统一轨道事实，不能在这里重新判定检查文案或执行工具。</summary>
 public static class LegacyMuxContractConverter
 {
+    // 不规范化旧探测字符串；大小写未知类型仍为 Unknown，保留 null 与空 IETF 的区别。
+    public static MediaTrackInfo ToTrackInfo(MediaTrack track)
+    {
+        ArgumentNullException.ThrowIfNull(track);
+        var kind = track.Type switch
+        {
+            "video" => TrackKind.Video,
+            "audio" => TrackKind.Audio,
+            "subtitles" => TrackKind.Subtitle,
+            _ => TrackKind.Unknown
+        };
+        return new(new(track.Id), kind, track.Type, track.Codec, track.CodecId,
+            new(track.Language), track.LanguageIetf is null ? null : new LanguageTag(track.LanguageIetf),
+            track.Name, new(track.IsDefault, track.IsForced), track.PixelDimensions,
+            track.AudioChannels, track.AudioSamplingFrequency, track.HasDefaultFlag, track.HasForcedFlag);
+    }
+
+    public static MediaProbeResult ToProbeResult(MediaProbe probe)
+    {
+        ArgumentNullException.ThrowIfNull(probe);
+        return new(probe.Path, new(probe.Tracks.Select(ToTrackInfo)),
+            new(probe.Attachments.Select(attachment => new MediaAttachmentInfo(attachment.Id,
+                attachment.FileName, attachment.ContentType, attachment.Size))), probe.DurationNanoseconds);
+    }
+
     public static MuxJobSpec ToSpec(MuxRequest request, Workspace workspace)
     {
         ArgumentNullException.ThrowIfNull(workspace);

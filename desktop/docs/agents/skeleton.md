@@ -52,7 +52,7 @@ Desktop → Core 保留到既有入口迁移完成；Desktop → Infrastructure 
 
 1a 选定并固定测试依赖：`xunit.v3` **3.2.2**、`xunit.runner.visualstudio` **3.1.4**、`Microsoft.NET.Test.Sdk` **17.14.1**；架构测试使用 `NetArchTest.Rules` **1.3.2**。所有新增项目提交 `packages.lock.json`，继续使用 `dotnet restore MuxDeck.sln --locked-mode`。
 
-Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Application；Architecture.Tests 验证全部生产项目（过渡期包含 Core），Smoke 仍只直接引用 Desktop。1b 初始新增 Domain 值类型测试 8 项、Core 旧模型转换测试 26 项；修正 B 后 Domain 为 15 项、Application 契约值相等测试 4 项，修正 C 后架构测试 91 项；2a 后 Domain 84 / 架构 94，2b 后 Domain 218 / 架构 95；输入位置枚举合并后 Application 9；2c 后 Domain 294 / 架构 98（仅新增规则与护栏用例）。Application 流程尚未迁移，当前流程用例 0。Core.Tests 只直接引用 Core，不放宽既有分层测试依赖。架构测试检查 restore 后的实际直接项目引用、Domain 包依赖、程序集与命名空间依赖、Views/ViewModels 的契约与接口边界，以及 Infrastructure 只能由 Program/Composition 使用的装配边界（含源码路径）。字段、泛型、构造调用和异步方法反例验证 NetArchTest 的扫描能力。
+Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Application；Architecture.Tests 验证全部生产项目（过渡期包含 Core），Smoke 仍只直接引用 Desktop。1b 初始新增 Domain 值类型测试 8 项、Core 旧模型转换测试 26 项；修正 B 后 Domain 为 15 项、Application 契约值相等测试 4 项，修正 C 后架构测试 91 项；2a 后 Domain 84 / 架构 94，2b 后 Domain 218 / 架构 95；输入位置枚举合并后 Application 9；2c 后 Domain 294 / 架构 98；Environment 经授权修正后架构 127，原有 427 项全部保留，新增 29 项成员护栏。3a 后 Domain 298 / Application 10 / Core 37 / 架构 140，共 485 项，仅新增 29，原 456 项保留。Application 流程尚未迁移，当前流程用例 0。Core.Tests 只直接引用 Core，不放宽既有分层测试依赖。架构测试检查 restore 后的实际直接项目引用、Domain 包依赖、程序集与命名空间依赖、Views/ViewModels 的契约与接口边界，以及 Infrastructure 只能由 Program/Composition 使用的装配边界（含源码路径）。字段、泛型、构造调用和异步方法反例验证 NetArchTest 的扫描能力。
 
 ## 契约
 
@@ -74,7 +74,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 | `MuxJobSpec`、`ExternalTrackSpec`、`SourceTrackSelection`、`FontSpec`、`OutputSpec` | 单任务不可变规格 | `MuxRequest`、`SubtitleInput`、`AudioInput` |
 | `JobProgress(Stage, StepCode, Percent, Message)` | 阶段进度 | `MuxProgress` |
 | `MuxJobResult`、`CheckResult`、`JobFailure`、`Diagnostic`、`OutputArtifact`、`LogRef` | 结构化结果 | `MuxResult`（`Checks` 文本、`Error` 字符串）、`MuxWarning` |
-| `MediaProbeResult` 及轨道、附件类型 | 只读探测结果 | `MediaProbe`、`MediaTrack`（`Type` 为字符串）、`MediaAttachment` |
+| `MediaProbeResult`、Domain `MediaTrackInfo` 与附件类型 | 共用 Domain 轨道事实的只读探测结果 | `MediaProbe`、`MediaTrack`（`Type` 为字符串）、`MediaAttachment` |
 | `InputItem`、`ImportPlan` | 导入准备与提交 | `InputCandidate`、`InputAcceptancePlan`、`MediaImportPlan` |
 | `IRunSingleMux`、`IProbeMedia`、`IPrepareImport`、`IManageComponents` | 用例接口 | 直接调用 `SingleMuxService`、`ComponentInstaller` 等 |
 | `OperationKind`、`IOperationLease` | 跨功能占用与互斥 | `ComponentOperations.Gate` 与 `MainWindowViewModel` 联动 |
@@ -85,7 +85,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 - 输入契约 `InputItem.Kind` 直接使用 Domain 的 `InputLocationKind`（LocalFile / LocalDirectory / NonLocal / Unknown）；不在 Contracts 中重复定义输入位置枚举。Desktop 的旧候选类型暂由边界映射，随草稿迁移处理。
 - Domain 已定义 `TrackKind`、`LanguageTag`、`TrackFlags`、`TrackId`。语言值保留原字符串（含空值和传统/IETF 标签），1b 不引入规范化或匹配规则。
 - `Contracts/` 已定义单任务规格/结果/进度、媒体探测、导入计划、组件操作及协调器接口。集合统一使用 Domain 的 `EquatableArray<T>`（只读包装 ImmutableArray，按元素比较相等与哈希，default 视为空），仅保存数据；导入会话由调用方提供 ID 与修订号，不暴露 ViewModel 或 Application 内部对象。组件阶段独立于 `JobStage`，协调器目前只有契约，没有实现。
-- `MuxJobSpec.Tools` 显式携带工具、日志、缓存及独立 fonttools 后端配置；Core 的 `Muxing/LegacyMuxContractConverter.cs` 提供 `ToSpec(MuxRequest, Workspace/ToolConfiguration)`、`ToLegacyRequest(MuxJobSpec)` 与 `ToResult(MuxResult)`。旧入口与调用方尚未接入这些转换，保持原行为。
+- `MuxJobSpec.Tools` 显式携带工具、日志、缓存及独立 fonttools 后端配置；Core 的 `Muxing/LegacyMuxContractConverter.cs` 提供 `ToSpec(MuxRequest, Workspace/ToolConfiguration)`、`ToLegacyRequest(MuxJobSpec)` 与 `ToResult(MuxResult)`。旧请求与结果入口尚未接入这些转换，保持原行为；3a 新增 ToTrackInfo / ToProbeResult 纯转换，旧 QC 边界已调用 ToTrackInfo。
 - 旧请求的字幕与音频各自保留顺序，新规格先列字幕、再列音频；空输出名与 null 分别原样往返。旧模型无法表达的源轨选择、跨类型交错顺序、字幕来源轨号或无来源轨号的音频，转换回旧请求时明确拒绝，不丢弃字段。
 - 旧检查文本使用唯一过渡码 `ErrorCodes.LegacyCheck`（`MUX_LEGACY_CHECK`），原文完整保存在 `CheckResult.Actual`，状态为 `NotEvaluated`，不根据文案判定成败；旧失败码为 `MUX_LEGACY_FAILURE`，取消码为 `MUX_CANCELLED`。旧结果未记录失败阶段，暂为 `JobStage.Unknown`。上述过渡检查/失败映射在第 3 步替换为真实结构化信息。
 - 旧 warnings 的 code、message、出现次数及顺序原样转换；成品、日志路径及 nullable 失败消息保留。工具诊断白名单仍只由 `diagnostics.md` 维护。契约的 public、归属、依赖、不可变数据与无友元程序集规则由架构测试检查；除 string 外公开集合只能是 EquatableArray<T>，拒绝其他集合及可写 setter，static 常量类豁免数据形状检查；依赖与可见性两条护栏已通过本地故意违反确认。
@@ -165,6 +165,26 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 新增的多轨与自动导入范围以 [自动拖放任务](../tasks/automatic-media-drop.md) 为准：`SubtitleText` 统一 ASS/SRT 的 UTF-8 与结构校验，ASS 继续使用 `AssGlyphValidator`；外加音频包含真实输入 Track ID，`ExternalMedia` 构建选择参数；编码、声道、采样率与元数据的 QC 调用 Domain `OutputQcRules`。字幕采用同工具往返全文参考，音频采用同工具参考的 `--fullraw`（含 CodecPrivate）SHA-256，任一不符阻止发布。只在 A/V 输入时长均已声明时检查总时长，不以字幕尾时间替代未知容器数据。
 
 接口合同与第一阶段具体验收案例见 [阶段一任务](../tasks/phase-1-single-mux.md)。Core 已确认的探测类型为 `MediaTrack`、`MediaAttachment`、`MediaProbe`；公开的单任务签名按任务文档约定，真实文件和额外依赖以实现为准。
+
+
+#### 3a 端口与统一轨道事实已定义
+
+- `src/MuxDeck.Application/Ports/` 定义九个端口，接口均为 public；真实实现留待 3b，流水线接入留待 3c。端口数据为不可变 record，集合为 EquatableArray，不建立通用仓储、事件总线、中介者或万能执行接口。
+- 原 Contracts `MediaTrackInfo` 归入 Domain，作为唯一的轨道事实类型，使用 TrackKind / LanguageTag / TrackId / TrackFlags。MediaProbeResult、ImportedTrackSpec 与 Domain MediaQcFacts 共用它；重复的 TrackQcFacts 已删除。保留 RawType、nullable IETF、HasDefaultFlag / HasForcedFlag，传统语言严格按原值比较，IETF 保留原大小写无关规则。
+- Core LegacyMuxContractConverter 的 ToTrackInfo / ToProbeResult 只负责模型转换与不可变快照；旧 SingleMuxService 的 QC 边界调用同一转换后交给 OutputQcRules，不保留第二套轨道事实判定。旧工具参数、流水线、进度、失败文案与行为保持不变。
+- 所有外部操作接受 CancellationToken；TaskWorkspace 通过 IAsyncDisposable 负责独占工作目录清理与日志生命周期，不向 Contracts 暴露工作区接口；IClock 只声明注入的 UTC 值，不读取当前时间。
+
+| 端口 | 业务边界 |
+|---|---|
+| IMediaProber | 媒体探测，返回共用 Domain 轨道事实的 MediaProbeResult |
+| IFontSubsetter | ASS 字体子集化，返回修正字幕、字体产物与诊断 |
+| IMuxer | 封装临时成品，返回产物与诊断 |
+| IMediaExtractor | 按真实轨号/附件号提取，支持容器默认格式及 fullraw |
+| IFontInspector | 读取指定字体 face 的名字、码点、粗斜体和字重事实 |
+| IArtifactPublisher | 同目录暂存并不覆盖提交，冲突与竞态失败 |
+| ITaskWorkspaceFactory | 创建任务独占工作区，异步释放后清理完成、保留日志 |
+| IToolCatalog | 按业务能力定位工具，返回不可变描述 |
+| IClock | 提供注入的 UTC 时间 |
 
 #### 阶段一 Desktop 单任务约定
 

@@ -439,9 +439,7 @@ public sealed partial class SingleMuxService
     }
 
     private static MediaQcFacts QcFacts(MediaProbe probe) => new(
-        new(probe.Tracks.Select(track => new TrackQcFacts(track.Id, track.Type, track.Codec, track.CodecId,
-            track.Language, track.LanguageIetf, track.Name, track.IsDefault, track.IsForced,
-            track.PixelDimensions, track.AudioChannels, track.AudioSamplingFrequency, track.HasDefaultFlag, track.HasForcedFlag))),
+        new(probe.Tracks.Select(LegacyMuxContractConverter.ToTrackInfo)),
         probe.DurationNanoseconds);
 
     private static bool IsFont(string path) => InputRules.IsFontExtension(Path.GetExtension(path));

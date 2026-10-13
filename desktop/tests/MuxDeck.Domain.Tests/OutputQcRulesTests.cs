@@ -5,10 +5,11 @@ namespace MuxDeck.Domain.Tests;
 
 public sealed class OutputQcRulesTests
 {
-    private static TrackQcFacts Track(string type = "video", int id = 0) =>
-        new(id, type, type == "video" ? "AVC" : "AAC", "codec", "eng", "en", "源轨",
-            true, false, "1920x1080", 2, 48000, true, true);
-    private static MediaQcFacts Media(params TrackQcFacts[] tracks) => new(new(tracks), 100_000_000_000);
+    private static MediaTrackInfo Track(string type = "video", int id = 0) =>
+        new(new(id), type switch { "video" => TrackKind.Video, "audio" => TrackKind.Audio, "subtitles" => TrackKind.Subtitle, _ => TrackKind.Unknown },
+            type, type == "video" ? "AVC" : "AAC", "codec", new("eng"), new("en"), "源轨",
+            new(true, false), "1920x1080", 2, 48000, true, true);
+    private static MediaQcFacts Media(params MediaTrackInfo[] tracks) => new(new(tracks), 100_000_000_000);
     private static OutputQcResult Check(MediaQcFacts source, MediaQcFacts output) =>
         OutputQcRules.CheckTracks(source, output, [], [], []);
 
@@ -17,7 +18,7 @@ public sealed class OutputQcRulesTests
     public void Retained_tracks_preserve_known_fields_and_allow_new_track_ids()
     {
         var track = Track();
-        var checks = Check(Media(track), Media(track with { Id = 9, LanguageIetf = "EN" }));
+        var checks = Check(Media(track), Media(track with { Id = new(9), LanguageIetf = new("EN") }));
         Assert.Collection(checks.Checks, item => Assert.Contains("保留 1 条 video", item),
             item => Assert.Contains("保留 0 条 audio", item));
     }
@@ -44,10 +45,10 @@ public sealed class OutputQcRulesTests
             "channels" => before with { AudioChannels = 6 },
             "sampling" => before with { AudioSamplingFrequency = 44100 },
             "name" => before with { Name = "wrong" },
-            "language" => before with { Language = "jpn" },
-            "ietf" => before with { LanguageIetf = "ja" },
-            "default" => before with { IsDefault = false },
-            _ => before with { IsForced = true }
+            "language" => before with { Language = new("jpn") },
+            "ietf" => before with { LanguageIetf = new("ja") },
+            "default" => before with { Flags = before.Flags with { IsDefault = false } },
+            _ => before with { Flags = before.Flags with { IsForced = true } }
         };
         Assert.Contains("源文件不同", Check(Media(before), Media(actual)).Error!);
     }
@@ -57,7 +58,7 @@ public sealed class OutputQcRulesTests
     {
         var source = Track() with { CodecId = null, PixelDimensions = null, AudioChannels = null,
             AudioSamplingFrequency = null, LanguageIetf = null, HasDefaultFlag = false, HasForcedFlag = false };
-        Assert.Null(Check(Media(source), Media(Track() with { IsDefault = false, IsForced = true })).Error);
+        Assert.Null(Check(Media(source), Media(Track() with { Flags = new(false, true) })).Error);
         Assert.NotNull(Check(Media(source), Media()).Error);
     }
 
@@ -80,7 +81,7 @@ public sealed class OutputQcRulesTests
         var source = Media(Track());
         var audio = Track("audio", 9);
         var output = Media(Track(), audio) with { DurationNanoseconds = 200_000_000_000 };
-        var inputs = new EquatableArray<AudioQcFacts>([new(9, audio.Name, audio.Language, audio.IsDefault, audio.IsForced)]);
+        var inputs = new EquatableArray<AudioQcFacts>([new(9, audio.Name, audio.Language.Value, audio.Flags.IsDefault, audio.Flags.IsForced)]);
         Assert.Null(OutputQcRules.CheckTracks(source, output, [], inputs,
             [Media(audio) with { DurationNanoseconds = null }]).Error);
         Assert.Null(OutputQcRules.CheckTracks(source, output, [], inputs,
@@ -109,14 +110,14 @@ public sealed class OutputQcRulesTests
     public void Added_subtitles_must_match_every_requested_field(string field, bool expected)
     {
         var subtitle = Track("subtitles", 8) with { CodecId = "S_TEXT/ASS", Name = "SC",
-            Language = "chi", LanguageIetf = "zh-Hans" };
+            Language = new("chi"), LanguageIetf = new("zh-Hans") };
         subtitle = field switch
         {
             "codec" => subtitle with { CodecId = "S_TEXT/UTF8" },
             "name" => subtitle with { Name = "wrong" },
-            "language" => subtitle with { LanguageIetf = "zh-Hant" },
-            "default" => subtitle with { IsDefault = false },
-            "forced" => subtitle with { IsForced = true },
+            "language" => subtitle with { LanguageIetf = new("zh-Hant") },
+            "default" => subtitle with { Flags = subtitle.Flags with { IsDefault = false } },
+            "forced" => subtitle with { Flags = subtitle.Flags with { IsForced = true } },
             _ => subtitle
         };
         var actual = field == "count" ? Media(Track()) : Media(Track(), subtitle);
@@ -138,16 +139,16 @@ public sealed class OutputQcRulesTests
     public void Added_audio_uses_real_source_track_id_and_request_metadata(string field, bool expected)
     {
         var before = Track("audio", 9);
-        var actual = before with { Id = 22, Name = "评论" };
+        var actual = before with { Id = new(22), Name = "评论" };
         actual = field switch
         {
             "codec" => actual with { Codec = "wrong" },
             "channels" => actual with { AudioChannels = 6 },
             "sampling" => actual with { AudioSamplingFrequency = 44100 },
             "name" => actual with { Name = "wrong" },
-            "language" => actual with { LanguageIetf = "ja" },
-            "default" => actual with { IsDefault = false },
-            "forced" => actual with { IsForced = true },
+            "language" => actual with { LanguageIetf = new("ja") },
+            "default" => actual with { Flags = actual.Flags with { IsDefault = false } },
+            "forced" => actual with { Flags = actual.Flags with { IsForced = true } },
             _ => actual
         };
         var results = OutputQcRules.CheckTracks(Media(Track()), Media(Track(), actual), [],
