@@ -124,9 +124,16 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 
 以下两节记录迁移前的文件落位与 Desktop 行为约定。行为约定（接纳、草稿修订、Overlay、键盘、结果展示等）在迁移后继续有效；文件归属随[架构分层重构](migration.md#架构分层重构)改写，搬迁哪一部分就在同一改动中更新对应条目。
 
+#### 2a 轨道与命名已迁入 Domain
+
+- `src/MuxDeck.Domain/TrackPolicy.cs` 是 SC/TC 默认轨、源 A/V 保留和来源纳入投影的唯一规则位置。调用方提供槽位存在、轨道类型和外加纳入选择；旧空草稿仍先显示 SC 默认，实际组合变化后按槽位重算。编辑守卫、修改时机和草稿修订暂留 Desktop，随 4b 迁移。
+- `LanguageRules.cs` 负责基于不含扩展名的文件名推断语言，以及旧封装 QC 的传统/IETF 标签匹配。传统/IETF 原字符串保留，IETF 仅为 null 时才允许匹配回退；语言推断保留旧标签边界、优先顺序和大小写处理。
+- `OutputNaming.cs` 负责默认后缀、自定义名称和无视频时的预览占位。Desktop 预览将空白视为自动命名；旧服务仅将 null 视为自动命名，空白仍由原校验拒绝。路径拆分、文件存在性、合法文件名校验和落位均留在调用边界。
+- 原位置只调用上述 Domain 规则；规则不使用文件、目录、进程、当前时间或 ID 生成 API。Domain 单元测试注明对应的既有 Smoke 场景，架构测试逐个检查三个规则类型并保留全命名空间护栏。
+
 #### 阶段一单任务职责
 
-阶段一的业务编排与媒体工具代码位于 `src/MuxDeck.Core/Muxing/`。下表路径相对于 `src/MuxDeck.Core/`；进程技术适配位于 Core 根目录，不拆出额外生产项目：
+阶段一尚未迁出的业务编排与媒体工具代码位于 `src/MuxDeck.Core/Muxing/`。下表路径相对于 `src/MuxDeck.Core/`；进程技术适配位于 Core 根目录，不拆出额外生产项目：
 
 | 职责 | 相对 Core 的文件 | 约束 |
 |---|---|---|
@@ -144,7 +151,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 
 #### 阶段一 Desktop 单任务约定
 
-最新自动入口由 `ViewModels/MediaImport.cs` 和 `Views/SingleMuxView.MediaInput.cs` 承担：工作区文件格式优先，混合批次准备后一次提交；文件名仅在语言未声明时提供提示。字幕/音频追加到共享 `externalOrder`，显示 ID 连续编号，GUID 只作内部身份；一份音频容器可以投影多条真实音轨。字幕/音频更换、移除与编辑守卫共同维护草稿版本。ASS 才要求字体目录和字体后端；SRT/音频可单独封装。`MuxRequest` 快照复制字幕与音频集合，开始/取消/关闭锁定不变，关闭等待还包含媒体识别进程。以下 SC/TC API 保留其旧草稿契约和回归，不再限制新拖放/添加入口。
+最新自动入口由 `ViewModels/MediaImport.cs` 和 `Views/SingleMuxView.MediaInput.cs` 承担：工作区文件格式优先，混合批次准备后一次提交；文件名仅在语言未声明时提供提示，路径拆分后调用 Domain `LanguageRules.InferImported`，不在 ViewModel 内保留推断实现。字幕/音频追加到共享 `externalOrder`，显示 ID 连续编号，GUID 只作内部身份；一份音频容器可以投影多条真实音轨。字幕/音频更换、移除与编辑守卫共同维护草稿版本。ASS 才要求字体目录和字体后端；SRT/音频可单独封装。`MuxRequest` 快照复制字幕与音频集合，开始/取消/关闭锁定不变，关闭等待还包含媒体识别进程。以下 SC/TC API 保留其旧草稿契约和回归，不再限制新拖放/添加入口。
 
 最新输入反馈见[窗口输入反馈任务](../tasks/window-input-feedback.md)：`Views/SingleMuxView.DropFeedback.cs` 在窗口宿主统一处理拖入，包含左侧导航，只有单个封装可接纳；`MainWindow` 的透明遮罩覆盖整块客户区且退出命中测试。子控件 Leave/Enter 通过 70ms 合并，真正窗口外离开、Drop、Esc、切页及脱离清理；详情面板坐标遮挡、忙碌和所有可见 owned dialog 均拒绝。原生对话框的 enabled 状态不能只凭托管 `IsEnabled` 推断。
 
@@ -156,7 +163,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 
 组件卸载以当前配置目录为管理边界：手动复制的组件也计为 Mux Deck 来源，不使用安装归属记录。Core `ComponentDirectories` 只生成固定直接子目录的计划并检查边界/链接，`ComponentUninstaller` 重新验证后逐项删除并记录日志，与安装器共用 `ComponentOperations.Gate`。AFS 的随包 Python 随主目录删除，独立 `fonttools` 保留并单独管理；重装可复用已验证的独立后端。Desktop 保存待确认计划、卸载任务和错误；MainWindow 结合单任务、导入与真实工具探测忙碌态禁止删除，关闭等待收尾。完整边界与证据见[组件卸载任务](../tasks/component-uninstall.md)。
 
-单任务交互由 `ViewModels/SingleMuxViewModel.cs` 持有；它构造 `MuxRequest` 快照并调用 `SingleMuxService`，包含 `StartAsync`、`CancelAndWaitAsync`、`RunTask`、`IsRunning`、`CanEdit`、`Tracks`、`SelectedTrack`、`Log`、`Result` 与 `StatusText`。`TrackRowViewModel` 表示内封来源轨道与外加字幕的展示行；SC/TC 外加字幕各自显式维护名称、语言、default 和 forced，输入组合变更时只应用一次 SC/TC 默认规则。`MainWindowViewModel` 继续负责导航和工具环境摘要。UI 不承担 QC，也不构造 AFS 或 mkvmerge 参数。
+单任务交互由 `ViewModels/SingleMuxViewModel.cs` 持有；它构造 `MuxRequest` 快照并调用 `SingleMuxService`，包含 `StartAsync`、`CancelAndWaitAsync`、`RunTask`、`IsRunning`、`CanEdit`、`Tracks`、`SelectedTrack`、`Log`、`Result` 与 `StatusText`。`TrackRowViewModel` 表示内封来源轨道与外加字幕的展示行；SC/TC 外加字幕各自显式维护名称、语言、default 和 forced，输入组合变更时只调用一次 Domain `TrackPolicy.SubtitleDefaults`；同槽替换、纳入切换和后续显式旗标编辑不重算默认值。`MainWindowViewModel` 继续负责导航和工具环境摘要。UI 不承担 QC，也不构造 AFS 或 mkvmerge 参数。
 
 第一轮任务 A 的新增状态和接纳接口位于同一 ViewModel 及 `ViewModels/InputAcceptance.cs`，不放入 Core：
 
@@ -169,7 +176,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 单个封装最新结构见 [工作台重构任务](../tasks/single-mux-workbench.md)；三张旧稿保留为历史布局参考：
 
 - `MainWindow` 保留 172 宽左侧栏与底部工作区路径条，给单任务视图提供整块客户区宿主；`SingleMuxView` 持有封装/字体附件/可选开发日志页签与全高轨道属性栏，不再接收重复页面标题。封装页主区自上而下为视频摘要（约 72 高，两行投影）、轨道与内容（约 312，清单内部滚动）、输出设置（约 143，字体/输出目录并排、字体辅助说明及输出文件名）。主区不整体滚动：默认列宽下普通 3 源轨 + SC/TC 在 1040×760 下无需滚动，更多轨道只在清单内部滚动。固定状态区（约 76 高）不随内容滚动；底部结果面板止于其上缘，全高轨道属性栏会覆盖其右侧操作，关闭栏后恢复可达。
-- 主表列为“无文字纳入列、ID、类型、语言、名称、默认、强制、编码”，共享 `TrackRowTemplate` 和 `TrackColumnLayout`，`TrackColumnsGrid` 为每个实例投影独立列定义；表头拖动/键盘调整由 `TrackColumnHeader` 承担，表格内部允许水平滚动并同步表头，源/外加以分组标题区分，删除逐行详情/更换/移除按钮，整行主要区域是行选择按钮。首列包含状态是按来源策略生成的展示投影（`TrackRowViewModel.InclusionBox`）：源视频/音频勾选只读、源字幕不勾选只读、外加字幕可切换，不直接绑定默认为 true 的 `IsIncluded`；只读源行仍可选中。行选择按钮的可访问名称由 `TrackRowViewModel.AccessibleName` 明确给出，不能退化为控件类型文本。
+- 主表列为“无文字纳入列、ID、类型、语言、名称、默认、强制、编码”，共享 `TrackRowTemplate` 和 `TrackColumnLayout`，`TrackColumnsGrid` 为每个实例投影独立列定义；表头拖动/键盘调整由 `TrackColumnHeader` 承担，表格内部允许水平滚动并同步表头，源/外加以分组标题区分，删除逐行详情/更换/移除按钮，整行主要区域是行选择按钮。首列包含状态由 `TrackRowViewModel.InclusionBox` 调用 Domain `TrackPolicy.IsIncluded` 生成展示投影，源保留策略调用 `TrackPolicy.RetainsSource`：源视频/音频勾选只读、源字幕不勾选只读、外加字幕可切换，不直接绑定默认为 true 的 `IsIncluded`；只读源行仍可选中。行选择按钮的可访问名称由 `TrackRowViewModel.AccessibleName` 明确给出，不能退化为控件类型文本。
 - 两个 Overlay 覆盖主内容：右侧轨道属性栏（300 宽）按最新用户红框贴窗口客户区右边，纵向从客户区顶部到底部，无外侧留白与圆角；底部结果详情（300 高）仍止于状态栏上缘。二者暂互斥，打开一个关闭另一个；切换轨道原位更新；`×` 与 Esc 关闭、点击空白不关闭。被遮区域同时退出指针命中测试与 Tab 导航：轨道面板打开时视频摘要区与设置区整体退出，结果面板打开时设置区与被完全盖住的行退出，可见轨道清单保持可用；面板内容溢出时仅面板内部滚动。轨道属性栏只有封装页签选中时可见，切页/页签隐藏但保留模型状态；标题与关闭入口、外加更换/移除操作固定，中部滚动。
 - Overlay 键盘规则可自动验证：窗口级 Tab/Shift+Tab 在未被遮挡的可用控件间移动，包含活动面板自身的操作与可见侧栏，不进入被遮的添加/附件/设置操作或全高属性栏下的状态按钮；窗口键盘接线在视图脱离时解除，隐藏封装页或其他页签使用默认导航。关闭后按当前视觉树解析触发入口/当前选中行并落到有效可见焦点（行随清单重建后不沿用旧控件，入口被移除时回退到可用控件）。轨道清单获焦时普通 ↑/↓ 可跨视口滚入下一行并原位更新已打开的面板，Enter/Space 打开对应属性；结果面板打开时仅增加清单内部末尾滚动余量，使末行可滚到露出的区域，不改变主布局。方向导航不改草稿或包含状态，文本编辑与下拉内保持控件自身语义。
 - 未选外加字幕替换/移除导致清单重建时，所选源行按来源、类型和轨道标识恢复到当前对象，Inspector 保持源视频路径；更换视频先清空旧选择，不按相同数字标识继承另一视频的轨道。源选择恢复只是展示更新，不增加草稿修订。

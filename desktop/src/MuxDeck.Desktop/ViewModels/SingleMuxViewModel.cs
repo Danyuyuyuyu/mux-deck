@@ -1,3 +1,4 @@
+using MuxDeck.Domain;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
@@ -60,8 +61,8 @@ public sealed partial class SingleMuxViewModel : ObservableObject
 
     public void UpdateWorkspace(Workspace workspace) => service.UpdateWorkspace(workspace);
 
-    public TrackRowViewModel ScTrack { get; } = new() { Id = "SC", Type = "字幕", Codec = "ASS", Source = "外加 · 简体", Language = "zh-Hans", Name = "SC", IsDefault = true, IsEditable = true, Policy = "新增", Detail = "子集化后新增 ASS；固定语言 zh-Hans。轨道名称、默认与强制旗标可编辑。" };
-    public TrackRowViewModel TcTrack { get; } = new() { Id = "TC", Type = "字幕", Codec = "ASS", Source = "外加 · 繁体", Language = "zh-Hant", Name = "TC", IsEditable = true, Policy = "新增", Detail = "子集化后新增 ASS；固定语言 zh-Hant。仅选择繁体时默认启用默认旗标。" };
+    public TrackRowViewModel ScTrack { get; } = new() { Id = "SC", Type = "字幕", Codec = "ASS", Source = "外加 · 简体", Language = "zh-Hans", Name = "SC", IsDefault = TrackPolicy.InitialScDefault, IsEditable = true, Policy = "新增", Detail = "子集化后新增 ASS；固定语言 zh-Hans。轨道名称、默认与强制旗标可编辑。" };
+    public TrackRowViewModel TcTrack { get; } = new() { Id = "TC", Type = "字幕", Codec = "ASS", Source = "外加 · 繁体", Language = "zh-Hant", Name = "TC", IsDefault = TrackPolicy.InitialTcDefault, IsEditable = true, Policy = "新增", Detail = "子集化后新增 ASS；固定语言 zh-Hant。仅选择繁体时默认启用默认旗标。" };
     public string VideoPath { get => videoPath; set { if (!CanEdit || !Set(ref videoPath, value)) return; sourceProbe = null; SelectedTrack = null; RebuildTracks(false); Raise(nameof(ResolvedOutputFileName)); NotifyVideoSummary(); MarkDraftChanged(); UpdateInputs(); _ = ProbeVideoAsync(); } }
     public string ScSubtitle { get => scSubtitle; set => SetSubtitlePath(SubtitleSlot.Sc, value); }
     public string TcSubtitle { get => tcSubtitle; set => SetSubtitlePath(SubtitleSlot.Tc, value); }
@@ -69,7 +70,8 @@ public sealed partial class SingleMuxViewModel : ObservableObject
     public string FontsDirectory { get => fontsDirectory; set { if (CanEdit && Set(ref fontsDirectory, value)) { Raise(nameof(HasFontsDirectory)); MarkDraftChanged(); UpdateInputs(); } } }
     public string OutputDirectory { get => outputDirectory; set { if (CanEdit && Set(ref outputDirectory, value)) { Raise(nameof(HasOutputDirectory)); MarkDraftChanged(); UpdateInputs(); } } }
     public string OutputFileName { get => outputFileName; set { if (!CanEdit || !Set(ref outputFileName, value)) return; Raise(nameof(ResolvedOutputFileName)); MarkDraftChanged(); UpdateInputs(); } }
-    public string ResolvedOutputFileName => string.IsNullOrWhiteSpace(OutputFileName) ? (string.IsNullOrWhiteSpace(VideoPath) ? "源文件名.muxed.mkv" : Path.GetFileNameWithoutExtension(VideoPath) + ".muxed.mkv") : OutputFileName;
+    public string ResolvedOutputFileName => OutputNaming.ResolvePreview(OutputFileName,
+        string.IsNullOrWhiteSpace(VideoPath) ? null : Path.GetFileNameWithoutExtension(VideoPath));
     public bool IsRunning { get => isRunning; private set { if (!Set(ref isRunning, value)) return; NotifyEditability(); CancelCommand.NotifyCanExecuteChanged(); } }
     public bool IsProbing { get => isProbing; private set => Set(ref isProbing, value); }
     private int activeToolProbes;
@@ -463,8 +465,9 @@ public sealed partial class SingleMuxViewModel : ObservableObject
     private void ApplySubtitleDefaults()
     {
         // 只在输入组合改变时应用简繁约定，之后的显式旗标修改保留到提交快照。
-        ScTrack.IsDefault = !string.IsNullOrWhiteSpace(ScSubtitle);
-        TcTrack.IsDefault = string.IsNullOrWhiteSpace(ScSubtitle) && !string.IsNullOrWhiteSpace(TcSubtitle);
+        var defaults = TrackPolicy.SubtitleDefaults(!string.IsNullOrWhiteSpace(ScSubtitle), !string.IsNullOrWhiteSpace(TcSubtitle));
+        ScTrack.IsDefault = defaults.Sc;
+        TcTrack.IsDefault = defaults.Tc;
     }
     private void RebuildTracks(bool selectFallback = true)
     {
@@ -475,7 +478,7 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         {
             foreach (var track in sourceProbe.Tracks)
             {
-                var row = new TrackRowViewModel { Id = track.Id.ToString(), Type = track.Type switch { "video" => "视频", "audio" => "音频", "subtitles" => "字幕", _ => track.Type }, Codec = track.Codec, Source = "源视频 · 内封", Language = track.LanguageIetf ?? track.Language, LegacyLanguage = track.Language, LanguageIetf = track.LanguageIetf, CodecId = track.CodecId, PixelDimensions = track.PixelDimensions, AudioChannels = track.AudioChannels, Name = track.Name, IsDefault = track.IsDefault, IsForced = track.IsForced, HasDefaultFlag = track.HasDefaultFlag, HasForcedFlag = track.HasForcedFlag, Policy = track.Type is "video" or "audio" ? "保留" : "移除", Detail = $"{track.PixelDimensions ?? ""} { (track.AudioChannels is { } channels ? channels + " 声道" : "") } {track.CodecId}".Trim() };
+                var row = new TrackRowViewModel { Id = track.Id.ToString(), Type = track.Type switch { "video" => "视频", "audio" => "音频", "subtitles" => "字幕", _ => track.Type }, Codec = track.Codec, Source = "源视频 · 内封", Language = track.LanguageIetf ?? track.Language, LegacyLanguage = track.Language, LanguageIetf = track.LanguageIetf, CodecId = track.CodecId, PixelDimensions = track.PixelDimensions, AudioChannels = track.AudioChannels, Name = track.Name, IsDefault = track.IsDefault, IsForced = track.IsForced, HasDefaultFlag = track.HasDefaultFlag, HasForcedFlag = track.HasForcedFlag, Policy = TrackPolicy.RetainsSource(track.Type switch { "video" => TrackKind.Video, "audio" => TrackKind.Audio, "subtitles" => TrackKind.Subtitle, _ => TrackKind.Unknown }) ? "保留" : "移除", Detail = $"{track.PixelDimensions ?? ""} { (track.AudioChannels is { } channels ? channels + " 声道" : "") } {track.CodecId}".Trim() };
                 row.SetEditGuard(() => false);
                 sourceTracks.Add(row); Tracks.Add(row);
             }

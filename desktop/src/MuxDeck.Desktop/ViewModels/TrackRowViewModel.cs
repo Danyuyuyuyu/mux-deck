@@ -1,3 +1,4 @@
+using MuxDeck.Domain;
 namespace MuxDeck.Desktop.ViewModels;
 
 public sealed class TrackRowViewModel : ObservableObject
@@ -45,7 +46,7 @@ public sealed class TrackRowViewModel : ObservableObject
     public bool IsIncluded { get => isIncluded; set { if (CanChange && Set(ref isIncluded, value)) { Raise(nameof(InclusionText)); Raise(nameof(InclusionBox)); } } }
     public bool IsSelected { get => isSelected; internal set => Set(ref isSelected, value); }
     // 展示投影：源行按固定策略表现包含状态，不直接绑定默认为 true 的 IsIncluded。
-    public bool InclusionBox { get => IsEditable ? isIncluded : Policy == "保留"; set { if (CanChange) IsIncluded = value; } }
+    public bool InclusionBox { get => TrackPolicy.IsIncluded(IsEditable, isIncluded, Policy == "保留"); set { if (CanChange) IsIncluded = value; } }
     public bool InclusionBoxEnabled => IsEditable && CanChange;
     public string InclusionText => IsIncluded ? "加入" : "暂不加入";
     public string InputPath { get => inputPath; internal set => Set(ref inputPath, value); }

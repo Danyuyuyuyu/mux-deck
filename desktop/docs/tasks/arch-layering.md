@@ -204,7 +204,7 @@
 |---|---|---|---|
 | [1a · PR #3](https://github.com/Danyuyuyuyu/mux-deck/pull/3) | 已合并（`c4f932e`） | 锁定 restore：9/9 项目；Release build：0 警告 / 0 错误；dotnet test：32/32（架构规则 27 + 扫描反例 5），失败/跳过 0；Smoke：28/28 | 三个空生产项目、三个 xUnit 测试项目、过渡引用、NetArchTest 护栏、CI test 步骤与全部新增项目锁文件；按已接受 ADR-0001 实施，未移动代码、定义契约或修改行为。Domain/Application 业务测试 0；未重放真实工具链或原生 UI。 |
 | [1b · `aa85458`](https://github.com/Danyuyuyuyu/mux-deck/commit/aa85458a3caf7b11e76ae5f7d60317d3c862ffe8) | 已完成，已推送，Desktop CI 通过 | restore 10/10；Release 0 警告 / 0 错误；dotnet test 71/71（转换 26、Domain 8、架构 37）；受控 13/13 套件、656/656；契约两条故意违反均被拒绝 | 公共不可变契约、四个 Domain 值类型与 Core 兼容转换；旧调用方零改动；详见下方命令与计数。未重放真实工具链或原生 UI。 |
-| 2a | 未开始 | | |
+| 2a | 本地验证完成，待推送及 CI | locked restore 10/10；Release 0 警告 / 0 错误；dotnet test 208/208；受控 13/13、656/656 | TrackPolicy、LanguageRules、OutputNaming 已迁入 Domain；新增 Domain 69、架构 3，原 136 全部保留；详见 2a 实际验证。 |
 | 2b | 未开始 | | |
 | 2c | 未开始 | | |
 | 3a | 未开始 | | |
@@ -343,6 +343,48 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui` | 61/61 |
 
 本机日志：`artifacts/arch-corrections/B/`。共享文件仅骨架与本任务验证记录；sln、锁文件、props、ADR 均不变。
+
+### 2a 实际验证（2026-10-13）
+
+输入：在 `v2/avalonia-rewrite` 执行 `git pull --rebase origin v2/avalonia-rewrite`，确认最新基线含 `9a1d4e3`；沿用已接受的 [ADR-0001](../adr/0001-layered-architecture.md)。输出：Domain `TrackPolicy`、`LanguageRules`、`OutputNaming` 及原位置调用，新增规则单元测试与副作用架构检查。失败行为：构建、架构或任何既有回归失败均不推送；推送后 Desktop CI 不通过即修复或回退。原输入拒绝、QC 失败、取消和不覆盖落位语义不变。
+
+规则均直接迁入 Domain，原位置仅保留调用；文件路径拆分和 IO 事实仍在调用方，文件名合法性校验仍由旧服务负责。SC/TC 默认仅在输入组合变化时调用，同槽替换、纳入切换不重算显式旗标；源 A/V 保留、源字幕与附件移除、外加纳入可编辑保持原样。语言推断保持 IETF 优先、标签边界、优先顺序与 und 的原大小写语义；匹配仅在 IETF 为 null 时回退。输出预览把空白视为自动名，服务只把 null 视为自动名，保留两者原有差异。工具参数、QC 判定和诊断白名单未改。
+
+每条规则有效输入与关键反例的既有 Smoke 对应：
+
+| Domain 测试 | 新增用例 | 既有场景与关键反例 |
+|---|---|---|
+| `TrackPolicyTests` 默认轨 | 5 | Smoke / `--single-mux-round1`：SC、TC-only、SC+TC；无输入不选择默认轨，旧空草稿初始 SC 标记保留 |
+| `TrackPolicyTests` 源策略与纳入 | 11 | `--single-mux-round1` 源 A/V 保留与源字幕移除；`--single-mux-ui-round1` 只读源纳入列、外加可切换；源字幕不能因外加纳入值为 true 而保留，外加禁用不被源保留覆盖 |
+| `LanguageRulesTests` 推断 | 26 | `--media-drop` 未指定语言从有边界的文件名标签推断、未知回退 und；已声明字段优先，无边界子串不推断，未声明 IETF 不回退传统字段 |
+| `LanguageRulesTests` 匹配 | 14 | Smoke 公共封装 QC，以及 `--media-drop-real` 篡改新增音轨语言阻止发布；别名与大小写匹配、IETF 不匹配时禁止传统字段掩盖、zh-Hans / zh-Hant 不混用（这里只复用元数据事实，未重放真实套件） |
+| `OutputNamingTests` | 13 | `--single-mux-round1` 中文空格大写 MKV 默认名、输出名编辑与 Smoke 成品命名；自定义名不覆写、空白服务名留给原校验拒绝、未知视频与空基名区分 |
+| `DomainRuleBoundaryTests` | 3 | 逐个确认三个真实规则在 Domain 程序集，禁用文件/目录/进程/网络/Console/Environment/Avalonia 依赖，以及当前时间与 ID 生成 |
+
+以下命令均在 `desktop/` 实际执行：
+
+| 实际命令 | 结果 |
+|---|---|
+| `dotnet restore MuxDeck.sln --locked-mode` | 10/10 项目成功 |
+| `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false` | 10/10 项目，0 警告 / 0 错误 |
+| `dotnet test MuxDeck.sln --no-build -c Release` | 208/208（Domain 84、Application 4、Core 26、Architecture 94），失败/跳过 0 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release` | 28/28 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-policy` | 57/57 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-round1` | 89/89 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-ui-round1` | 176/176 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --workbench-ui` | 38/38 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --input-feedback` | 24/24 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop` | 25/25 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --environment-ui` | 23/23 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --components` | 31/31 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-ui` | 37/37 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all` | 41/41 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall` | 26/26 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui` | 61/61 |
+
+136 → 208，只新增 72 项：Domain 69（默认轨 5、纳入与源保留 11、语言推断 26、匹配 14、命名 13），架构 3；原 136 项全部保留，没有删改、跳过或放宽现有测试。受控 13/13 套件、656/656，与基准一致。本机日志：`artifacts/arch-corrections/2a/`。
+
+共享文件只更新 `docs/agents/skeleton.md` 中本次迁移现状；`MuxDeck.sln`、锁文件、`Directory.Build.props` 不变，未改 ADR 或步骤计划。未重放真实媒体工具链、原生选择器、Explorer、高 DPI 或播放器；真实工具链基准仍需在 3b 前按上方要求重跑。本地验证完成，推送后补入实现提交与 Desktop CI 链接。
 
 ## 发现的旧缺陷
 

@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+using MuxDeck.Domain;
 using MuxDeck.Core.Muxing;
 
 namespace MuxDeck.Desktop.ViewModels;
@@ -84,15 +84,8 @@ public sealed partial class SingleMuxViewModel
         catch (Exception ex) { return new(false, "无法识别拖入文件，整批未接纳：" + ex.Message); }
         finally { EndToolProbe(); }
     }
-    private static string ImportedLanguage(string path, MediaTrack track)
-    {
-        var language = track.LanguageIetf ?? track.Language;
-        if (!string.IsNullOrWhiteSpace(language) && language != "und") return language;
-        var name = Path.GetFileNameWithoutExtension(path);
-        foreach (var (pattern, code) in new[] { ("zh[-_]hans|简体|简中|(^|[._\\-\\s\\[\\]()])(sc|chs|gb)($|[._\\-\\s\\[\\]()])", "zh-Hans"), ("zh[-_]hant|繁体|繁體|繁中|(^|[._\\-\\s\\[\\]()])(tc|cht|big5)($|[._\\-\\s\\[\\]()])", "zh-Hant"), ("(^|[._\\-\\s\\[\\]()])(eng|en)($|[._\\-\\s\\[\\]()])", "en"), ("(^|[._\\-\\s\\[\\]()])(jpn|ja)($|[._\\-\\s\\[\\]()])", "ja") })
-            if (Regex.IsMatch(name, pattern, RegexOptions.IgnoreCase)) return code;
-        return "und";
-    }
+    private static string ImportedLanguage(string path, MediaTrack track) =>
+        LanguageRules.InferImported(Path.GetFileNameWithoutExtension(path), track.Language, track.LanguageIetf);
     public MediaImportResult CommitMediaInput(MediaImportPlan plan, bool videoReplacementConfirmed = false)
     {
         if (!CanEdit || !ReferenceEquals(plan.Owner, this) || plan.Revision != DraftRevision) return new(false, "草稿已变化或任务已锁定，原输入保持。");

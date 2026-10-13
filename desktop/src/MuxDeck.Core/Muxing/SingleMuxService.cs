@@ -1,3 +1,4 @@
+using MuxDeck.Domain;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -306,7 +307,7 @@ public sealed partial class SingleMuxService
         var output = Path.GetFullPath(request.OutputDirectory);
         if (SamePath(output.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), Path.GetDirectoryName(video)!))
             throw new ArgumentException("请使用与源视频不同的独立输出目录。");
-        var name = request.OutputFileName ?? Path.GetFileNameWithoutExtension(video) + ".muxed.mkv";
+        var name = OutputNaming.ResolveForJob(request.OutputFileName, Path.GetFileNameWithoutExtension(video));
         if (string.IsNullOrWhiteSpace(name) || name != Path.GetFileName(name) ||
             !name.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase) || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
             throw new ArgumentException("输出文件名必须是有效的 MKV 文件名，不能包含目录。");
@@ -467,12 +468,8 @@ public sealed partial class SingleMuxService
         CheckExternalAudio(source, output, request, audioSources, checks);
     }
 
-    private static bool LanguageMatches(MediaTrack track, string language)
-    {
-        var canonical = language.ToLowerInvariant() switch { "chi" or "zho" => "zh", "eng" => "en", "jpn" => "ja", _ => language };
-        return string.Equals(track.LanguageIetf, canonical, StringComparison.OrdinalIgnoreCase) ||
-               (track.LanguageIetf is null && string.Equals(track.Language, language, StringComparison.OrdinalIgnoreCase));
-    }
+    private static bool LanguageMatches(MediaTrack track, string language) =>
+        LanguageRules.Matches(track.Language, track.LanguageIetf, language);
     // 仅统一文件换行；最后一条 Dialogue 的尾部空格也属于正文，必须保留比较。
     private static string NormalizeAss(string text) => text.Replace("\r\n", "\n");
     private static bool IsFont(string path) => Path.GetExtension(path).ToLowerInvariant() is ".ttf" or ".otf" or ".ttc" or ".otc";
