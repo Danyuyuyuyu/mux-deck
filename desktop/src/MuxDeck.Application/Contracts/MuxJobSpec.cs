@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using MuxDeck.Domain;
 
 namespace MuxDeck.Contracts;
@@ -12,6 +11,6 @@ public sealed record ToolConfiguration(string ToolsDirectory, string LogsDirecto
     string CacheDirectory, string? FontToolsDirectoryOverride = null);
 
 /// <summary>所有路径与工具配置都是本次提交的值，集合使用不可变数组。</summary>
-public sealed record MuxJobSpec(string VideoPath, ImmutableArray<ExternalTrackSpec> ExternalTracks,
-    ImmutableArray<SourceTrackSelection> SourceTracks, FontSpec Fonts, OutputSpec Output,
+public sealed record MuxJobSpec(string VideoPath, EquatableArray<ExternalTrackSpec> ExternalTracks,
+    EquatableArray<SourceTrackSelection> SourceTracks, FontSpec Fonts, OutputSpec Output,
     ToolConfiguration Tools);

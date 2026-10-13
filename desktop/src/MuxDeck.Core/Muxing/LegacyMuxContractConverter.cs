@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using MuxDeck.Contracts;
 using MuxDeck.Domain;
 
@@ -25,7 +24,7 @@ public static class LegacyMuxContractConverter
                 new TrackFlags(subtitle.IsDefault, subtitle.IsForced)))
             .Concat(request.Audios.Select(audio => new ExternalTrackSpec(audio.Path, TrackKind.Audio,
                 new TrackId(audio.TrackId), audio.Name, new LanguageTag(audio.Language),
-                new TrackFlags(audio.IsDefault, audio.IsForced)))).ToImmutableArray();
+                new TrackFlags(audio.IsDefault, audio.IsForced)))).ToEquatableArray();
         // 旧模型没有可编辑的源轨选择；空数组表示继续沿用旧入口的源轨策略。
         return new MuxJobSpec(request.VideoPath, tracks, [], new FontSpec(request.FontsDirectory),
             new OutputSpec(request.OutputDirectory, request.OutputFileName), tools);
@@ -79,9 +78,9 @@ public static class LegacyMuxContractConverter
         return new MuxJobResult(status,
             result.OutputPath is { } output ? [new OutputArtifact(output)] : [],
             result.Checks.Select(text => new CheckResult(ErrorCodes.LegacyCheck, CheckStatus.NotEvaluated,
-                null, null, text)).ToImmutableArray(),
+                null, null, text)).ToEquatableArray(),
             result.Warnings.Select(warning => new Diagnostic(warning.Code, DiagnosticSeverity.Warning,
-                warning.Message, warning.Occurrences)).ToImmutableArray(),
+                warning.Message, warning.Occurrences)).ToEquatableArray(),
             failure, result.LogPath is { } log ? new LogRef(log) : null);
     }
 }

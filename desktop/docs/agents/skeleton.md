@@ -59,7 +59,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 
 - 命名空间固定为 `MuxDeck.Contracts`，文件位于 `src/MuxDeck.Application/Contracts/`。出现第二个调用方时拆为独立项目，命名空间不变。
 - 只依赖 `System.*` 与 `MuxDeck.Domain`。`TrackKind`、`LanguageTag`、`TrackFlags` 等值类型归 Domain，由契约引用。
-- 只含不可变 record、枚举和用例接口；不含读写文件、调用服务或依赖当前时间的逻辑。
+- 只含不可变 record、枚举和用例接口（错误码常量允许 static class）；不含读写文件、调用服务或依赖当前时间的逻辑。
 - 类型全部 `public`，不以 `InternalsVisibleTo` 访问内部成员，不暴露 Application 内部类型（如任务临时目录）。
 - 结果结构化：成败用枚举表达；检查项为 `CheckResult(Code, Status, Subject, Expected, Actual)`；失败为 `JobFailure(Code, Stage, Message, Detail)`。界面不解析文案或日志判断成败。
 - 工具诊断码以[工具诊断分类](diagnostics.md)为唯一来源；任务错误码集中定义在 `Contracts/ErrorCodes.cs`。
@@ -80,8 +80,9 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 
 ### 1b 契约与旧模型过渡
 
+- LanguageTag 的相等与哈希按 Value 比较，default 与空字符串相等；MediaTrackInfo 的 HasDefaultFlag / HasForcedFlag 必须显式传入，不再默认猜测元数据存在。ErrorCodes 为 static 常量类，现有常量和调用写法不变。
 - Domain 已定义 `TrackKind`、`LanguageTag`、`TrackFlags`、`TrackId`。语言值保留原字符串（含空值和传统/IETF 标签），1b 不引入规范化或匹配规则。
-- `Contracts/` 已定义单任务规格/结果/进度、媒体探测、导入计划、组件操作及协调器接口。集合统一使用 `ImmutableArray<T>`，仅保存数据；导入会话由调用方提供 ID 与修订号，不暴露 ViewModel 或 Application 内部对象。组件阶段独立于 `JobStage`，协调器目前只有契约，没有实现。
+- `Contracts/` 已定义单任务规格/结果/进度、媒体探测、导入计划、组件操作及协调器接口。集合统一使用 Domain 的 `EquatableArray<T>`（只读包装 ImmutableArray，按元素比较相等与哈希，default 视为空），仅保存数据；导入会话由调用方提供 ID 与修订号，不暴露 ViewModel 或 Application 内部对象。组件阶段独立于 `JobStage`，协调器目前只有契约，没有实现。
 - `MuxJobSpec.Tools` 显式携带工具、日志、缓存及独立 fonttools 后端配置；Core 的 `Muxing/LegacyMuxContractConverter.cs` 提供 `ToSpec(MuxRequest, Workspace/ToolConfiguration)`、`ToLegacyRequest(MuxJobSpec)` 与 `ToResult(MuxResult)`。旧入口与调用方尚未接入这些转换，保持原行为。
 - 旧请求的字幕与音频各自保留顺序，新规格先列字幕、再列音频；空输出名与 null 分别原样往返。旧模型无法表达的源轨选择、跨类型交错顺序、字幕来源轨号或无来源轨号的音频，转换回旧请求时明确拒绝，不丢弃字段。
 - 旧检查文本使用唯一过渡码 `ErrorCodes.LegacyCheck`（`MUX_LEGACY_CHECK`），原文完整保存在 `CheckResult.Actual`，状态为 `NotEvaluated`，不根据文案判定成败；旧失败码为 `MUX_LEGACY_FAILURE`，取消码为 `MUX_CANCELLED`。旧结果未记录失败阶段，暂为 `JobStage.Unknown`。上述过渡检查/失败映射在第 3 步替换为真实结构化信息。

@@ -1,9 +1,9 @@
-using System.Collections.Immutable;
+using MuxDeck.Domain;
 
 namespace MuxDeck.Contracts;
 
 public enum OperationKind { SingleMux, MediaImport, ComponentInspection, ComponentInstall, ComponentUninstall }
-public sealed record OperationState(bool IsShuttingDown, ImmutableArray<OperationKind> ActiveOperations);
+public sealed record OperationState(bool IsShuttingDown, EquatableArray<OperationKind> ActiveOperations);
 
 public interface IOperationLease : IDisposable, IAsyncDisposable
 {

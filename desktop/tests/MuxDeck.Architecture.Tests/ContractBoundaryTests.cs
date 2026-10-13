@@ -39,7 +39,7 @@ public sealed class ContractBoundaryTests
     {
         var assembly = Assembly.Load("MuxDeck.Application");
         foreach (var type in assembly.GetTypes().Where(type =>
-                     ArchitectureScope.InNamespace(type.Namespace, "MuxDeck.Contracts") && !type.IsInterface && !type.IsEnum))
+                     ArchitectureScope.InNamespace(type.Namespace, "MuxDeck.Contracts") && !type.IsInterface && !type.IsEnum && !(type.IsAbstract && type.IsSealed)))
         {
             Assert.NotNull(type.GetMethod("<Clone>$"));
             Assert.DoesNotContain(type.GetFields(BindingFlags.Public | BindingFlags.Instance),

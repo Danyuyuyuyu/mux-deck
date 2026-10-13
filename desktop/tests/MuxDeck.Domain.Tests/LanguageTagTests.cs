@@ -30,4 +30,15 @@ public sealed class LanguageTagTests
     {
         Assert.Throws<ArgumentNullException>(() => new LanguageTag(null!));
     }
+
+    [Fact]
+    public void Default_and_empty_language_tags_have_the_same_value_and_hash()
+    {
+        var first = default(LanguageTag);
+        var second = new LanguageTag("");
+        Assert.Equal(first, second);
+        Assert.Equal(first.GetHashCode(), second.GetHashCode());
+        Assert.True(first == second);
+        Assert.NotEqual(new LanguageTag("zh-Hans"), new LanguageTag("zh-hans"));
+    }
 }

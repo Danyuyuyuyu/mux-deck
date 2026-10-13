@@ -18,5 +18,7 @@ public readonly record struct LanguageTag
     }
 
     public string Value => value ?? string.Empty;
+    public bool Equals(LanguageTag other) => StringComparer.Ordinal.Equals(Value, other.Value);
+    public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(Value);
     public override string ToString() => Value;
 }

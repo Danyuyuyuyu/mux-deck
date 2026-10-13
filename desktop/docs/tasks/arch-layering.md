@@ -267,7 +267,7 @@
 
 #### 修正 A：限定 Avalonia 基类
 
-Desktop 全部 C# 源码检索仅发现 App 的一处未限定基类，已改为 `Avalonia.Application`。在 Desktop 临时加入 `MuxDeck.Application.ApplicationNameProbe` 后 Release 构建成功（0 警告 / 0 错误），撤销后再执行下列完整验收；没有保留临时类型。原 71 个用例全部保留，计数不变；受控 13/13 套件、656/656。提交与 CI 链接推送确认后补充。
+Desktop 全部 C# 源码检索仅发现 App 的一处未限定基类，已改为 `Avalonia.Application`。在 Desktop 临时加入 `MuxDeck.Application.ApplicationNameProbe` 后 Release 构建成功（0 警告 / 0 错误），撤销后再执行下列完整验收；没有保留临时类型。原 71 个用例全部保留，计数不变；受控 13/13 套件、656/656。提交 [c636e91](https://github.com/Danyuyuyuyu/mux-deck/commit/c636e91d3825ceeba8b4d935b9e72503e12c4f56)，[Desktop CI 已通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38383347658)。
 
 | 实际命令（desktop/） | 结果 |
 |---|---|
@@ -290,6 +290,33 @@ Desktop 全部 C# 源码检索仅发现 App 的一处未限定基类，已改为
 
 本机日志：`artifacts/arch-corrections/A/`。不改 ADR、锁文件、解决方案、共享构建配置或任何测试。
 
+#### 修正 B：集合值相等与值类型修正
+
+Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读取/枚举/元素相等/哈希中视为空，复制可变输入。所有契约集合与用例返回集合使用该类型；LanguageTag 按 Value 比较，default 等于空字符串且哈希一致；探测旗标存在性必须显式传入；ErrorCodes 为 static 常量类。旧转换的显式初始化校验仍保留，原转换测试不变。仅为用户指定的 static ErrorCodes 同步豁免 static 类记录检查，集合白名单在修正 C 收紧。
+
+计数 71 → 82，仅新增 Domain 7（集合 6、语言 1）、Application 4（spec/result 内容相等、default 空集合、旗标必须显式）；原 71 个用例全部保留，Core 26 和 Architecture 37 不变。受控 13/13、656/656。提交与 CI 链接推送确认后补充。
+
+| 实际命令（desktop/） | 结果 |
+|---|---|
+| `dotnet restore MuxDeck.sln --locked-mode` | 10/10 成功 |
+| `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false` | 0 警告 / 0 错误 |
+| `dotnet test MuxDeck.sln --no-build -c Release` | 82/82（Domain 15、Application 4、Core 26、Architecture 37），失败/跳过 0 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release` | 28/28 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-policy` | 57/57 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-round1` | 89/89 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-ui-round1` | 176/176 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --workbench-ui` | 38/38 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --input-feedback` | 24/24 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop` | 25/25 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --environment-ui` | 23/23 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --components` | 31/31 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-ui` | 37/37 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all` | 41/41 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall` | 26/26 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui` | 61/61 |
+
+本机日志：`artifacts/arch-corrections/B/`。共享文件仅骨架与本任务验证记录；sln、锁文件、props、ADR 均不变。
+
 ## 发现的旧缺陷
 
-（已修复：修正 A；提交号推送确认后补充。以下保留发现背景。）`Desktop/App.axaml.cs` 将未限定的 `Application` 用作 Avalonia 基类；当目标程序集首次包含 `MuxDeck.Application` 命名空间的业务类型时，编译器会优先解析同名命名空间并报 CS0118。首个反例因此未计为架构护栏验收，改用独立禁止命名空间后两条护栏均确认失败。1b 只定义 `MuxDeck.Contracts`，没有触发该冲突；后续引入 Application 用例前需单独修复基类限定，不混入本步。
+（已修复：修正 A；提交 c636e91，Desktop CI 38383347658 已通过。以下保留发现背景。）`Desktop/App.axaml.cs` 将未限定的 `Application` 用作 Avalonia 基类；当目标程序集首次包含 `MuxDeck.Application` 命名空间的业务类型时，编译器会优先解析同名命名空间并报 CS0118。首个反例因此未计为架构护栏验收，改用独立禁止命名空间后两条护栏均确认失败。1b 只定义 `MuxDeck.Contracts`，没有触发该冲突；该缺陷已由修正 A 的 c636e91 修复，并经临时同名类型与完整 CI 验证。

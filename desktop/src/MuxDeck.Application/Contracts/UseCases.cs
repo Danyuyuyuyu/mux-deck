@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using MuxDeck.Domain;
 
 namespace MuxDeck.Contracts;
 
@@ -22,7 +22,7 @@ public interface IPrepareImport
 
 public interface IManageComponents
 {
-    Task<ImmutableArray<ComponentInspection>> InspectAsync(ComponentConfiguration configuration,
+    Task<EquatableArray<ComponentInspection>> InspectAsync(ComponentConfiguration configuration,
         CancellationToken cancellationToken = default);
     Task<ComponentOperationResult> InstallAsync(string componentId, ComponentConfiguration configuration,
         IProgress<ComponentProgress>? progress = null, CancellationToken cancellationToken = default);

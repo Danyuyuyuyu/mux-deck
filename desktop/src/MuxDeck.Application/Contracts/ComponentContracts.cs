@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+using MuxDeck.Domain;
 
 namespace MuxDeck.Contracts;
 
@@ -9,7 +9,7 @@ public enum ComponentRemovalKind { Component, Dependencies }
 public sealed record ComponentConfiguration(string WorkspaceRoot, string ToolsDirectory,
     string LogsDirectory, string CacheDirectory, string? FontToolsDirectoryOverride = null);
 public sealed record ComponentPart(string Name, string? Path, ComponentState State, string? Reason);
-public sealed record ComponentInspection(string Id, ComponentState State, ImmutableArray<ComponentPart> Parts,
+public sealed record ComponentInspection(string Id, ComponentState State, EquatableArray<ComponentPart> Parts,
     string? Version = null, string? Reason = null);
 public sealed record ComponentProgress(ComponentPhase Phase, string Message, long Bytes = 0, long? TotalBytes = null);
 public sealed record ComponentUninstallPlan(string ComponentId, ComponentRemovalKind Kind,
