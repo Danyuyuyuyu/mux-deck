@@ -17,7 +17,8 @@ public sealed class DiagnosticAndQcBoundaryTests
         Assert.Single(rules.GetTypes());
         ArchitectureScope.AssertSuccess(rules.ShouldNot().HaveDependencyOnAny(
             "System.IO", "System.Diagnostics.Process", "System.Net", "System.Console",
-            "System.Environment", "Avalonia", "MuxDeck.Core", "MuxDeck.Contracts").GetResult());
+            "Avalonia", "MuxDeck.Core", "MuxDeck.Contracts").GetResult());
         ArchitectureScope.AssertSuccess(rules.Should().MeetCustomRule(new NoCurrentTimeRule()).GetResult());
+        ArchitectureScope.AssertSuccess(rules.Should().MeetCustomRule(new NoEnvironmentSideEffectsRule()).GetResult());
     }
 }

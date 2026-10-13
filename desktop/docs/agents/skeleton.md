@@ -20,7 +20,7 @@ Domain ← Application ← Infrastructure
            Desktop ───────────┘（仅 Program 与 Composition/）
 ```
 
-- Domain 不引用任何项目或第三方包，禁用文件、进程、网络、Console 和 Environment API。
+- Domain 不引用任何项目或第三方包，禁用文件、进程、网络和 Console；Environment 按成员禁止 `GetEnvironmentVariable`、`GetEnvironmentVariables`、`SetEnvironmentVariable`、`ExpandEnvironmentVariables`、`MachineName`、`UserName`、`UserDomainName`、`CurrentDirectory`（读/写）、`GetFolderPath`、`GetCommandLineArgs`、`CommandLine`、`Exit`、`FailFast`、`ProcessId`、`ProcessPath`，由成员级 IL 护栏检查。经用户明确授权，放行 `CurrentManagedThreadId`、`NewLine`、`ProcessorCount` 等只读成员及 yield 状态机；`TickCount` / `TickCount64` 仍由下方时间护栏禁止。
 - Application 只引用 Domain，不引用 Avalonia、Infrastructure 或具体工具；Application / Contracts 禁用 System.IO、System.Diagnostics.Process、System.Net。
 - Infrastructure 引用 Application（实现其端口）与 Domain，不引用 Desktop 或 Avalonia。
 - Desktop 引用 Application 与 Infrastructure；`ViewModels/` 与 `Views/` 只使用 `MuxDeck.Contracts` 命名空间、Domain 值类型和用例接口，不构造 Infrastructure 类型。只有 `Program.cs` 与 `Composition/` 可使用 Infrastructure 命名空间。
@@ -146,7 +146,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 - `OutputQcRules.cs` 负责保留源 A/V 的已知元数据、新增字幕/音频规格、真实音轨 ID 及已声明 A/V 时长比较；输入为 `OutputQcFacts.cs` 的不可变事实。结果保留按原顺序通过的检查项及失败文案，旧边界先追加检查项，再抛原数据异常。
 - 字幕全文比较也由 `OutputQcRules` 负责，只归一 CRLF/LF；同工具 transport 参考生成、提取和文件读取仍在旧边界。Dialogue 文本、时序、Style、字体、事件顺序与末尾空格不能丢弃或放宽。
 - `AssDocument.cs` 负责必要节、样式、字体/粗斜体覆盖、绘图忽略、Unicode 码点与 AFS mapping 解析，返回不可变使用/映射集合；动画字体切换、未知样式、非标准字重等原拒绝保持不变。UTF-8/BOM 文件读取、ttx 读取及字体候选/字形/固有粗体证明仍在 Core，IO 适配随 3b 搬迁。
-- Domain 的解析拒绝使用无 IO 依赖的 `MediaRuleException`，旧边界转换为原 `InvalidDataException` 文案；不把文件、进程、时间、Environment 或具体工具类型带入 Domain。原 `diagnostics.md` 白名单未修改。
+- Domain 的解析拒绝使用无 IO 依赖的 `MediaRuleException`，旧边界转换为原 `InvalidDataException` 文案；不把文件、进程、时间、有副作用的 Environment 成员或具体工具类型带入 Domain。原 `diagnostics.md` 白名单未修改。
 
 #### 阶段一单任务职责
 

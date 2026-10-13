@@ -122,7 +122,7 @@ public sealed class NamespaceDependencyTests
     }
 
     [Theory]
-    [InlineData("MuxDeck.Domain", new[] { "System.IO", "System.Diagnostics.Process", "System.Net", "Avalonia", "System.Console", "System.Environment" })]
+    [InlineData("MuxDeck.Domain", new[] { "System.IO", "System.Diagnostics.Process", "System.Net", "Avalonia", "System.Console" })]
     [InlineData("MuxDeck.Application", new[] { "Avalonia", "MuxDeck.Infrastructure", "MuxDeck.Desktop", "MuxDeck.Core", "System.IO", "System.Diagnostics.Process", "System.Net" })]
     [InlineData("MuxDeck.Contracts", new[] { "System.IO", "System.Diagnostics.Process", "System.Net" })]
     public void Inner_namespaces_do_not_use_side_effects_or_outer_layers(string layer, string[] forbidden)

@@ -47,8 +47,10 @@ namespace MuxDeck.Architecture.Tests
         [InlineData(typeof(Fixtures.SideEffects.PureData), "Avalonia", true)]
         public void Namespace_dependencies_reject_boundary_apis_and_allow_plain_data(Type type, string dependency, bool expected)
         {
-            var result = Types.InAssembly(typeof(GuardrailCounterexampleTests).Assembly).That()
-                .HaveName(type.Name).ShouldNot().HaveDependencyOn(dependency).GetResult();
+            var types = Types.InAssembly(typeof(GuardrailCounterexampleTests).Assembly).That().HaveName(type.Name);
+            var result = dependency == "System.Environment"
+                ? types.Should().MeetCustomRule(new NoEnvironmentSideEffectsRule()).GetResult()
+                : types.ShouldNot().HaveDependencyOn(dependency).GetResult();
             Assert.Equal(expected, result.IsSuccessful);
             if (!expected) Assert.Contains(type.FullName!, result.FailingTypeNames);
         }

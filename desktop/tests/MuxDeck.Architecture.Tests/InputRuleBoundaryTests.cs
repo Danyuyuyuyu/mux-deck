@@ -14,7 +14,8 @@ public sealed class InputRuleBoundaryTests
         Assert.Single(rules.GetTypes());
         ArchitectureScope.AssertSuccess(rules.ShouldNot().HaveDependencyOnAny(
             "System.IO", "System.Diagnostics.Process", "System.Net", "System.Console",
-            "System.Environment", "Avalonia").GetResult());
+            "Avalonia").GetResult());
         ArchitectureScope.AssertSuccess(rules.Should().MeetCustomRule(new NoCurrentTimeRule()).GetResult());
+        ArchitectureScope.AssertSuccess(rules.Should().MeetCustomRule(new NoEnvironmentSideEffectsRule()).GetResult());
     }
 }

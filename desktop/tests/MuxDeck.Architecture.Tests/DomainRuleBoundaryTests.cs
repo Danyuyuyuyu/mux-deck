@@ -19,7 +19,8 @@ public sealed class DomainRuleBoundaryTests
         Assert.Single(types.GetTypes());
         ArchitectureScope.AssertSuccess(types.ShouldNot().HaveDependencyOnAny(
             "System.IO", "System.Diagnostics.Process", "System.Net", "System.Console",
-            "System.Environment", "Avalonia").GetResult());
+            "Avalonia").GetResult());
         ArchitectureScope.AssertSuccess(types.Should().MeetCustomRule(new NoCurrentTimeRule()).GetResult());
+        ArchitectureScope.AssertSuccess(types.Should().MeetCustomRule(new NoEnvironmentSideEffectsRule()).GetResult());
     }
 }

@@ -261,6 +261,33 @@ Application / Contracts 禁止 System.IO、System.Diagnostics.Process、System.N
 
 本机日志：`artifacts/arch-corrections/C/`。反例位于测试程序集，装配 fixture 与便携 PDB 只在本测试唯一 artifacts 子目录内生成并清理。共享文件仅骨架与本任务验证记录；ADR、步骤计划、sln、锁文件、props、生产代码均不变。
 
+#### 修正 D：Environment 改为成员级禁令
+
+授权：用户明确同意，授权范围仅此项。经用户同意放宽：Environment 整类型禁令改为成员级。原因：C# yield 状态机会调用 CurrentManagedThreadId，该只读成员应放行。输入基线 fa5065b；输出为 Domain 成员级护栏与反例，保留 MachineName 等既有反例和全部时间/ID 禁令。禁止环境变量读取/写入/展开、机器/用户身份、当前目录、特殊目录、命令行、退出/FailFast 与进程身份；CurrentManagedThreadId、NewLine、ProcessorCount 放行。TickCount/TickCount64 仍由 NoCurrentTimeRule 禁止。失败行为：任何构建、护栏或回归失败不推送；本项 CI 通过后才实施 3a。不修改其他架构规则或生产行为。
+
+
+
+实际验证（在 desktop/）：427 → 456，仅新增 29 项，原 427 项全部保留；Architecture 98 → 127，新增整程序集扫描 1 项、成员反例 22 项、放行样例 4 项、保留时间禁令样例 2 项。受控 13/13 套件、656/656，与基准一致。日志：`artifacts/arch-corrections/1a-environment/`。CI 待实现提交推送后核对，并在后续记录补入链接。
+
+| 实际命令 | 结果 |
+|---|---|
+| `dotnet restore MuxDeck.sln --locked-mode` | 10/10 |
+| `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false` | 0 警告 / 0 错误 |
+| `dotnet test MuxDeck.sln --no-build -c Release` | 456/456（Domain 294、Application 9、Core 26、Architecture 127）；失败/跳过 0 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release` | 28/28 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-policy` | 57/57 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-round1` | 89/89 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-ui-round1` | 176/176 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --workbench-ui` | 38/38 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --input-feedback` | 24/24 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop` | 25/25 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --environment-ui` | 23/23 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --components` | 31/31 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-ui` | 37/37 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all` | 41/41 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall` | 26/26 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui` | 61/61 |
+
 ### 1b 实际验证（2026-10-13）
 
 输入：分支头 `93a2c9b`、现有旧模型与已接受 ADR-0001。输出：Domain 四个值类型、Application 公共不可变契约、Core 新增转换类、转换/值类型/契约护栏测试；现有调用方零改动。失败行为：新规格若超出旧请求表达能力则明确拒绝；旧检查文案不猜测判定，旧失败不猜测阶段。验收场景包括双向往返、字幕/音频、全部 default/forced 组合、原语言、空输出名、成功/失败/取消、集合快照与无法表达的数据拒绝。
