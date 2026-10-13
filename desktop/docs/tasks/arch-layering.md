@@ -141,7 +141,7 @@
 
 “既有回归不退化”指计数与下表一致，且全部通过。计数取自重构开始前最近一次记录；受控套件已在 CI 运行（[提交 `65da1f7` 的运行](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38377836030)全部通过）。第一个实际运行某套件的步骤，须把实测计数写入结果表；与下表不同时先说明原因，确认后以实测值为新基准。
 
-| 套件 | 实际命令 / 参数 | 基准 | 运行位置 | 本轮日期 / 计数 | 工具版本 / 证据 |
+| 套件 | 实际命令 / 参数 | 基准 | 运行位置 | 本轮日期 / 计数 | 工具版本 / 证据 / 备注 |
 |---|---|---|---|---|---|
 | Smoke | （无参数） | 28/28 | CI + 本地 | — | — |
 | 分层与架构测试 | `dotnet test` | 32/32（1a） | CI + 本地 | — | — |
@@ -160,9 +160,9 @@
 | 真实工具链 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --integration` | 121/121 | 仅本地 | 2026-10-13：121/121，失败 0 | MKV 100.0 / FFmpeg 8.1.1 / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10；[报告](../../artifacts/phase1/20261013-142859-82b3d25cf1e54a029ee505f2922a67b2/report.json) |
 | 真实多轨导入 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop-real` | 37/37 | 仅本地 | 2026-10-13：37/37，失败 0 | MKV 100.0 / FFmpeg 8.1.1 / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10；[报告](../../artifacts/automatic-drop/real-1f9252ddf7484002b912bd2b8ce067db/report.json) |
 | 真实 UI | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --ui-integration artifacts/phase1/20261013-142859-82b3d25cf1e54a029ee505f2922a67b2 artifacts/arch-corrections/real-baseline/new-ui.png` | 39/39 | 仅本地 | 2026-10-13：39/39，失败 0 | MKV 100.0 / FFmpeg 8.1.1 / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10；[报告](../../artifacts/single-mux-round1-b/real-0894ff063db94e0c9d57b4d3358cd596/report.json) |
-| 完整电影重放 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-real artifacts/runs/20261009-115919-18aeaf51f58d43e5a4b935b9ce8b8f5b/task.log` | 9/9 | 仅本地 | 2026-10-13：8/8，失败 0；与 9 项基准不符，停止 | MKV 100.0 / FFmpeg 8.1.1 / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10；[报告](../../artifacts/warning-policy/real-2a100db1e6e6472cacd2ec5f22286dd7/report.json) |
-| 真实组件安装 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all-real` | 15/15 | 仅本地，需联网 | 2026-10-13：未运行：前项计数不符，停止 | — |
-| 真实卸载循环 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-real <固定发布包缓存目录>` | 17/17 | 仅本地 | 2026-10-13：未运行：前项计数不符，停止 | — |
+| 完整电影重放 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-synthetic-bold-real artifacts/runs/20261009-115919-18aeaf51f58d43e5a4b935b9ce8b8f5b/task.log` | 9/9 | 仅本地 | 2026-10-13：9/9，失败 0，SyntheticBoldExpected=true | MKV 100.0 / FFmpeg 8.1.1 / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10；[9 项报告](../../artifacts/warning-policy/real-99bfc72a8373477dacf51a8e00524b70/report.json)。原表配错命令，是文档错误、不是回归；本次 `--warning-real` 的 [8/8](../../artifacts/warning-policy/real-2a100db1e6e6472cacd2ec5f22286dd7/report.json) 保留为补充记录，不替代 9 项基准。 |
+| 真实组件安装 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all-real` | 15/15 | 仅本地，需联网 | 2026-10-13：15/15，失败 0 | 受管 MKV 101.0 / FFmpeg 8.1.1-essentials_build / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10；[报告](../../artifacts/arch-corrections/real-baseline/component-install-all-real-report.json)、[实际版本](../../artifacts/arch-corrections/real-baseline/installed-tool-versions.json) |
+| 真实卸载循环 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-real artifacts/arch-corrections/real-baseline/packages` | 17/17 | 仅本地 | 2026-10-13：17/17，失败 0 | 受管 MKV 101.0（系统回退 100.0）/ FFmpeg 8.1.1-essentials_build / AFS 2.1.1 / assfonts 0.7.3 / fontTools 4.61.1 / Python 3.12.10；[报告](../../artifacts/arch-corrections/real-baseline/component-uninstall-real-report.json)、[七包校验](../../artifacts/arch-corrections/real-baseline/package-manifest-verified.json) |
 
 真实工具链基准须在开始 3b 前，于当时的分支头重跑一遍并记录到结果表，作为 3b–3e 的对照起点；报告文件保留在本机 `artifacts/`。
 
@@ -609,15 +609,25 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 
 ### 真实工具链基准重跑（2026-10-13，3b 前）
 
-输入为端口修正 9171c30；[Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38412696046) 完成 success，head_sha 核对一致。输出为六项“仅本地”真实验收的实际命令、计数、日期、工具版本与本机报告。失败行为：任一退出码、计数或结果与 121 / 37 / 39 / 9 / 15 / 17 基准不符即停止，不继续后续真实套件、不修订测试或基准、不开始 3b。现有真实入口实际为 --integration 和 --ui-integration（后者需要 fixture 与 screenshot 两个参数）；用户称呼的 --single-mux-integration / --single-mux-ui-integration 在当前 Program.cs 中不存在，按已存在入口执行，不新增或改变命令分派。旧源视频、字幕、字体只读，输出与下载缓存隔离。
+输入为端口修正 `9171c30` 的生产代码；[Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38412696046) 完成 success，head_sha 已核对一致。首次三项在该提交执行，续跑基线为纯文档提交 `f956e36`；已核对 `9171c30..f956e36` 的 src、tests、sln、props 没有变化，沿用同一 Release 编译产物。用户明确授权按历史入口完成电影，再顺序联网安装与固定包缓存卸载。输出为六项“仅本地”的命令、计数、日期、工具版本及本机报告，均写入上方对照表。
 
-本轮在 `9171c30` 上顺序运行。真实集成 121/121、多轨导入 37/37、真实 UI 39/39，均与基准一致；电影任务 exit 0、Succeeded、原生报告 Passed=8 / Failed=0，与基准 9 不符即停止。真实组件安装与卸载尚未运行，3b 未开始，本轮真实基准未验收完成。
+六项全部通过：真实集成 **121/121**、多轨导入 **37/37**、真实 UI **39/39**、完整电影 **9/9**、联网安装 **15/15**、固定包卸载 **17/17**，共 **6/6 套件、238/238 检查**，退出码与失败数均为 0。电影原生报告另确认 `SyntheticBoldExpected=true`、`Status=Succeeded`，原始/副本 ASS、字体和视频哈希检查通过。任何一项不符即停止的规则不变；未删除、跳过、放宽或修改测试，不重定义任何基准。
 
-计数差异只读对比：历史 [9 项报告](../../artifacts/warning-policy/real-e223f0011b774942bf40123b7b1c76a3/report.json) 的 SyntheticBoldExpected=true；本次 [8 项报告](../../artifacts/warning-policy/real-2a100db1e6e6472cacd2ec5f22286dd7/report.json) 为 false。唯一缺少的检查名是“真实 Regular-only 字体 fixture 验证合成粗体提示”，由现有 WarningPolicyChecks.RunRealAsync 的 expectSyntheticBold 分支产生，对应 Program.cs 的 `--warning-synthetic-bold-real <task.log>`。验收表的 `--warning-real <task.log>` 不启用该分支；没有删除、跳过或修改测试。按用户“任何一项与基准不符就停下来报告”要求，不自行更换入口或重定义 9 项基准，待用户确认后再按历史入口重跑并继续后两项。
+#### 电影入口文档修正与补充记录
 
-电影控制台不打印总计数，临时记录脚本最初无法从 stdout 解析计数（-1）；随后只读核对原生 JSON 和检查列表，确认实际 8/8。本次结果以原生报告为准，解析问题与真实 8/9 基准差异分别保留；未重跑或修改 harness。前四项本机日志、命令/日期汇总、工具版本在 `artifacts/arch-corrections/real-baseline/`，所有输出与下载素材隔离，电影源视频/ASS 原件与副本/字体哈希校验通过。真实 UI 为现有 headless 控件与真实 Core/工具流程，不替代原生选择器、Explorer、DPI 或播放器验收。
+原对照表将 9 项基准配成 `--warning-real <task.log>`，是**文档错误、不是回归**。历史 [9 项报告](../../artifacts/warning-policy/real-e223f0011b774942bf40123b7b1c76a3/report.json) 的 `SyntheticBoldExpected=true`，对应 `--warning-synthetic-bold-real <task.log>`。该入口在普通重放基础上额外检查“真实 Regular-only 字体 fixture 验证合成粗体提示”。本次按用户指定的同一请求日志执行历史入口，[原生报告](../../artifacts/warning-policy/real-99bfc72a8373477dacf51a8e00524b70/report.json) **9/9、失败 0、SyntheticBoldExpected=true**，命令已修正到对照表，9 项基准不变。
 
-实测工具：系统 MKVToolNix 三工具均 100.0；PATH FFmpeg 8.1.1-full_build；仓库 AFS 2.1.1+abeaf2a431ab95572379e8501a06b09389f5173d（发布包 v2.2.0 内部版本仍 2.1.1）；仓库字体后端 ttx/fontTools 4.61.1、Python 3.12.10。集成报告中的实际 ToolPaths 与版本查询路径逐项一致；尚未运行的安装/卸载不填写推测版本。共享文件、生产代码与测试均不再修改，本次仅更新任务记录。
+首次按原表运行的 `--warning-real artifacts/runs/20261009-115919-18aeaf51f58d43e5a4b935b9ce8b8f5b/task.log` 为 [8/8、失败 0](../../artifacts/warning-policy/real-2a100db1e6e6472cacd2ec5f22286dd7/report.json)，`SyntheticBoldExpected=false`，保留为补充记录，不替代合成粗体 9 项基准。首次因此暂停、只读对比并报告；用户明确确认历史入口后才续跑。电影控制台不打印总数，首次临时计数脚本无法解析 stdout；两份原生 JSON 的 8 与 9 项检查列表已分别核对，记录脚本现读取原生报告，不修改 harness。
+
+#### 安装、卸载与版本证据
+
+`--component-install-all-real` 真实联网下载并核验固定包、启动工具、重检测、验证移动目录和只装依赖路径，使用新安装的三组件及独立字体后端完成真实 ASS 子集化、封装和 QC，原生报告 **15/15、失败 0**。报告副本：[安装报告](../../artifacts/arch-corrections/real-baseline/component-install-all-real-report.json)；临时原目录为 `C:/Users/ZhenXun/AppData/Local/Temp/mux-deck-install-d4de6aa627a543cf9ba676f43c9a4f4b/`，未写入用户真实工具目录。
+
+卸载固定缓存为 `artifacts/arch-corrections/real-baseline/packages`，七个文件按当前 `ComponentReleases` 固定地址下载，大小和 SHA-256 **7/7** 核对一致；包括 mkv.zip、ffmpeg.zip、afs.zip、assfonts.zip、python.zip、fonttools.whl、pip.whl。生产安装器在卸载套件中再次核验，执行四组件真实安装/启动/卸载、系统回退、外部 AFS 主程序保留、独立依赖卸载重装及复用，原生报告 **17/17、失败 0**。证据：[包清单](../../artifacts/arch-corrections/real-baseline/package-manifest-verified.json)、[卸载报告](../../artifacts/arch-corrections/real-baseline/component-uninstall-real-report.json)；临时原目录为 `C:/Users/ZhenXun/AppData/Local/Temp/mux-deck-uninstall-bc4f366ec52b432e93c0a8924183e6a4/`。操作只限本次验收独占目录，系统工具与外部 AFS 文件哈希保留检查通过。
+
+电影与前三项使用系统 MKVToolNix 100.0、PATH FFmpeg 8.1.1-full_build、仓库 AFS 2.1.1+abeaf2a431ab95572379e8501a06b09389f5173d、ttx/fontTools 4.61.1、Python 3.12.10；[本机工具版本](../../artifacts/arch-corrections/real-baseline/tool-versions.json) 与集成报告实际 ToolPaths 一致。安装与卸载使用受管 MKVToolNix 101.0、FFmpeg 8.1.1-essentials_build、AFS 2.1.1（固定发布包 v2.2.0 的内部版本）、fontTools 4.61.1、Python 3.12.10；卸载还使用 assfonts **0.7.3**，系统回退仍为 MKVToolNix 100.0。证据：[安装后版本查询](../../artifacts/arch-corrections/real-baseline/installed-tool-versions.json)、[固定包 assfonts 实际版本](../../artifacts/arch-corrections/real-baseline/assfonts-version.json)。两个工具来源的版本分别记录，不以发布包名替代实际 AFS 返回值。
+
+六项命令与日期汇总、stdout、原生报告路径保存在 `artifacts/arch-corrections/real-baseline/`；源输入只读，输出、下载和暂存隔离。本轮真实 UI 为已有 headless 控件与真实 Core/工具流程，不替代原生选择器、Explorer、DPI 或播放器验收。本提交仅修订任务文档及其对照表，不改 ADR、步骤计划、骨架、生产代码、测试、sln、props、锁文件或诊断白名单；按已接受 ADR-0001 实施。按用户要求，六项全部通过后只做一笔纯文档提交、pull --rebase 并推送；工作流明确排除纯文档，不触发新的 Desktop CI。**3b 未开始，提交后停止等待用户确认。**
 
 ## 发现的旧缺陷
 
