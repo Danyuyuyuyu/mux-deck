@@ -211,8 +211,8 @@ public sealed partial class SingleMuxService
                     cancellationToken, TimeSpan.FromMinutes(10)).ConfigureAwait(false);
                 if (!File.Exists(referenceAss) || new FileInfo(referenceAss).Length == 0)
                     throw new InvalidDataException($"新增字幕 {i + 1} 未产出有效 ASS 校验参考字幕。");
-                if (NormalizeAss(SubtitleText.Read(referenceAss)) !=
-                    NormalizeAss(SubtitleText.Read(Path.Combine(extracted, $"subtitle-{i}" + Path.GetExtension(corrected[i])))))
+                if (!OutputQcRules.SubtitleContentEquals(SubtitleText.Read(referenceAss),
+                    SubtitleText.Read(Path.Combine(extracted, $"subtitle-{i}" + Path.GetExtension(corrected[i])))))
                     throw new InvalidDataException($"新增字幕 {i + 1} 提取后内容与同工具字幕参考不符。");
             }
             var attachmentArgs = new List<string> { temporaryMkv, "attachments" };
@@ -428,50 +428,22 @@ public sealed partial class SingleMuxService
 
     private static void CheckTracks(MediaProbe source, MediaProbe output, MuxRequest request, List<string> checks, IReadOnlyList<MediaProbe> audioSources)
     {
-        foreach (var type in new[] { "video", "audio" })
-        {
-            var before = source.Tracks.Where(x => x.Type == type).ToArray();
-            var after = output.Tracks.Where(x => x.Type == type).ToArray();
-            if (before.Length + (type == "audio" ? request.Audios.Count : 0) != after.Length) throw new InvalidDataException($"{type} 轨数量与请求不同。");
-            for (var i = 0; i < before.Length; i++)
-                // MP4 等容器不提供 Matroska codec_id/旗标；已知源字段严格比较，允许输出补齐缺失字段。
-                if (before[i].Codec != after[i].Codec || (before[i].CodecId is not null && before[i].CodecId != after[i].CodecId) ||
-                    (before[i].PixelDimensions is not null && before[i].PixelDimensions != after[i].PixelDimensions) ||
-                    (before[i].AudioChannels is not null && before[i].AudioChannels != after[i].AudioChannels) ||
-                    (before[i].AudioSamplingFrequency is not null && before[i].AudioSamplingFrequency != after[i].AudioSamplingFrequency) ||
-                    before[i].Name != after[i].Name || before[i].Language != after[i].Language ||
-                    (before[i].LanguageIetf is not null && !string.Equals(before[i].LanguageIetf, after[i].LanguageIetf, StringComparison.OrdinalIgnoreCase)) ||
-                    (before[i].HasDefaultFlag && before[i].IsDefault != after[i].IsDefault) ||
-                    (before[i].HasForcedFlag && before[i].IsForced != after[i].IsForced))
-                    throw new InvalidDataException($"{type} 轨 {i + 1} 的编码、媒体属性或轨道元数据与源文件不同。");
-            checks.Add($"保留 {before.Length} 条 {type} 轨：编码、尺寸/声道/采样率和轨道元数据一致");
-        }
-        // 只有所有 A/V 输入声明时长时才能预测总时长；不能拿字幕尾时间或未知 MP4 时长代替源证据。
-        long? expectedDuration = source.DurationNanoseconds;
-        if (audioSources.Count > 0)
-            expectedDuration = source.DurationNanoseconds is not null && audioSources.All(p => p.DurationNanoseconds is not null)
-                ? new[] { source.DurationNanoseconds.Value }.Concat(audioSources.Select(p => p.DurationNanoseconds!.Value)).Max() : null;
-        if (expectedDuration is { } duration && output.DurationNanoseconds is { } outputDuration &&
-            Math.Abs((double)duration - outputDuration) > Math.Max(1_000_000_000, duration * 0.01))
-            throw new InvalidDataException("成品时长与源文件不符。");
-        var subtitles = output.Tracks.Where(x => x.Type == "subtitles").ToArray();
-        if (subtitles.Length != request.Subtitles.Count) throw new InvalidDataException("新增字幕轨数量不符。");
-        for (var i = 0; i < subtitles.Length; i++)
-        {
-            var actual = subtitles[i];
-            var expected = request.Subtitles[i];
-            if (actual.CodecId != (MediaFileTypes.IsAss(expected.Path) ? "S_TEXT/ASS" : "S_TEXT/UTF8") || actual.Name != expected.Name ||
-                !LanguageMatches(actual, expected.Language) || actual.IsDefault != expected.IsDefault || actual.IsForced != expected.IsForced)
-                throw new InvalidDataException($"新增字幕轨 {i + 1} 的 ASS 类型、名称、语言、default 或 forced 旗标不符。");
-            checks.Add($"新增字幕 {i + 1}（轨 ID {actual.Id}）：{actual.Name} / {actual.LanguageIetf ?? actual.Language} / default={actual.IsDefault} / forced={actual.IsForced}");
-        }
-        CheckExternalAudio(source, output, request, audioSources, checks);
+        var subtitles = new EquatableArray<SubtitleQcFacts>(request.Subtitles.Select(input =>
+            new SubtitleQcFacts(MediaFileTypes.IsAss(input.Path), input.Name, input.Language, input.IsDefault, input.IsForced)));
+        var audios = new EquatableArray<AudioQcFacts>(request.Audios.Select(input =>
+            new AudioQcFacts(input.TrackId, input.Name, input.Language, input.IsDefault, input.IsForced)));
+        var sources = new EquatableArray<MediaQcFacts>(audioSources.Select(QcFacts));
+        var result = OutputQcRules.CheckTracks(QcFacts(source), QcFacts(output), subtitles, audios, sources);
+        checks.AddRange(result.Checks);
+        if (result.Error is not null) throw new InvalidDataException(result.Error);
     }
 
-    private static bool LanguageMatches(MediaTrack track, string language) =>
-        LanguageRules.Matches(track.Language, track.LanguageIetf, language);
-    // 仅统一文件换行；最后一条 Dialogue 的尾部空格也属于正文，必须保留比较。
-    private static string NormalizeAss(string text) => text.Replace("\r\n", "\n");
+    private static MediaQcFacts QcFacts(MediaProbe probe) => new(
+        new(probe.Tracks.Select(track => new TrackQcFacts(track.Id, track.Type, track.Codec, track.CodecId,
+            track.Language, track.LanguageIetf, track.Name, track.IsDefault, track.IsForced,
+            track.PixelDimensions, track.AudioChannels, track.AudioSamplingFrequency, track.HasDefaultFlag, track.HasForcedFlag))),
+        probe.DurationNanoseconds);
+
     private static bool IsFont(string path) => InputRules.IsFontExtension(Path.GetExtension(path));
     private static byte[] HashFile(string path) { using var stream = File.OpenRead(path); return SHA256.HashData(stream); }
     private static string Executable(string name) => name + (OperatingSystem.IsWindows() ? ".exe" : "");

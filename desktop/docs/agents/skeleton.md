@@ -52,7 +52,7 @@ Desktop → Core 保留到既有入口迁移完成；Desktop → Infrastructure 
 
 1a 选定并固定测试依赖：`xunit.v3` **3.2.2**、`xunit.runner.visualstudio` **3.1.4**、`Microsoft.NET.Test.Sdk` **17.14.1**；架构测试使用 `NetArchTest.Rules` **1.3.2**。所有新增项目提交 `packages.lock.json`，继续使用 `dotnet restore MuxDeck.sln --locked-mode`。
 
-Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Application；Architecture.Tests 验证全部生产项目（过渡期包含 Core），Smoke 仍只直接引用 Desktop。1b 初始新增 Domain 值类型测试 8 项、Core 旧模型转换测试 26 项；修正 B 后 Domain 为 15 项、Application 契约值相等测试 4 项，修正 C 后架构测试 91 项；2a 后 Domain 84 / 架构 94，2b 后 Domain 218 / 架构 95（仅新增规则与护栏用例）。Application 流程尚未迁移，当前流程用例 0。Core.Tests 只直接引用 Core，不放宽既有分层测试依赖。架构测试检查 restore 后的实际直接项目引用、Domain 包依赖、程序集与命名空间依赖、Views/ViewModels 的契约与接口边界，以及 Infrastructure 只能由 Program/Composition 使用的装配边界（含源码路径）。字段、泛型、构造调用和异步方法反例验证 NetArchTest 的扫描能力。
+Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Application；Architecture.Tests 验证全部生产项目（过渡期包含 Core），Smoke 仍只直接引用 Desktop。1b 初始新增 Domain 值类型测试 8 项、Core 旧模型转换测试 26 项；修正 B 后 Domain 为 15 项、Application 契约值相等测试 4 项，修正 C 后架构测试 91 项；2a 后 Domain 84 / 架构 94，2b 后 Domain 218 / 架构 95；输入位置枚举合并后 Application 9；2c 后 Domain 294 / 架构 98（仅新增规则与护栏用例）。Application 流程尚未迁移，当前流程用例 0。Core.Tests 只直接引用 Core，不放宽既有分层测试依赖。架构测试检查 restore 后的实际直接项目引用、Domain 包依赖、程序集与命名空间依赖、Views/ViewModels 的契约与接口边界，以及 Infrastructure 只能由 Program/Composition 使用的装配边界（含源码路径）。字段、泛型、构造调用和异步方法反例验证 NetArchTest 的扫描能力。
 
 ## 契约
 
@@ -140,6 +140,14 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 - 固定槽位仍只接纳 MKV/MP4 与 ASS，自动导入保留原有广泛视频/音频/ASS/SRT/字体入口。两者的设备路径与规范化细节差异保持原行为，不统一或扩大允许范围。
 - 准备/提交、编辑锁、迟到修订、替换确认、原拒绝文案和全批次原子更新仍留 Desktop，随 4b 迁移。SC/TC 去重比较最终槽位集合；同音频容器按真实 Track ID 区分，字幕按文件身份去重。Domain 规则测试与新增副作用架构检查覆盖这些边界。
 
+#### 2c 诊断、QC 与 ASS 解析已迁入 Domain
+
+- `DiagnosticPolicy.cs` 维护唯一 AFS 物理行分类实现，ANSI、精确颜色白名单、未知级别/诊断与原 code/message 保持不变。Core `AfsDiagnosticClassifier` 只转接旧数据形状；有界分块重组、流复核和 warning 合并仍由旧收集器完成。
+- `OutputQcRules.cs` 负责保留源 A/V 的已知元数据、新增字幕/音频规格、真实音轨 ID 及已声明 A/V 时长比较；输入为 `OutputQcFacts.cs` 的不可变事实。结果保留按原顺序通过的检查项及失败文案，旧边界先追加检查项，再抛原数据异常。
+- 字幕全文比较也由 `OutputQcRules` 负责，只归一 CRLF/LF；同工具 transport 参考生成、提取和文件读取仍在旧边界。Dialogue 文本、时序、Style、字体、事件顺序与末尾空格不能丢弃或放宽。
+- `AssDocument.cs` 负责必要节、样式、字体/粗斜体覆盖、绘图忽略、Unicode 码点与 AFS mapping 解析，返回不可变使用/映射集合；动画字体切换、未知样式、非标准字重等原拒绝保持不变。UTF-8/BOM 文件读取、ttx 读取及字体候选/字形/固有粗体证明仍在 Core，IO 适配随 3b 搬迁。
+- Domain 的解析拒绝使用无 IO 依赖的 `MediaRuleException`，旧边界转换为原 `InvalidDataException` 文案；不把文件、进程、时间、Environment 或具体工具类型带入 Domain。原 `diagnostics.md` 白名单未修改。
+
 #### 阶段一单任务职责
 
 阶段一尚未迁出的业务编排与媒体工具代码位于 `src/MuxDeck.Core/Muxing/`。下表路径相对于 `src/MuxDeck.Core/`；进程技术适配位于 Core 根目录，不拆出额外生产项目：
@@ -148,13 +156,13 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 |---|---|---|
 | 旧请求、结果、状态、进度、轨道探测模型；1b 兼容转换 | `Muxing/MuxModels.cs`、`Muxing/LegacyMuxContractConverter.cs`（新增） | 以不可变业务数据表达；字幕输入保留路径、名字、语言和 default/forced 选择 |
 | 单任务整流程、AFS/mkvmerge/mkvextract 参数与 JSON 探测 | `Muxing/SingleMuxService.cs`、`Muxing/ExternalMedia.cs` | 一个 `RunAsync` 入口拥有任务日志/临时目录、进度、取消与清理；固定 PyFontTools；按检查、探测、子集化、封装、QC、不覆盖落位排序 |
-| AFS 诊断分类与结果 warning | `Muxing/AfsDiagnosticClassifier.cs`、`Muxing/MuxModels.cs`、`Muxing/SingleMuxService.cs` | 分类白名单、未知诊断与可继续告警行为以[工具诊断分类](diagnostics.md)为准；流程返回结构化 warning |
-| ASS 字形使用解析及子集字体校验 | `Muxing/AssGlyphValidator.cs` | 读取 UTF-8 ASS 样式与覆盖字体，按对白统计实际码点，再与 ttx 导出的字体 `name`/`cmap` 表核对 |
+| AFS 诊断分类与结果 warning | `Muxing/AfsDiagnosticClassifier.cs`、`Muxing/MuxModels.cs`、`Muxing/SingleMuxService.cs` | 分类调用 Domain `DiagnosticPolicy`，旧入口只转换数据形状；白名单、未知诊断与可继续告警行为以[工具诊断分类](diagnostics.md)为准；流程返回结构化 warning |
+| ASS 字形使用解析及子集字体校验 | `Muxing/AssGlyphValidator.cs` | 读取 UTF-8 后调用 Domain `AssDocument` 解析样式、覆盖字体和对白码点；Core 保留 ttx `name`/`cmap` 读取及字体候选/字形核验 |
 | 可替换的外部进程边界 | `Muxing/IMuxToolRunner.cs` | `IMuxToolRunner` 只包住外部进程执行；默认 `MuxToolRunner` 复用 `ProcessRunner`，测试注入保持在这个具体边界 |
-| QC 判定 | `Muxing/SingleMuxService.cs` 私有探测/QC 流程和 `Muxing/AssGlyphValidator.cs` | 对比源视频与音轨，逐轨验证新增 ASS 名称/语言/default/forced；验证附件身份、大小、类型、提取 SHA-256 和 ASS 内容；不能仅按语言找到任意轨即通过。ASS 以同一 MKVToolNix 将每条修正 ASS 单独封装、提取为参考，与真实成品提取全文比较；仅统一 CRLF/LF，Dialogue 文本、时序、Style、字体、事件顺序和文本边缘空格均须一致 |
+| QC 判定 | `Muxing/SingleMuxService.cs` 调用 Domain `OutputQcRules`；`Muxing/AssGlyphValidator.cs` 保留字体 IO 核验 | Domain 对比源视频与音轨，逐轨验证新增 ASS 名称/语言/default/forced；验证附件身份、大小、类型、提取 SHA-256 和 ASS 内容；不能仅按语言找到任意轨即通过。ASS 以同一 MKVToolNix 将每条修正 ASS 单独封装、提取为参考，与真实成品提取全文比较；仅统一 CRLF/LF，Dialogue 文本、时序、Style、字体、事件顺序和文本边缘空格均须一致 |
 | 文件、进程与日志支持 | `ProcessRunner.cs`、`WindowsProcessJob.cs` 与 `Muxing/SingleMuxService.cs` | 运行级临时目录和完整任务日志；已归属 Job 的工具进程用取消/父退出收尾；`Process.Start()` 到 Assign Job 存在未覆盖竞态，不能承诺任意 launcher 的后代全终止；目标用同目录临时文件及不覆盖 rename 落位 |
 
-新增的多轨与自动导入范围以 [自动拖放任务](../tasks/automatic-media-drop.md) 为准：`SubtitleText` 统一 ASS/SRT 的 UTF-8 与结构校验，ASS 继续使用 `AssGlyphValidator`；外加音频包含真实输入 Track ID，`ExternalMedia` 构建选择参数并核验编码、声道、采样率与元数据。字幕采用同工具往返全文参考，音频采用同工具参考的 `--fullraw`（含 CodecPrivate）SHA-256，任一不符阻止发布。只在 A/V 输入时长均已声明时检查总时长，不以字幕尾时间替代未知容器数据。
+新增的多轨与自动导入范围以 [自动拖放任务](../tasks/automatic-media-drop.md) 为准：`SubtitleText` 统一 ASS/SRT 的 UTF-8 与结构校验，ASS 继续使用 `AssGlyphValidator`；外加音频包含真实输入 Track ID，`ExternalMedia` 构建选择参数；编码、声道、采样率与元数据的 QC 调用 Domain `OutputQcRules`。字幕采用同工具往返全文参考，音频采用同工具参考的 `--fullraw`（含 CodecPrivate）SHA-256，任一不符阻止发布。只在 A/V 输入时长均已声明时检查总时长，不以字幕尾时间替代未知容器数据。
 
 接口合同与第一阶段具体验收案例见 [阶段一任务](../tasks/phase-1-single-mux.md)。Core 已确认的探测类型为 `MediaTrack`、`MediaAttachment`、`MediaProbe`；公开的单任务签名按任务文档约定，真实文件和额外依赖以实现为准。
 

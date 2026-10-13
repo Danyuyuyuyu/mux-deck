@@ -206,7 +206,7 @@
 | [1b · `aa85458`](https://github.com/Danyuyuyuyu/mux-deck/commit/aa85458a3caf7b11e76ae5f7d60317d3c862ffe8) | 已完成，已推送，Desktop CI 通过 | restore 10/10；Release 0 警告 / 0 错误；dotnet test 71/71（转换 26、Domain 8、架构 37）；受控 13/13 套件、656/656；契约两条故意违反均被拒绝 | 公共不可变契约、四个 Domain 值类型与 Core 兼容转换；旧调用方零改动；详见下方命令与计数。未重放真实工具链或原生 UI。 |
 | [2a · `34c4c18`](https://github.com/Danyuyuyuyu/mux-deck/commit/34c4c1827169270c715a955fe027a0bd6622509d) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38390147903) | locked restore 10/10；Release 0 警告 / 0 错误；dotnet test 208/208；受控 13/13、656/656 | TrackPolicy、LanguageRules、OutputNaming 已迁入 Domain；新增 Domain 69、架构 3，原 136 全部保留；详见 2a 实际验证。 |
 | [2b · `90fff6c`](https://github.com/Danyuyuyuyu/mux-deck/commit/90fff6c47d8a3fcef6c509fa81ec91f80425b865) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38393673757) | locked restore 10/10；Release 0 警告 / 0 错误；dotnet test 343/343；受控 13/13、656/656；接纳 89/89、自动导入 25/25 | InputRules 已落位；新增 Domain 134、架构 1，原 208 保留；IO 事实留边界，原入口差异不变；详见 2b 实施与验证。 |
-| 2c | 未开始 | | |
+| 2c | 本地验证完成，待推送及 CI | restore 10/10；Release 0 警告 / 0 错误；test 427/427；受控 13/13、656/656；warning-policy 57/57 | DiagnosticPolicy、OutputQcRules、AssDocument 已落位；新增 Domain 76、架构 3；原 348 保留，白名单未变。 |
 | 3a | 未开始 | | |
 | 3b | 未开始 | | |
 | 3c | 未开始 | | |
@@ -455,7 +455,47 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall` | 26/26 |
 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui` | 61/61 |
 
-枚举修正本地验证完成，CI 链接待补；未重放真实工具链或原生 UI。共享文件仅 skeleton.md，sln、锁文件、props、ADR 不变。
+枚举修正提交 [10255a2](https://github.com/Danyuyuyuyu/mux-deck/commit/10255a236c6826825da9bb4be9abba55fb31e1ef) 的 [Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38397219246) 已完成 success，核对 head_sha 一致，CI 通过后才开始 2c；未重放真实工具链或原生 UI。共享文件仅 skeleton.md，sln、锁文件、props、ADR 不变。
+
+### 2c 实施与验证（2026-10-13）
+
+输入：枚举合并提交 `10255a2` 的 [Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38397219246) 已完成 success。输出：Domain `DiagnosticPolicy`、`OutputQcRules`、`AssDocument`，原 Core 位置只负责事实转换、IO 与调用。失败行为：诊断白名单、QC 拒绝与原错误文案保持不变；Domain 规则失败在旧边界映射为原 InvalidDataException，不新增架构例外。验收覆盖精确颜色告警/未知诊断、源/新增轨道元数据、时长、ASS 样式/覆盖/码点/动画拒绝、仅 CRLF/LF 归一与全文比较（Dialogue 文本/时序/Style/字体/顺序/末尾空格反例）。真实 ttx 与文件/进程操作不进 Domain，字体元数据读取及兼容证明保留原实现，随第 3 步处理；不改 `diagnostics.md`、工具参数或 ADR。
+
+规则与既有回归对应：
+
+| 新增测试 | 计数 | 对应场景与反例 |
+|---|---|---|
+| `DiagnosticPolicyTests` | 23 | `--warning-policy` 唯一颜色白名单五种标签、未知 warning、危险后缀/多逻辑行、原始错误、未知/无法解析级别、ANSI、普通 INF/DBG 与文本 |
+| `AssDocumentTests` | 12 | Smoke / `--warning-policy` 必要节、字体/粗斜体覆盖与 reset、Unicode/ASS 转义、绘图忽略、动画拒绝、非标准字重、未知样式/格式字段、mapping 归一与歧义拒绝 |
+| `OutputQcRulesTests` | 41 | Smoke / `--warning-policy` 已知源字段严格匹配与缺失字段保留未知、新增字幕/音频逐字段拒绝、真实 Track ID、时长容差与未知时长、失败前检查保留；同工具字幕全文只归一 CRLF/LF，Dialogue 文本/时序/Style/字体/顺序/末尾空格变化均拒绝 |
+| `DiagnosticAndQcBoundaryTests` | 3 | 非空扫描三个真实 Domain 规则，禁止 IO/进程/网络/Environment/Console/Avalonia、Core/Contracts 与时间/ID 依赖 |
+
+最终实现返回不可变 QC 结果，避免 C# yield 状态机自动调用 Environment.CurrentManagedThreadId；未修改、跳过或增加例外来绕过护栏。ASS 解析结果为不可变使用/映射集合，旧字体校验边界转换为原字典；ttx 读取、候选字体/字形验证、原生/合成粗体证明、参考生成和文件提取保持原实现。已知规则失败的错误文案与此前通过的检查项均保留。
+
+以下命令均在 `desktop/` 实际执行：
+
+| 实际命令 | 结果 |
+|---|---|
+| `dotnet restore MuxDeck.sln --locked-mode` | 10/10 项目成功 |
+| `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false` | 10/10 项目，0 警告 / 0 错误 |
+| `dotnet test MuxDeck.sln --no-build -c Release` | 427/427（Domain 294、Application 9、Core 26、Architecture 98），失败/跳过 0 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release` | 28/28 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-policy` | 57/57 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-round1` | 89/89 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-ui-round1` | 176/176 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --workbench-ui` | 38/38 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --input-feedback` | 24/24 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop` | 25/25 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --environment-ui` | 23/23 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --components` | 31/31 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-ui` | 37/37 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all` | 41/41 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall` | 26/26 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui` | 61/61 |
+
+348 → 427，仅新增 79 项：Domain 76、架构 3；原 348 项全部保留，既有测试零修改。13/13 受控套件、656/656，与基准一致；告警策略明确重跑 57/57，白名单未变。日志：`artifacts/arch-corrections/2c/`，ASS/诊断/元数据拒绝通过公共旧服务回归核验。
+
+共享文件仅 `docs/agents/skeleton.md` 同步迁移现状、契约枚举与测试计数；本任务记录枚举修正及 2c 实测结果。未修改 sln、锁文件、props、ADR、步骤计划或 `diagnostics.md`。按已接受 ADR-0001 实施，工具参数与 QC 规则语义未改。未重放真实媒体工具链、原生选择器、Explorer、高 DPI 或播放器，真实工具链基准仍需在 3b 前重跑。2c 本地验证完成，推送后补入实现提交与 CI 链接。
 
 ## 发现的旧缺陷
 
