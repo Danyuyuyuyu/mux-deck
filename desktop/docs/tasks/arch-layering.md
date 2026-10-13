@@ -141,28 +141,28 @@
 
 “既有回归不退化”指计数与下表一致，且全部通过。计数取自重构开始前最近一次记录；受控套件已在 CI 运行（[提交 `65da1f7` 的运行](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38377836030)全部通过）。第一个实际运行某套件的步骤，须把实测计数写入结果表；与下表不同时先说明原因，确认后以实测值为新基准。
 
-| 套件 | 命令参数 | 基准 | 运行位置 |
-|---|---|---|---|
-| Smoke | （无参数） | 28/28 | CI + 本地 |
-| 分层与架构测试 | `dotnet test` | 32/32（1a） | CI + 本地 |
-| 告警策略 | `--warning-policy` | 57/57 | CI + 本地 |
-| 单个封装接纳 | `--single-mux-round1` | 89/89 | CI + 本地 |
-| 单个封装 UI | `--single-mux-ui-round1` | 176/176 | CI + 本地 |
-| 工作台 | `--workbench-ui` | 38/38 | CI + 本地 |
-| 输入反馈 | `--input-feedback` | 24/24 | CI + 本地 |
-| 自动导入（受控） | `--media-drop` | 25/25 | CI + 本地 |
-| 环境 UI | `--environment-ui` | 23/23 | CI + 本地 |
-| 组件检测（受控） | `--components` | 31/31 | CI + 本地 |
-| 组件安装 UI | `--component-install-ui` | 37/37 | CI + 本地 |
-| 组件安装（受控） | `--component-install-all` | 41/41 | CI + 本地 |
-| 组件卸载（受控） | `--component-uninstall` | 26/26 | CI + 本地 |
-| 组件卸载 UI | `--component-uninstall-ui` | 61/61 | CI + 本地 |
-| 真实工具链 | `--integration` | 121/121 | 仅本地 |
-| 真实多轨导入 | `--media-drop-real` | 37/37 | 仅本地 |
-| 真实 UI | `--ui-integration <fixture>` | 39/39 | 仅本地 |
-| 完整电影重放 | `--warning-real <task.log>` | 9/9 | 仅本地 |
-| 真实组件安装 | `--component-install-all-real` | 15/15 | 仅本地，需联网 |
-| 真实卸载循环 | `--component-uninstall-real <缓存目录>` | 17/17 | 仅本地 |
+| 套件 | 实际命令 / 参数 | 基准 | 运行位置 | 本轮日期 / 计数 | 工具版本 / 证据 |
+|---|---|---|---|---|---|
+| Smoke | （无参数） | 28/28 | CI + 本地 | — | — |
+| 分层与架构测试 | `dotnet test` | 32/32（1a） | CI + 本地 | — | — |
+| 告警策略 | `--warning-policy` | 57/57 | CI + 本地 | — | — |
+| 单个封装接纳 | `--single-mux-round1` | 89/89 | CI + 本地 | — | — |
+| 单个封装 UI | `--single-mux-ui-round1` | 176/176 | CI + 本地 | — | — |
+| 工作台 | `--workbench-ui` | 38/38 | CI + 本地 | — | — |
+| 输入反馈 | `--input-feedback` | 24/24 | CI + 本地 | — | — |
+| 自动导入（受控） | `--media-drop` | 25/25 | CI + 本地 | — | — |
+| 环境 UI | `--environment-ui` | 23/23 | CI + 本地 | — | — |
+| 组件检测（受控） | `--components` | 31/31 | CI + 本地 | — | — |
+| 组件安装 UI | `--component-install-ui` | 37/37 | CI + 本地 | — | — |
+| 组件安装（受控） | `--component-install-all` | 41/41 | CI + 本地 | — | — |
+| 组件卸载（受控） | `--component-uninstall` | 26/26 | CI + 本地 | — | — |
+| 组件卸载 UI | `--component-uninstall-ui` | 61/61 | CI + 本地 | — | — |
+| 真实工具链 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --integration` | 121/121 | 仅本地 | 2026-10-13：121/121，失败 0 | MKV 100.0 / FFmpeg 8.1.1 / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10；[报告](../../artifacts/phase1/20261013-142859-82b3d25cf1e54a029ee505f2922a67b2/report.json) |
+| 真实多轨导入 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop-real` | 37/37 | 仅本地 | 2026-10-13：37/37，失败 0 | MKV 100.0 / FFmpeg 8.1.1 / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10；[报告](../../artifacts/automatic-drop/real-1f9252ddf7484002b912bd2b8ce067db/report.json) |
+| 真实 UI | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --ui-integration artifacts/phase1/20261013-142859-82b3d25cf1e54a029ee505f2922a67b2 artifacts/arch-corrections/real-baseline/new-ui.png` | 39/39 | 仅本地 | 2026-10-13：39/39，失败 0 | MKV 100.0 / FFmpeg 8.1.1 / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10；[报告](../../artifacts/single-mux-round1-b/real-0894ff063db94e0c9d57b4d3358cd596/report.json) |
+| 完整电影重放 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-real artifacts/runs/20261009-115919-18aeaf51f58d43e5a4b935b9ce8b8f5b/task.log` | 9/9 | 仅本地 | 2026-10-13：8/8，失败 0；与 9 项基准不符，停止 | MKV 100.0 / FFmpeg 8.1.1 / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10；[报告](../../artifacts/warning-policy/real-2a100db1e6e6472cacd2ec5f22286dd7/report.json) |
+| 真实组件安装 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all-real` | 15/15 | 仅本地，需联网 | 2026-10-13：未运行：前项计数不符，停止 | — |
+| 真实卸载循环 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-real <固定发布包缓存目录>` | 17/17 | 仅本地 | 2026-10-13：未运行：前项计数不符，停止 | — |
 
 真实工具链基准须在开始 3b 前，于当时的分支头重跑一遍并记录到结果表，作为 3b–3e 的对照起点；报告文件保留在本机 `artifacts/`。
 
@@ -582,7 +582,7 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 
 #### 3a 修正：端口失败约定与中间文件引用
 
-输入：9a45de2 的 CI 已通过。输出：Ports/Failures 的统一 ToolFailureException(Code, Message, Detail)、ErrorCodes 的退出/解析/Fatal 三类集中错误码及 Ports.WorkFile。失败行为：工具退出码异常、输出解析失败、Fatal 诊断抛 ToolFailureException，取消抛 OperationCanceledException；构造异常拒绝不属于 ErrorCodes 的码，保留原始 Detail。所有端口及调用成员 XML 注释明确该约定；中间文件只用 WorkFile，只有最终发布返回 OutputArtifact。既有 record 数据护栏保持不变，失败异常按 Exception 专门验证，另新增覆盖整个 Ports 子命名空间的形状检查，不修改或豁免 Contracts 不可变规则。验收：错误码/原文、所有端口注释、WorkFile 归属与最终产物边界、全部原有测试与受控回归。ADR、步骤计划、诊断白名单、旧 Core 和真实调用行为不变。实际验证：520 → 549，仅新增 29 项（Application 12：集中码/原文/Detail、未知码拒绝、工作文件值语义；Architecture 17：异常归属/只读载荷、Ports 子命名空间形状、中间/最终文件边界、全部十个端口与工作区接口 XML、泛型签名反例）。原 520 项全部保留，既有 Ports / Contracts / QC 测试文件零修改；日志 `artifacts/arch-corrections/3a-ports/`。受控 13/13、656/656，warning-policy 57/57；CI 待端口修正提交推送后核对并补入链接。
+输入：9a45de2 的 CI 已通过。输出：Ports/Failures 的统一 ToolFailureException(Code, Message, Detail)、ErrorCodes 的退出/解析/Fatal 三类集中错误码及 Ports.WorkFile。失败行为：工具退出码异常、输出解析失败、Fatal 诊断抛 ToolFailureException，取消抛 OperationCanceledException；构造异常拒绝不属于 ErrorCodes 的码，保留原始 Detail。所有端口及调用成员 XML 注释明确该约定；中间文件只用 WorkFile，只有最终发布返回 OutputArtifact。既有 record 数据护栏保持不变，失败异常按 Exception 专门验证，另新增覆盖整个 Ports 子命名空间的形状检查，不修改或豁免 Contracts 不可变规则。验收：错误码/原文、所有端口注释、WorkFile 归属与最终产物边界、全部原有测试与受控回归。ADR、步骤计划、诊断白名单、旧 Core 和真实调用行为不变。实际验证：520 → 549，仅新增 29 项（Application 12：集中码/原文/Detail、未知码拒绝、工作文件值语义；Architecture 17：异常归属/只读载荷、Ports 子命名空间形状、中间/最终文件边界、全部十个端口与工作区接口 XML、泛型签名反例）。原 520 项全部保留，既有 Ports / Contracts / QC 测试文件零修改；日志 `artifacts/arch-corrections/3a-ports/`。受控 13/13、656/656，warning-policy 57/57；实现提交 [9171c30](https://github.com/Danyuyuyuyu/mux-deck/commit/9171c307571bf188b2fd78f78b533898ff712b1b) 本地全部验证后 pull --rebase 并推送；[Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38412696046) 完成 success，workflow 与 desktop job 全部通过，head_sha 已核对一致。确认通过后开始真实基准重跑。
 
 | 实际命令（desktop/） | 结果 |
 |---|---|
@@ -606,6 +606,18 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 共享文件仅 skeleton.md，同步端口失败、取消和工作文件约定；sln、props、锁文件、ADR、步骤计划和 diagnostics.md 不变。错误码仅向 ErrorCodes 添加三项，原常量不变；旧 Core 及真实调用方零修改，行为未接入新端口。下一项真实基准必须待本项 CI 通过才运行，任一真实结果与原计数不符立即停止，不开始 3b。
 
 
+
+### 真实工具链基准重跑（2026-10-13，3b 前）
+
+输入为端口修正 9171c30；[Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38412696046) 完成 success，head_sha 核对一致。输出为六项“仅本地”真实验收的实际命令、计数、日期、工具版本与本机报告。失败行为：任一退出码、计数或结果与 121 / 37 / 39 / 9 / 15 / 17 基准不符即停止，不继续后续真实套件、不修订测试或基准、不开始 3b。现有真实入口实际为 --integration 和 --ui-integration（后者需要 fixture 与 screenshot 两个参数）；用户称呼的 --single-mux-integration / --single-mux-ui-integration 在当前 Program.cs 中不存在，按已存在入口执行，不新增或改变命令分派。旧源视频、字幕、字体只读，输出与下载缓存隔离。
+
+本轮在 `9171c30` 上顺序运行。真实集成 121/121、多轨导入 37/37、真实 UI 39/39，均与基准一致；电影任务 exit 0、Succeeded、原生报告 Passed=8 / Failed=0，与基准 9 不符即停止。真实组件安装与卸载尚未运行，3b 未开始，本轮真实基准未验收完成。
+
+计数差异只读对比：历史 [9 项报告](../../artifacts/warning-policy/real-e223f0011b774942bf40123b7b1c76a3/report.json) 的 SyntheticBoldExpected=true；本次 [8 项报告](../../artifacts/warning-policy/real-2a100db1e6e6472cacd2ec5f22286dd7/report.json) 为 false。唯一缺少的检查名是“真实 Regular-only 字体 fixture 验证合成粗体提示”，由现有 WarningPolicyChecks.RunRealAsync 的 expectSyntheticBold 分支产生，对应 Program.cs 的 `--warning-synthetic-bold-real <task.log>`。验收表的 `--warning-real <task.log>` 不启用该分支；没有删除、跳过或修改测试。按用户“任何一项与基准不符就停下来报告”要求，不自行更换入口或重定义 9 项基准，待用户确认后再按历史入口重跑并继续后两项。
+
+电影控制台不打印总计数，临时记录脚本最初无法从 stdout 解析计数（-1）；随后只读核对原生 JSON 和检查列表，确认实际 8/8。本次结果以原生报告为准，解析问题与真实 8/9 基准差异分别保留；未重跑或修改 harness。前四项本机日志、命令/日期汇总、工具版本在 `artifacts/arch-corrections/real-baseline/`，所有输出与下载素材隔离，电影源视频/ASS 原件与副本/字体哈希校验通过。真实 UI 为现有 headless 控件与真实 Core/工具流程，不替代原生选择器、Explorer、DPI 或播放器验收。
+
+实测工具：系统 MKVToolNix 三工具均 100.0；PATH FFmpeg 8.1.1-full_build；仓库 AFS 2.1.1+abeaf2a431ab95572379e8501a06b09389f5173d（发布包 v2.2.0 内部版本仍 2.1.1）；仓库字体后端 ttx/fontTools 4.61.1、Python 3.12.10。集成报告中的实际 ToolPaths 与版本查询路径逐项一致；尚未运行的安装/卸载不填写推测版本。共享文件、生产代码与测试均不再修改，本次仅更新任务记录。
 
 ## 发现的旧缺陷
 
