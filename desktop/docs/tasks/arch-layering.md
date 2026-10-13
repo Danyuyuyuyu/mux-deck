@@ -135,7 +135,68 @@
 
 ## 验收
 
-满足[开发流程](../agents/migration.md#架构分层重构)中的完成条件，并在下方逐步骤记录：提交链接、实际验证命令与计数、真实工具链对照结论、未覆盖项。
+整体完成条件以[开发流程](../agents/migration.md#架构分层重构)为准。本节给出对照基准、每步通用清单和各步骤的完成标准；每步全部满足才可推送，并在下方“实施结果”逐步骤记录提交链接、实际命令与计数、真实工具链对照结论和未覆盖项。
+
+### 对照基准
+
+“既有回归不退化”指计数与下表一致，且全部通过。计数取自重构开始前最近一次记录；受控套件已在 CI 运行（[提交 `65da1f7` 的运行](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38377836030)全部通过）。第一个实际运行某套件的步骤，须把实测计数写入结果表；与下表不同时先说明原因，确认后以实测值为新基准。
+
+| 套件 | 命令参数 | 基准 | 运行位置 |
+|---|---|---|---|
+| Smoke | （无参数） | 28/28 | CI + 本地 |
+| 分层与架构测试 | `dotnet test` | 32/32（1a） | CI + 本地 |
+| 告警策略 | `--warning-policy` | 57/57 | CI + 本地 |
+| 单个封装接纳 | `--single-mux-round1` | 89/89 | CI + 本地 |
+| 单个封装 UI | `--single-mux-ui-round1` | 176/176 | CI + 本地 |
+| 工作台 | `--workbench-ui` | 38/38 | CI + 本地 |
+| 输入反馈 | `--input-feedback` | 24/24 | CI + 本地 |
+| 自动导入（受控） | `--media-drop` | 25/25 | CI + 本地 |
+| 环境 UI | `--environment-ui` | 23/23 | CI + 本地 |
+| 组件检测（受控） | `--components` | 31/31 | CI + 本地 |
+| 组件安装 UI | `--component-install-ui` | 37/37 | CI + 本地 |
+| 组件安装（受控） | `--component-install-all` | 41/41 | CI + 本地 |
+| 组件卸载（受控） | `--component-uninstall` | 26/26 | CI + 本地 |
+| 组件卸载 UI | `--component-uninstall-ui` | 61/61 | CI + 本地 |
+| 真实工具链 | `--integration` | 121/121 | 仅本地 |
+| 真实多轨导入 | `--media-drop-real` | 37/37 | 仅本地 |
+| 真实 UI | `--ui-integration <fixture>` | 39/39 | 仅本地 |
+| 完整电影重放 | `--warning-real <task.log>` | 9/9 | 仅本地 |
+| 真实组件安装 | `--component-install-all-real` | 15/15 | 仅本地，需联网 |
+| 真实卸载循环 | `--component-uninstall-real <缓存目录>` | 17/17 | 仅本地 |
+
+真实工具链基准须在开始 3b 前，于当时的分支头重跑一遍并记录到结果表，作为 3b–3e 的对照起点；报告文件保留在本机 `artifacts/`。
+
+### 每步通用清单
+
+1. **范围**：只改本步骤列出的文件；共享文件（`MuxDeck.sln`、锁文件、`Directory.Build.props`、`docs/agents/`）的修改在提交正文中逐项说明。
+2. **本地验证**：`dotnet restore --locked-mode` 成功；Release 构建 0 警告 / 0 错误；`dotnet test` 全部通过；表中“CI + 本地”套件全部等于基准。
+3. **CI**：推送后 Desktop 工作流通过；失败时立即修复或 `git revert`，恢复前不开始下一步。
+4. **计数变化**：只允许因新增用例而增加，或因迁移用例而在套件间转移（注明来源与去向）；任何减少都必须说明原因，不能静默删除用例。
+5. **护栏不放宽**：不新增架构测试例外、跳过或条件豁免；确需过渡例外时注明原因及在哪一步移除。
+6. **行为不变**：用户可见文案、默认值、外部工具参数、QC 判定与[诊断白名单](../agents/diagnostics.md)不变；`diagnostics.md` 无改动。
+7. **一份实现**：迁出的规则或流程在原位置不保留副本，原位置只剩调用。
+8. **文档同步**：更新本文结果表对应行；搬迁哪部分，就改写 `skeleton.md` “迁移前现状”的对应条目。
+9. **提交**：提交摘要带步骤号，正文含 `Validation:`（实际命令与计数）；发现的旧缺陷写入“发现的旧缺陷”，不混入本步骤。
+
+### 各步骤完成标准
+
+| 步骤 | 完成标准（在通用清单之外） |
+|---|---|
+| **1a** | 三个空生产项目与三个测试项目建立；`skeleton.md` 每条依赖规则至少 1 个架构测试，且每条都经本地故意违反确认会失败；CI 执行 `dotnet test`（已完成，见结果表） |
+| **1b** | 契约位于 `src/MuxDeck.Application/Contracts/`、命名空间 `MuxDeck.Contracts`，值类型位于 Domain；新增架构测试：Contracts 只依赖 `System.*` 与 Domain，类型均为 public，并经故意违反确认；转换测试覆盖 `MuxRequest ↔ MuxJobSpec` 往返（字幕/音频集合、语言、default/forced、输出名为空）及 `MuxResult → MuxJobResult` 的成功/失败/取消各至少 1 例，旧文本检查项原文保留；除新增转换类外，现有调用方零改动 |
+| **2a** | 默认轨、纳入策略、语言推断、`LanguageMatches`、输出文件名规则均有 Domain 单元测试，每条规则至少 1 个有效输入和 1 个关键反例，并注明对应的既有 Smoke 场景；新增架构测试：Domain 不使用文件、目录、进程、时间等副作用 API |
+| **2b** | `MediaFileTypes`、字体扩展名识别与接纳中的路径/去重/数量/类型判定迁入 `InputRules` 并有单元测试；文件存在性仍在 Domain 之外，判定只接收传入的事实；接纳 89/89 与自动导入 25/25 等于基准 |
+| **2c** | 诊断分类、`CheckTracks`、ASS 归一与全文比较、ASS 解析迁入 Domain 并有单元测试，含 Dialogue 文本/时序/Style/字体/顺序/末尾空格变化的拒绝反例；`--warning-policy` 57/57；`diagnostics.md` 白名单未变 |
+| **3a** | 端口接口全部位于 Application，名称表达业务能力；无通用仓储、事件总线、中介者或万能任务接口；Application 不引用 Infrastructure 的架构测试保持通过 |
+| **3b** | 每个适配有 Infrastructure 集成测试：参数以列表传递、stdout/stderr 分流、退出码、取消；`ProcessRunner`/`WindowsProcessJob` 原有进程树用例保留通过；工具调用代码搬迁后，本地 `--integration`、`--media-drop-real` 等于基准 |
+| **3c** | 七个阶段各有 Application 假端口测试，覆盖成功、本阶段失败（`JobFailure.Stage` 与 `Code` 正确）、取消、临时目录无残留、目标已存在、落位期间新出现目标；`UpdateWorkspace` 删除，并有“运行中修改配置不影响已提交任务”的测试；全部“仅本地”真实套件等于基准，且[3c/3d 对照项](#3d-旧入口小)逐项一致，对照报告路径写入结果表；**推送前经用户确认** |
+| **3d** | `SingleMuxService` 只含旧模型转换与对用例的调用；Desktop 与 Smoke 零改动；全部受控与真实套件等于基准 |
+| **3e** | `ComponentOperations.Gate` 删除，所有互斥经 `IOperationCoordinator`；协调器测试覆盖同类/异类互斥矩阵、异常与取消后的租约释放、`ShutdownAsync` 等待全部租约；组件与环境相关套件等于基准；本地 `--component-uninstall-real` 17/17 |
+| **4a** | `App.Workspace`、`App.Storage` 删除；新增架构测试：ViewModels/Views 不引用 Infrastructure，装配只在 `Program`/`Composition/`；`--root` 便携模式与默认存储路径行为不变（有测试或记录手动验证）；全部 UI 套件等于基准 |
+| **4b** | `MuxDraft` 测试覆盖：同值赋值不增修订号、一次接纳批次只增一次、准备→提交、运行中锁定拒绝、`ToSpec()` 快照与后续修改隔离；ViewModel 中不再有 SC/TC 默认规则等业务代码；UI、接纳、工作台、输入反馈、自动导入套件等于基准；1040×760 与 1280×900 截图与基线逐张对照无差异（差异须逐项说明）；本地 `--ui-integration` 等于基准；**推送前经用户确认** |
+| **4c** | `SingleMuxViewModel` 只做组合与过渡转发；六个区域 ViewModel 的绑定均为编译绑定且构建通过；可访问名称不变；全部 UI 套件等于基准 |
+| **4d** | 结果详情直接展示结构化检查项、诊断与失败阶段，代码中不再对检查文本做字符串匹配；`MainWindow` 关闭只等待 `IOperationCoordinator.ShutdownAsync()`；关闭等待相关用例通过；两尺寸截图检查 |
+| **5** | `MuxDeck.Core`、旧模型、转换类与旧入口删除；架构测试无过渡例外；全部受控与真实套件等于基准（计数变化逐项说明）；`skeleton.md` “迁移前现状”改写为现状、两份 README 与 `verification.md` 已更新 |
 
 ## 实施结果
 
