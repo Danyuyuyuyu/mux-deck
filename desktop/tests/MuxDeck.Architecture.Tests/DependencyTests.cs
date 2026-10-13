@@ -15,6 +15,7 @@ public sealed class ProjectDependencyTests
     [InlineData("src/MuxDeck.Infrastructure", new[] { "MuxDeck.Application", "MuxDeck.Domain" })]
     [InlineData("src/MuxDeck.Core", new[] { "MuxDeck.Application", "MuxDeck.Domain" })]
     [InlineData("src/MuxDeck.Desktop", new[] { "MuxDeck.Application", "MuxDeck.Core" })]
+    [InlineData("tests/MuxDeck.Core.Tests", new[] { "MuxDeck.Core" })]
     [InlineData("tests/MuxDeck.Domain.Tests", new[] { "MuxDeck.Domain" })]
     [InlineData("tests/MuxDeck.Application.Tests", new[] { "MuxDeck.Application" })]
     [InlineData("tests/MuxDeck.Architecture.Tests", new[] { "MuxDeck.Application", "MuxDeck.Core", "MuxDeck.Desktop", "MuxDeck.Domain", "MuxDeck.Infrastructure" })]

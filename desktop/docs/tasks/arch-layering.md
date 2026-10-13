@@ -203,7 +203,7 @@
 | PR | 状态 | 验证 | 备注 |
 |---|---|---|---|
 | [1a · PR #3](https://github.com/Danyuyuyuyu/mux-deck/pull/3) | 已合并（`c4f932e`） | 锁定 restore：9/9 项目；Release build：0 警告 / 0 错误；dotnet test：32/32（架构规则 27 + 扫描反例 5），失败/跳过 0；Smoke：28/28 | 三个空生产项目、三个 xUnit 测试项目、过渡引用、NetArchTest 护栏、CI test 步骤与全部新增项目锁文件；按已接受 ADR-0001 实施，未移动代码、定义契约或修改行为。Domain/Application 业务测试 0；未重放真实工具链或原生 UI。 |
-| 1b | 未开始 | | |
+| 1b | 已实现，本地验收通过，待 CI | restore 10/10；Release 0 警告 / 0 错误；dotnet test 71/71（转换 26、Domain 8、架构 37）；受控 13/13 套件、656/656；契约两条故意违反均被拒绝 | 公共不可变契约、四个 Domain 值类型与 Core 兼容转换；旧调用方零改动；详见下方命令与计数。未重放真实工具链或原生 UI。 |
 | 2a | 未开始 | | |
 | 2b | 未开始 | | |
 | 2c | 未开始 | | |
@@ -234,6 +234,35 @@
 
 三层生产项目为空，命名空间护栏会在 1b 及后续迁移中继续生效；本轮不声称已完成业务分层或真实媒体工具链验收。CI 的最新结果见 [PR #3 检查](https://github.com/Danyuyuyuyu/mux-deck/pull/3/checks)。
 
+### 1b 实际验证（2026-10-13）
+
+输入：分支头 `93a2c9b`、现有旧模型与已接受 ADR-0001。输出：Domain 四个值类型、Application 公共不可变契约、Core 新增转换类、转换/值类型/契约护栏测试；现有调用方零改动。失败行为：新规格若超出旧请求表达能力则明确拒绝；旧检查文案不猜测判定，旧失败不猜测阶段。验收场景包括双向往返、字幕/音频、全部 default/forced 组合、原语言、空输出名、成功/失败/取消、集合快照与无法表达的数据拒绝。
+
+以下命令均在 `desktop/` 实际执行；本机详细命令/计数与各套件日志保存在 `artifacts/arch-1b/verification/summary.json` 和同目录文本日志（不随 Git 提交）。
+
+| 实际命令 | 结果 |
+|---|---|
+| `dotnet restore MuxDeck.sln --locked-mode` | 10/10 项目成功 |
+| `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false` | 10/10 项目，0 警告 / 0 错误 |
+| `dotnet test MuxDeck.sln --no-build -c Release` | 71/71：Core 转换 26、Domain 8、Architecture 37；失败/跳过 0，Application 流程用例 0 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release` | 28/28 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-policy` | 57/57 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-round1` | 89/89 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-ui-round1` | 176/176 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --workbench-ui` | 38/38 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --input-feedback` | 24/24 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop` | 25/25 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --environment-ui` | 23/23 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --components` | 31/31 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-ui` | 37/37 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all` | 41/41 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall` | 26/26 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui` | 61/61 |
+
+计数由 1a 的 32 增至 71，仅新增用例：Core 转换 26、Domain 8、架构 5（Core.Tests 项目依赖 1、契约护栏 4）；原 32 项保留。受控套件 13/13、656/656，与基准一致。两个可构建的临时反例（非允许命名空间依赖、internal 契约）运行 `dotnet test tests/MuxDeck.Architecture.Tests --no-build -c Release --filter 'FullyQualifiedName~ContractBoundaryTests.Contracts_have_only_system_domain_and_contract_dependencies|FullyQualifiedName~ContractBoundaryTests.All_contract_types_are_public'`，如预期 2/2 拒绝；移除后最终全套 71/71 通过，未留例外、跳过或临时反例。
+
+共享文件变更：`MuxDeck.sln` 增加只引用 Core 的转换测试项目；新增该项目锁文件，其他锁文件和 `Directory.Build.props` 无改动；`docs/agents/skeleton.md` 同步已落位契约与兼容约束。Core.Tests 随第 5 步移除旧转换时处理。未移动业务实现、改变旧调用方/工具参数/QC/诊断白名单；本轮未重放真实媒体工具链或原生 UI。推送后的 Desktop CI 结果随后补充。
+
 ## 发现的旧缺陷
 
-（重构中发现的旧版缺陷记录于此，单独提交修复。）
+（1b 反例实验发现，当前正式代码不受影响）`Desktop/App.axaml.cs` 将未限定的 `Application` 用作 Avalonia 基类；当目标程序集首次包含 `MuxDeck.Application` 命名空间的业务类型时，编译器会优先解析同名命名空间并报 CS0118。首个反例因此未计为架构护栏验收，改用独立禁止命名空间后两条护栏均确认失败。1b 只定义 `MuxDeck.Contracts`，没有触发该冲突；后续引入 Application 用例前需单独修复基类限定，不混入本步。

@@ -26,7 +26,7 @@ Domain ← Application ← Infrastructure
 - Desktop 引用 Application 与 Infrastructure；`ViewModels/` 与 `Views/` 只使用 `MuxDeck.Contracts` 命名空间、Domain 值类型和用例接口，不构造 Infrastructure 类型。只有 `Program.cs` 与 `Composition/` 可使用 Infrastructure 命名空间。
 - 测试项目只引用其验证的生产项目。上述规则由架构测试固定，违反即测试失败。
 
-1a 已建立 Domain、Application、Infrastructure 三个空生产项目；现有代码仍位于 Core 与 Desktop，按[架构分层重构](../tasks/arch-layering.md)逐步搬迁。过渡期的实际项目引用如下（目标依赖仍以上述规则为准）：
+1a 已建立 Domain、Application、Infrastructure 三个生产项目；1b 已在 Domain/Application 定义值类型与契约，Infrastructure 仍为空，旧流程与调用方仍位于 Core 与 Desktop，按[架构分层重构](../tasks/arch-layering.md)逐步搬迁。过渡期的实际项目引用如下（目标依赖仍以上述规则为准）：
 
 | 项目 | 1a 直接项目引用 |
 |---|---|
@@ -44,13 +44,14 @@ Desktop → Core 保留到既有入口迁移完成；Desktop → Infrastructure 
 |---|---|
 | `tests/MuxDeck.Domain.Tests` | 纯规则单元测试，覆盖有效输入与关键反例 |
 | `tests/MuxDeck.Application.Tests` | 假端口下的流程、失败、取消、清理与不覆盖落位 |
+| `tests/MuxDeck.Core.Tests` | 过渡期旧模型与新契约转换，第 5 步随旧转换处理 |
 | `tests/MuxDeck.Infrastructure.IntegrationTests` | 真实工具、进程、编码与进程树 |
 | `tests/MuxDeck.Architecture.Tests` | 项目引用与命名空间依赖规则 |
 | `tests/MuxDeck.Smoke` | 保留为验收入口与 headless UI 检查 |
 
 1a 选定并固定测试依赖：`xunit.v3` **3.2.2**、`xunit.runner.visualstudio` **3.1.4**、`Microsoft.NET.Test.Sdk` **17.14.1**；架构测试使用 `NetArchTest.Rules` **1.3.2**。所有新增项目提交 `packages.lock.json`，继续使用 `dotnet restore MuxDeck.sln --locked-mode`。
 
-Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Application；Architecture.Tests 验证全部生产项目（过渡期包含 Core），Smoke 仍只直接引用 Desktop。Domain/Application 目前没有业务类型与业务测试，后续按任务补充，不添加占位通过用例。架构测试检查 restore 后的实际直接项目引用、Domain 包依赖、程序集与命名空间依赖、Views/ViewModels 的契约与接口边界，以及 Infrastructure 只能由 Program/Composition 使用的装配边界（含源码路径）。字段、泛型、构造调用和异步方法反例验证 NetArchTest 的扫描能力。
+Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Application；Architecture.Tests 验证全部生产项目（过渡期包含 Core），Smoke 仍只直接引用 Desktop。1b 新增 Domain 值类型测试 8 项、Core 旧模型转换测试 26 项；Application 流程尚未迁移，当前流程用例 0。Core.Tests 只直接引用 Core，不放宽既有分层测试依赖。架构测试检查 restore 后的实际直接项目引用、Domain 包依赖、程序集与命名空间依赖、Views/ViewModels 的契约与接口边界，以及 Infrastructure 只能由 Program/Composition 使用的装配边界（含源码路径）。字段、泛型、构造调用和异步方法反例验证 NetArchTest 的扫描能力。
 
 ## 契约
 
@@ -76,6 +77,15 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 | `InputItem`、`ImportPlan` | 导入准备与提交 | `InputCandidate`、`InputAcceptancePlan`、`MediaImportPlan` |
 | `IRunSingleMux`、`IProbeMedia`、`IPrepareImport`、`IManageComponents` | 用例接口 | 直接调用 `SingleMuxService`、`ComponentInstaller` 等 |
 | `OperationKind`、`IOperationLease` | 跨功能占用与互斥 | `ComponentOperations.Gate` 与 `MainWindowViewModel` 联动 |
+
+### 1b 契约与旧模型过渡
+
+- Domain 已定义 `TrackKind`、`LanguageTag`、`TrackFlags`、`TrackId`。语言值保留原字符串（含空值和传统/IETF 标签），1b 不引入规范化或匹配规则。
+- `Contracts/` 已定义单任务规格/结果/进度、媒体探测、导入计划、组件操作及协调器接口。集合统一使用 `ImmutableArray<T>`，仅保存数据；导入会话由调用方提供 ID 与修订号，不暴露 ViewModel 或 Application 内部对象。组件阶段独立于 `JobStage`，协调器目前只有契约，没有实现。
+- `MuxJobSpec.Tools` 显式携带工具、日志、缓存及独立 fonttools 后端配置；Core 的 `Muxing/LegacyMuxContractConverter.cs` 提供 `ToSpec(MuxRequest, Workspace/ToolConfiguration)`、`ToLegacyRequest(MuxJobSpec)` 与 `ToResult(MuxResult)`。旧入口与调用方尚未接入这些转换，保持原行为。
+- 旧请求的字幕与音频各自保留顺序，新规格先列字幕、再列音频；空输出名与 null 分别原样往返。旧模型无法表达的源轨选择、跨类型交错顺序、字幕来源轨号或无来源轨号的音频，转换回旧请求时明确拒绝，不丢弃字段。
+- 旧检查文本使用唯一过渡码 `ErrorCodes.LegacyCheck`（`MUX_LEGACY_CHECK`），原文完整保存在 `CheckResult.Actual`，状态为 `NotEvaluated`，不根据文案判定成败；旧失败码为 `MUX_LEGACY_FAILURE`，取消码为 `MUX_CANCELLED`。旧结果未记录失败阶段，暂为 `JobStage.Unknown`。上述过渡检查/失败映射在第 3 步替换为真实结构化信息。
+- 旧 warnings 的 code、message、出现次数及顺序原样转换；成品、日志路径及 nullable 失败消息保留。工具诊断白名单仍只由 `diagnostics.md` 维护。契约的 public、归属、依赖、不可变数据与无友元程序集规则由架构测试检查；依赖与可见性两条护栏已通过本地故意违反确认。
 
 ## 职责与落位
 
@@ -118,7 +128,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 
 | 职责 | 相对 Core 的文件 | 约束 |
 |---|---|---|
-| 请求、结果、状态、进度、轨道探测模型 | `Muxing/MuxModels.cs` | 以不可变业务数据表达；字幕输入保留路径、名字、语言和 default/forced 选择 |
+| 旧请求、结果、状态、进度、轨道探测模型；1b 兼容转换 | `Muxing/MuxModels.cs`、`Muxing/LegacyMuxContractConverter.cs`（新增） | 以不可变业务数据表达；字幕输入保留路径、名字、语言和 default/forced 选择 |
 | 单任务整流程、AFS/mkvmerge/mkvextract 参数与 JSON 探测 | `Muxing/SingleMuxService.cs`、`Muxing/ExternalMedia.cs` | 一个 `RunAsync` 入口拥有任务日志/临时目录、进度、取消与清理；固定 PyFontTools；按检查、探测、子集化、封装、QC、不覆盖落位排序 |
 | AFS 诊断分类与结果 warning | `Muxing/AfsDiagnosticClassifier.cs`、`Muxing/MuxModels.cs`、`Muxing/SingleMuxService.cs` | 分类白名单、未知诊断与可继续告警行为以[工具诊断分类](diagnostics.md)为准；流程返回结构化 warning |
 | ASS 字形使用解析及子集字体校验 | `Muxing/AssGlyphValidator.cs` | 读取 UTF-8 ASS 样式与覆盖字体，按对白统计实际码点，再与 ttx 导出的字体 `name`/`cmap` 表核对 |
