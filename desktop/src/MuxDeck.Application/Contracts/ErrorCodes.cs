@@ -7,4 +7,7 @@ public static class ErrorCodes
     public const string LegacyCheck = "MUX_LEGACY_CHECK";
     public const string LegacyFailure = "MUX_LEGACY_FAILURE";
     public const string Cancelled = "MUX_CANCELLED";
+    public const string ToolExitFailed = "MUX_TOOL_EXIT_FAILED";
+    public const string ToolOutputInvalid = "MUX_TOOL_OUTPUT_INVALID";
+    public const string ToolFatalDiagnostic = "MUX_TOOL_FATAL_DIAGNOSTIC";
 }

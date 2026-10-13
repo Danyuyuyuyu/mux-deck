@@ -110,6 +110,8 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 
 - 只在真实外部边界建立端口：外部工具、进程、文件落位、下载、持久化、时间与 ID。名称表达业务能力（如 `IFontSubsetter`），不建通用仓储、事件总线、中介者或万能任务接口。
 - 端口接口定义在 Application，实现位于 Infrastructure，测试替身位于测试项目。
+- Application/Ports/Failures 的 ToolFailureException(Code, Message, Detail) 是端口统一失败类型：工具退出码异常、输出解析失败或出现 Fatal 级诊断都抛该类型；取消抛 OperationCanceledException。所有端口及调用成员的 XML 注释明确约定。当前失败码集中在 Contracts.ErrorCodes（MUX_TOOL_EXIT_FAILED、MUX_TOOL_OUTPUT_INVALID、MUX_TOOL_FATAL_DIAGNOSTIC），构造拒绝未知码；不另立诊断白名单，Detail 保留原始原因。
+- 中间文件使用 Application/Ports 的 WorkFile(Path)：修正字幕、子集字体、提取目标与临时封装产物都不使用 OutputArtifact。IArtifactPublisher 接受 WorkFile，只有不覆盖发布成功才返回 Contracts.OutputArtifact，作为交给界面的最终成品。失败异常按 Exception 专门检查，所有端口数据继续为不可变 record/EquatableArray；既有 Contracts 与 Ports 数据护栏保持不变。
 - 现有 `IMuxToolRunner` 是进程边界，迁移后成为 Infrastructure 内部依赖。`--warning-policy` 等依赖它的回归改为替换工具端口后再收紧其可见性。
 
 ### 单任务流水线
@@ -177,8 +179,8 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 | 端口 | 业务边界 |
 |---|---|
 | IMediaProber | 媒体探测，返回共用 Domain 轨道事实的 MediaProbeResult |
-| IFontSubsetter | ASS 字体子集化，返回修正字幕、字体产物与诊断 |
-| IMuxer | 封装临时成品，返回产物与诊断 |
+| IFontSubsetter | ASS 字体子集化，返回修正字幕与字体 WorkFile 及诊断 |
+| IMuxer | 封装临时 WorkFile，返回工作文件与诊断 |
 | IMediaExtractor | 按真实轨号/附件号提取，支持容器默认格式及 fullraw |
 | IFontInspector | 读取指定字体 face 的名字、码点、粗斜体和字重事实 |
 | IArtifactPublisher | 同目录暂存并不覆盖提交，冲突与竞态失败 |

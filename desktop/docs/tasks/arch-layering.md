@@ -292,7 +292,7 @@ Application / Contracts 禁止 System.IO、System.Diagnostics.Process、System.N
 
 授权：用户明确同意，范围仅限此项。经用户同意放宽：Application/Contracts 的 System.IO 禁令改为放行 Path 纯字符串成员。原因：Application 编排需要组合和拆分已给定的路径字符串，不应因此承担文件、目录或环境 IO。白名单仅 Combine、Join、GetFileName、GetFileNameWithoutExtension、GetExtension、GetDirectoryName、ChangeExtension、HasExtension、DirectorySeparatorChar、AltDirectorySeparatorChar；未列出的 Path 成员全部拒绝，尤其 GetFullPath、GetTempPath、GetTempFileName、GetRandomFileName。System.IO 其他类型，包括 File、Directory、FileInfo、DirectoryInfo、Stream/派生类、InvalidDataException 仍禁用；Domain 原命名空间禁令不变。输入为 1b27a94，输出为成员与签名级 IL 护栏、全部原有反例和新增逐成员/lambda/async 反例及放行样例；任何本地或 CI 失败不开始下一项。
 
-实际验证：485 → 520，仅新增 Architecture 35（实际命名空间扫描 2、白名单/拒绝样例 32〔放行 12、拒绝 20〕、Domain 原禁令保留 1），原 485 项全部保留。严格构建 0 警告 / 0 错误，受控 13/13、656/656；日志 `artifacts/arch-corrections/1a-path/`。CI 待本项提交推送后核对并补入链接。
+实际验证：485 → 520，仅新增 Architecture 35（实际命名空间扫描 2、白名单/拒绝样例 32〔放行 12、拒绝 20〕、Domain 原禁令保留 1），原 485 项全部保留。严格构建 0 警告 / 0 错误，受控 13/13、656/656；日志 `artifacts/arch-corrections/1a-path/`。实现提交 [9a45de2](https://github.com/Danyuyuyuyu/mux-deck/commit/9a45de2c92f182e4015c984568317ad27103a5f2) 本地全部通过后 pull --rebase 并推送；[Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38410800344) 完成 success，head_sha 与实现提交一致，确认通过后才开始端口失败约定修正。
 
 | 实际命令（desktop/） | 结果 |
 |---|---|
@@ -579,6 +579,33 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 456 → 485，仅新增 29 项：Domain 4（值相等、IETF 缺失/空区别、传统语言严格比较、未知类型）、Application 1（探测与 QC 共用事实）、Core 11（原标签/未知类型、字段存在性、null/空 IETF、集合快照）、Architecture 13（九个端口归属、异步资源生命周期、不可变数据与契约边界、唯一事实类型、可取消操作与注入时钟）。原 456 项全部保留，原 OutputQcRulesTests 的 41 项仅同步值类型与旗标表达，测试方法及 Fact/Theory/InlineData 声明逐项对比一致，拒绝断言未放宽。受控 13/13、656/656 等于基准，包括 warning-policy 57/57。
 
 共享文件仅 `docs/agents/skeleton.md`，同步端口、契约归属与迁移现状；任务文档更新 1a 修正 CI 与 3a 实测结果。sln、props、全部锁文件、ADR、步骤计划及 diagnostics.md 不变。原 Core 仅在 QC 事实边界换用统一转换，工具调用、参数与旧流水线保持不变。未重放真实工具链或原生选择器、Explorer、高 DPI 与播放器；本步未实现端口适配或假端口流水线，真实工具链基准仍须在 3b 前重跑。实现提交 [da0f334](https://github.com/Danyuyuyuyu/mux-deck/commit/da0f3342f2b50bccfdcf31f19212ee3bb63e9f91) 已在本地完整验证后执行 `git pull --rebase origin v2/avalonia-rewrite` 并推送。[Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38406784353) 完成 success，workflow 与 desktop job 均成功，head_sha 已核对一致；locked restore、build、单元/架构测试、Smoke 及全部 12 个带参数受控回归（含 warning-policy）通过，失败产物上传按预期跳过。随后仅补充结果表、提交与 CI 链接的文档提交，按工作流 paths 排除规则不重复触发构建。
+
+#### 3a 修正：端口失败约定与中间文件引用
+
+输入：9a45de2 的 CI 已通过。输出：Ports/Failures 的统一 ToolFailureException(Code, Message, Detail)、ErrorCodes 的退出/解析/Fatal 三类集中错误码及 Ports.WorkFile。失败行为：工具退出码异常、输出解析失败、Fatal 诊断抛 ToolFailureException，取消抛 OperationCanceledException；构造异常拒绝不属于 ErrorCodes 的码，保留原始 Detail。所有端口及调用成员 XML 注释明确该约定；中间文件只用 WorkFile，只有最终发布返回 OutputArtifact。既有 record 数据护栏保持不变，失败异常按 Exception 专门验证，另新增覆盖整个 Ports 子命名空间的形状检查，不修改或豁免 Contracts 不可变规则。验收：错误码/原文、所有端口注释、WorkFile 归属与最终产物边界、全部原有测试与受控回归。ADR、步骤计划、诊断白名单、旧 Core 和真实调用行为不变。实际验证：520 → 549，仅新增 29 项（Application 12：集中码/原文/Detail、未知码拒绝、工作文件值语义；Architecture 17：异常归属/只读载荷、Ports 子命名空间形状、中间/最终文件边界、全部十个端口与工作区接口 XML、泛型签名反例）。原 520 项全部保留，既有 Ports / Contracts / QC 测试文件零修改；日志 `artifacts/arch-corrections/3a-ports/`。受控 13/13、656/656，warning-policy 57/57；CI 待端口修正提交推送后核对并补入链接。
+
+| 实际命令（desktop/） | 结果 |
+|---|---|
+| `dotnet restore MuxDeck.sln --locked-mode` | 10/10 |
+| `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false` | 0 警告 / 0 错误 |
+| `dotnet test MuxDeck.sln --no-build -c Release` | 549/549（Domain 298、Application 22、Core 37、Architecture 192）；失败/跳过 0 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release` | 28/28 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-policy` | 57/57 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-round1` | 89/89 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-ui-round1` | 176/176 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --workbench-ui` | 38/38 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --input-feedback` | 24/24 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop` | 25/25 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --environment-ui` | 23/23 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --components` | 31/31 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-ui` | 37/37 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all` | 41/41 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall` | 26/26 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui` | 61/61 |
+
+共享文件仅 skeleton.md，同步端口失败、取消和工作文件约定；sln、props、锁文件、ADR、步骤计划和 diagnostics.md 不变。错误码仅向 ErrorCodes 添加三项，原常量不变；旧 Core 及真实调用方零修改，行为未接入新端口。下一项真实基准必须待本项 CI 通过才运行，任一真实结果与原计数不符立即停止，不开始 3b。
+
+
 
 ## 发现的旧缺陷
 
