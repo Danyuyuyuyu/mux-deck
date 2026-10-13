@@ -29,8 +29,11 @@
 
 ## 提交与分支
 
-- 提交信息使用 `类型(desktop): 摘要`（如 `feat`、`fix`、`refactor`、`docs`、`test`），正文说明原因、改动范围和 `Validation:`（实际命令与通过计数）。
-- 代码改动在 `v2/<主题>` 分支完成，经 PR 合并到 `v2/avalonia-rewrite`；CI 通过后再合并。
+- 直接在 `v2/avalonia-rewrite` 上提交和推送，不建功能分支，不开 PR。
+- 提交信息使用 `类型(desktop): [步骤号] 摘要`（如 `refactor(desktop): [1b] 定义单任务契约`；类型为 `feat`、`fix`、`refactor`、`docs`、`test`），正文说明原因、改动范围和 `Validation:`（实际命令与通过计数）。一个任务步骤对应一个提交，必要时少量连续提交。
+- 推送前在本地完成该步骤的全部验证并通过，再 `git pull --rebase` 后推送；禁止 force push 和改写已推送历史。
+- 推送后确认 Desktop 工作流通过。失败时立即追加修复提交或 `git revert`，CI 未恢复前不开始下一步。
+- 多个代理并行时，各自只改本步骤范围内的文件；共享文件按工作约定只由一个代理修改。
 
 ## 完成报告
 

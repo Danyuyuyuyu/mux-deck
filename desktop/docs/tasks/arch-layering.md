@@ -1,20 +1,20 @@
 # 架构分层重构
 
-按 [ADR-0001](../adr/0001-layered-architecture.md) 将 v2 从 `MuxDeck.Core` / `MuxDeck.Desktop` 两项目迁移为 Domain / Application / Infrastructure / Desktop 四层。分层、依赖与契约规则以[代码骨架](../agents/skeleton.md)为准，阶段位置与完成条件以[开发流程](../agents/migration.md#架构分层重构)为准；本文是逐 PR 的实施计划与结果记录。
+按 [ADR-0001](../adr/0001-layered-architecture.md) 将 v2 从 `MuxDeck.Core` / `MuxDeck.Desktop` 两项目迁移为 Domain / Application / Infrastructure / Desktop 四层。分层、依赖与契约规则以[代码骨架](../agents/skeleton.md)为准，阶段位置与完成条件以[开发流程](../agents/migration.md#架构分层重构)为准；本文是逐步骤的实施计划与结果记录。下文“PR”指一个实施步骤（如 1b），按 [AGENTS.md](../../AGENTS.md#提交与分支) 直接提交到 `v2/avalonia-rewrite`，不另开 PR。
 
 ## 范围
 
 - 输入：`v2/avalonia-rewrite` 当前代码（基线提交 `3f42228`）与现有 Smoke、UI、真实工具链验收。
 - 输出：四个生产项目、按层测试项目与架构测试；单任务流水线、草稿会话、操作协调与集中装配落位；`MuxDeck.Core` 移除。
 - 范围外：用户可见行为、工具参数、QC 判定与诊断白名单不变；阶段二进程启动归属竞态（P2）在本重构完成后处理；不新增功能。
-- 失败行为：任一 PR 的构建、架构测试或既有回归失败即不合并；真实工具链对照不一致时停止后续步骤，先定位差异来源。
+- 失败行为：任一步骤的构建、架构测试或既有回归在本地失败即不推送，推送后 CI 失败即修复或回退，未恢复前不开始下一步；真实工具链对照不一致时停止后续步骤，先定位差异来源。
 
 ## 实施原则
 
 1. **先改命名空间，再移动文件**：对应项目建立前，代码先在 Core 内改为目标命名空间（`MuxDeck.Domain`、`MuxDeck.Contracts`、`MuxDeck.Application`、`MuxDeck.Infrastructure`），搬迁时 `git mv` 保留历史。
 2. **旧入口兼容**：Smoke 有 16 处直接构造 `SingleMuxService`、7 个文件使用 `IMuxToolRunner`。迁移期间 `SingleMuxService` 保留为旧入口，内部转换为新契约并调用新用例，旧回归不改；第 5 步移除。
-3. **每个 PR 可独立合并**：Release 无告警/错误、CI 通过、既有回归不退化。
-4. **只搬迁不修复**：发现旧缺陷记录在本文“发现的旧缺陷”，另开 PR 修复。
+3. **每个步骤可独立提交**：推送前本地 Release 无告警/错误、既有回归不退化；推送后 CI 通过。
+4. **只搬迁不修复**：发现旧缺陷记录在本文“发现的旧缺陷”，单独提交修复。
 5. **同步骨架**：搬迁哪部分，就在同一 PR 中改写 `skeleton.md` “迁移前现状”对应条目。
 
 ## 依赖顺序
@@ -23,7 +23,7 @@
 1a → 1b → 2a / 2b / 2c（可并行）→ 3a → 3b → 3c → 3d → 3e → 4a → 4b → 4c → 4d → 5
 ```
 
-高风险 PR 为 **3c**（流水线改写）与 **4b**（草稿会话），各自单独评审，分别要求真实工具链对照与 UI 截图对照。
+高风险步骤为 **3c**（流水线改写）与 **4b**（草稿会话），推送前须经用户确认，分别要求真实工具链对照与 UI 截图对照。
 
 ## 第 1 步：骨架与护栏
 
@@ -135,13 +135,13 @@
 
 ## 验收
 
-满足[开发流程](../agents/migration.md#架构分层重构)中的完成条件，并在下方逐 PR 记录：PR 链接、实际验证命令与计数、真实工具链对照结论、未覆盖项。
+满足[开发流程](../agents/migration.md#架构分层重构)中的完成条件，并在下方逐步骤记录：提交链接、实际验证命令与计数、真实工具链对照结论、未覆盖项。
 
 ## 实施结果
 
 | PR | 状态 | 验证 | 备注 |
 |---|---|---|---|
-| [1a · PR #3](https://github.com/Danyuyuyuyu/mux-deck/pull/3) | 已实现，本地验收通过，待合并 | 锁定 restore：9/9 项目；Release build：0 警告 / 0 错误；dotnet test：32/32（架构规则 27 + 扫描反例 5），失败/跳过 0；Smoke：28/28 | 三个空生产项目、三个 xUnit 测试项目、过渡引用、NetArchTest 护栏、CI test 步骤与全部新增项目锁文件；按已接受 ADR-0001 实施，未移动代码、定义契约或修改行为。Domain/Application 业务测试 0；未重放真实工具链或原生 UI。 |
+| [1a · PR #3](https://github.com/Danyuyuyuyu/mux-deck/pull/3) | 已合并（`c4f932e`） | 锁定 restore：9/9 项目；Release build：0 警告 / 0 错误；dotnet test：32/32（架构规则 27 + 扫描反例 5），失败/跳过 0；Smoke：28/28 | 三个空生产项目、三个 xUnit 测试项目、过渡引用、NetArchTest 护栏、CI test 步骤与全部新增项目锁文件；按已接受 ADR-0001 实施，未移动代码、定义契约或修改行为。Domain/Application 业务测试 0；未重放真实工具链或原生 UI。 |
 | 1b | 未开始 | | |
 | 2a | 未开始 | | |
 | 2b | 未开始 | | |
@@ -175,4 +175,4 @@
 
 ## 发现的旧缺陷
 
-（重构中发现的旧版缺陷记录于此，另开 PR 修复。）
+（重构中发现的旧版缺陷记录于此，单独提交修复。）
