@@ -52,7 +52,7 @@ Core → Infrastructure 为 3b 用户批准的单向过渡，到第 5 步移除�
 
 1a 选定并固定测试依赖：`xunit.v3` **3.2.2**、`xunit.runner.visualstudio` **3.1.4**、`Microsoft.NET.Test.Sdk` **17.14.1**；架构测试使用 `NetArchTest.Rules` **1.3.2**。所有新增项目提交 `packages.lock.json`，继续使用 `dotnet restore MuxDeck.sln --locked-mode`。
 
-Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Application；Architecture.Tests 验证全部生产项目（过渡期包含 Core），Smoke 仍只直接引用 Desktop；Infrastructure.IntegrationTests 只直接引用 Infrastructure。1b 初始新增 Domain 值类型测试 8 项、Core 旧模型转换测试 26 项；修正 B 后 Domain 为 15 项、Application 契约值相等测试 4 项，修正 C 后架构测试 91 项；2a 后 Domain 84 / 架构 94，2b 后 Domain 218 / 架构 95；输入位置枚举合并后 Application 9；2c 后 Domain 294 / 架构 98；Environment 经授权修正后架构 127，原有 427 项全部保留，新增 29 项成员护栏。3a 后 Domain 298 / Application 10 / Core 37 / 架构 140，共 485 项，仅新增 29，原 456 项保留。Application 流程尚未迁移，当前流程用例 0。Core.Tests 只直接引用 Core，不放宽既有分层测试依赖。架构测试检查 restore 后的实际直接项目引用、Domain 包依赖、程序集与命名空间依赖、Views/ViewModels 的契约与接口边界，以及 Infrastructure 只能由 Program/Composition 使用的装配边界（含源码路径）。字段、泛型、构造调用和异步方法反例验证 NetArchTest 的扫描能力。
+Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Application；Architecture.Tests 验证全部生产项目（过渡期包含 Core），Smoke 仍只直接引用 Desktop；Infrastructure.IntegrationTests 只直接引用 Infrastructure。1b 初始新增 Domain 值类型测试 8 项、Core 旧模型转换测试 26 项；修正 B 后 Domain 为 15 项、Application 契约值相等测试 4 项，修正 C 后架构测试 91 项；2a 后 Domain 84 / 架构 94，2b 后 Domain 218 / 架构 95；输入位置枚举合并后 Application 9；2c 后 Domain 294 / 架构 98；Environment 经授权修正后架构 127，原有 427 项全部保留，新增 29 项成员护栏。3a 后 Domain 298 / Application 10 / Core 37 / 架构 140，共 485 项，仅新增 29，原 456 项保留。上述为 3a 历史计数；3c 已新增 27 项假端口流程用例，3d 新增旧请求日志回归 1 项。Core.Tests 只直接引用 Core，不放宽既有分层测试依赖。架构测试检查 restore 后的实际直接项目引用、Domain 包依赖、程序集与命名空间依赖、Views/ViewModels 的契约与接口边界，以及 Infrastructure 只能由 Program/Composition 使用的装配边界（含源码路径）。字段、泛型、构造调用和异步方法反例验证 NetArchTest 的扫描能力。
 
 ## 契约
 
@@ -158,7 +158,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 | 职责 | 文件 | 约束 |
 |---|---|---|
 | 旧请求、结果、状态、进度、探测模型与兼容转换 | Core/Muxing/MuxModels.cs、LegacyMuxContractConverter.cs | 旧入口转换模型，保持 Desktop 调用行为；3d/5 处理兼容入口 |
-| 旧单任务编排与 QC 接线 | Core/Muxing/SingleMuxService.cs、ExternalMedia.cs | 阶段顺序、检查文案、参考往返、哈希和提交后取消保持；3c 迁移流水线，不再重复进程/工具/发布实现 |
+| 旧入口与唯一单任务用例 | Core/Muxing/SingleMuxService.cs、LegacyMuxContractConverter.cs；Application/RunSingleMuxUseCase.cs | 旧入口只接线和转换，ExternalMedia.cs 的流程辅助已删除；七阶段流程仅在 Application。检查文案、参考往返、哈希和提交后取消保持 |
 | AFS 诊断与字体文件校验 | Infrastructure/Muxing/AfsDiagnosticClassifier.cs、AfsDiagnosticCollector.cs、AssGlyphValidator.cs | 分类调用 Domain DiagnosticPolicy；ASS 规则调用 Domain AssDocument；保留诊断计数、实时输出与字体来源证明 |
 | 可替换进程边界 | Infrastructure/Muxing/IMuxToolRunner.cs；Infrastructure/ProcessRunner.cs、WindowsProcessJob.cs | 进程与 Job 整体搬迁；旧受控回归继续注入同一 runner，不更改测试逻辑；Start 到 Assign Job 的已知竞态仍未覆盖 |
 | 探测、子集化、封装、提取、字体表 | Infrastructure/Muxing/MkvmergeProber.cs、AfsSubsetter.cs、MkvmergeMuxer.cs、MkvextractExtractor.cs、TtxFontInspector.cs、ToolExecutor.cs | 实现 Application 端口；列表参数、双流完整日志、UTF-8、超时和取消；失败统一 ToolFailureException，取消保留 OperationCanceledException |
@@ -252,6 +252,12 @@ tests/MuxDeck.Infrastructure.IntegrationTests 只直接引用 Infrastructure，�
 QC 返回 `TrackQcReport` 的结构化事实，经 `QC_SUBSET_FONTS`、`QC_TRACK_FACTS`、`QC_ATTACHMENTS`、`QC_MEDIA_READABLE`、`QC_AUDIO_PAYLOAD` 生成 `CheckResult`。旧 `OutputQcRules.CheckTracks` 是兼容值转换，共享唯一 `CheckFacts` 规则；旧文本由 `LegacyTrackQcText` 转换。用例不保存旧检查文案。
 
 失败保留实际阶段；端口码原样传递。用例自身的集中码见 `ErrorCodes`：输入/视频/字体目录/输出路径/字幕与音频元数据、源轨缺失、封装计划、轨道 QC、附件数量/身份/数据、字幕参考/全文、音频 payload、源选择与未预期异常。取消返回 Cancelled；工作区所有终态都等待异步释放。只有发布端口成功才产生最终 `OutputArtifact`，提交成功后忽略取消。
+
+### 3d 旧入口转换
+
+`SingleMuxService` 仅固定旧 `MuxRequest` 集合快照、配置快照并调用用例；旧进度、检查顺序、错误文案与告警由 `LegacyMuxContractConverter` 转换。用例在输入校验完成、目标存在性检查之前发出 `INPUT_VALIDATED` 事实，旧服务直接用手上的旧请求快照写 `请求 …` 行，沿用原 JsonSerializer 默认格式及规范路径/输出名。用例自己的 `SPEC` 日志保持原样，日志工作区不反向解析规格，EquatableArray 不增加 JSON 反序列化支持。
+
+当前累计测试 676：Domain 298 / Application 80 / Core 41 / Architecture 198 / Infrastructure 59；3c 的 675 项全部保留，新增旧入口 task.log 的请求行逐字、时序与集合隔离检查。Desktop 和 Smoke 不改；UpdateWorkspace 只影响下一次任务，4a 删除。
 
 ## 单任务接口
 

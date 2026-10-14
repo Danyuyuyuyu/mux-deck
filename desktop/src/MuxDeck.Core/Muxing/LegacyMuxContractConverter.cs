@@ -3,7 +3,7 @@ using MuxDeck.Domain;
 
 namespace MuxDeck.Core.Muxing;
 
-/// <summary>只转换旧模型与统一轨道事实，不能在这里重新判定检查文案或执行工具。</summary>
+/// <summary>只转换旧模型与统一轨道事实，将结构化结果转换为旧文案；不判定业务规则、不执行工具。</summary>
 public static class LegacyMuxContractConverter
 {
     // 不规范化旧探测字符串；大小写未知类型仍为 Unknown，保留 null 与空 IETF 的区别。
@@ -107,5 +107,139 @@ public static class LegacyMuxContractConverter
             result.Warnings.Select(warning => new Diagnostic(warning.Code, DiagnosticSeverity.Warning,
                 warning.Message, warning.Occurrences)).ToEquatableArray(),
             failure, result.LogPath is { } log ? new LogRef(log) : null);
+    }
+
+    // 旧入口的非法请求文案在转换处保留；新用例只接收完整的不可变规格。
+    internal static MuxJobSpec ToRunSpec(MuxRequest request, Workspace workspace)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.Subtitles is null || request.Audios is null || request.Subtitles.Count + request.Audios.Count == 0)
+            return ToSpec(request with { Subtitles = [], Audios = [] }, workspace);
+        if (request.Subtitles.Any(item => item is null)) throw new ArgumentException("字幕参数不能为空。");
+        if (request.Audios.Any(item => item is null)) throw new ArgumentException("音频参数不能为空。");
+        return ToSpec(request, workspace);
+    }
+
+    public static MediaProbe ToLegacyProbe(MediaProbeResult probe) => new(probe.Path,
+        probe.Tracks.Select(track => new MediaTrack(track.Id.Value, track.RawType, track.Codec, track.CodecId,
+            track.Language.Value, track.LanguageIetf?.Value, track.Name, track.Flags.IsDefault, track.Flags.IsForced,
+            track.PixelDimensions, track.AudioChannels, track.AudioSamplingFrequency, track.HasDefaultFlag, track.HasForcedFlag)).ToArray(),
+        probe.Attachments.Select(attachment => new MediaAttachment(attachment.Id, attachment.FileName, attachment.ContentType, attachment.Size)).ToArray(),
+        probe.DurationNanoseconds);
+
+    public static MuxProgress? ToLegacyProgress(JobProgress value)
+    {
+        if (value.StepCode == "SUBSET_ITEM")
+        {
+            var counts = System.Text.Json.JsonSerializer.Deserialize<int[]>(value.Detail!)!;
+            return new(MuxStage.Subsetting, $"子集化字幕 {counts[0]}/{counts[1]}");
+        }
+        if (value.StepCode == "SUBSET_DIAGNOSTICS")
+        {
+            var warnings = System.Text.Json.JsonSerializer.Deserialize<Diagnostic[]>(value.Detail!)!;
+            return new(MuxStage.Subsetting, "子集化注意提示：" + string.Join("；", warnings.Select(w => $"{w.Message}（累计 {w.Occurrences} 次）")));
+        }
+        return value.Stage switch
+        {
+            JobStage.Validating => new(MuxStage.Validating, "检查输入与真实工具依赖"),
+            JobStage.Probing => new(MuxStage.Probing, "探测源视频和所有音轨"),
+            JobStage.Muxing => new(MuxStage.Muxing, "保留视频和音轨，嵌入新增字幕与子集字体"),
+            JobStage.Checking => new(MuxStage.Checking, "核验轨道、旗标、字体附件和成品可读性"),
+            JobStage.Publishing => new(MuxStage.Installing, "在输出目录准备成品并拒绝覆盖地提交"),
+            JobStage.Completed => new(MuxStage.Completed, "封装完成", 100),
+            _ => null
+        };
+    }
+
+    public static MuxResult ToLegacyResult(MuxJobResult result) => new(
+        result.Status switch { MuxJobStatus.Succeeded => MuxStatus.Succeeded, MuxJobStatus.Cancelled => MuxStatus.Cancelled, _ => MuxStatus.Failed },
+        result.Outputs.FirstOrDefault()?.Path, result.Failure is null ? null : LegacyFailure(result.Failure),
+        result.Log?.Path, result.Checks.Select(LegacyCheck).ToArray())
+    {
+        Warnings = result.Diagnostics.Select(d => new MuxWarning(d.Code, d.Message, d.Occurrences)).ToArray()
+    };
+
+    private static string LegacyCheck(CheckResult check) => check.Code switch
+    {
+        MuxCheckCodes.SubsetFonts => $"字幕 {check.Subject}：修正 ASS 与 {check.Actual} 个子集字体的引用、字形完整性通过",
+        MuxCheckCodes.Tracks => LegacyTrackQcText.Check(ReadTrackCheck(check.Actual!)),
+        MuxCheckCodes.Attachments => $"源字幕和附件已移除；{check.Actual} 个子集字体附件提取与 SHA-256 校验通过",
+        MuxCheckCodes.Readable => "MKV 可探测，新增字幕提取后与同工具往返参考全文一致",
+        MuxCheckCodes.AudioPayload => $"外加音频 {check.Subject} 原始数据及 CodecPrivate SHA-256 一致",
+        _ => check.Actual ?? ""
+    };
+
+    private static TrackQcCheck ReadTrackCheck(string json)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        var root = document.RootElement;
+        var check = System.Text.Json.JsonSerializer.Deserialize<TrackQcCheck>(json)!;
+        if (check.Track is null) return check;
+        var track = root.GetProperty("Track");
+        return check with { Track = check.Track with {
+            Language = new(track.GetProperty("Language").GetProperty("Value").GetString()!),
+            LanguageIetf = track.GetProperty("LanguageIetf").ValueKind == System.Text.Json.JsonValueKind.Null ? null :
+                new LanguageTag(track.GetProperty("LanguageIetf").GetProperty("Value").GetString()!)
+        } };
+    }
+
+    private static string LegacyFailure(JobFailure failure)
+    {
+        if (failure.Code == ErrorCodes.Cancelled) return "任务已取消";
+        if (!string.IsNullOrEmpty(failure.Message))
+        {
+            if (failure.Code == ErrorCodes.ToolNotFound && (failure.Message.EndsWith("pyftsubset", StringComparison.Ordinal) ||
+                failure.Message.EndsWith("ttx", StringComparison.Ordinal)))
+                return "找不到同目录的 pyftsubset 与 ttx，AFS 需要可运行的 fontTools 后端。";
+            return failure.Message;
+        }
+        string Text() => System.Text.Json.JsonSerializer.Deserialize<string>(failure.Detail!)!;
+        int Index() => System.Text.Json.JsonSerializer.Deserialize<int>(failure.Detail!);
+        return failure.Code switch
+        {
+            ErrorCodes.InputEmpty => "至少需要一条启用的外加字幕或音频。",
+            ErrorCodes.VideoMissing => "视频不存在",
+            ErrorCodes.FontsDirectoryMissing => "字体目录不存在：" + Text(),
+            ErrorCodes.OutputDirectoryInvalid => "请使用与源视频不同的独立输出目录。",
+            ErrorCodes.OutputNameInvalid => "输出文件名必须是有效的 MKV 文件名，不能包含目录。",
+            ErrorCodes.OutputOverwritesSource => "输出不能覆盖源视频。",
+            ErrorCodes.SubtitleInputInvalid => "字幕必须是存在的 ASS/SRT 文件：" + Text(),
+            ErrorCodes.SubtitleLanguageInvalid => "字幕语言必须使用有效的语言代码或 BCP 47 标签。",
+            ErrorCodes.SubtitleNameInvalid => "字幕轨名称无效。",
+            ErrorCodes.AudioInputInvalid => "音频路径或 Track ID 无效。",
+            ErrorCodes.AudioMetadataInvalid => "音频名称或语言无效。",
+            ErrorCodes.SourceVideoMissing => "源文件没有视频轨。",
+            ErrorCodes.SourceAudioMissing => "外加音频 Track ID 不存在：" + Text(),
+            ErrorCodes.TargetAlreadyExists => "目标已存在，拒绝覆盖：" + Text(),
+            ErrorCodes.TrackQcFailed => LegacyTrackQcText.Failure(System.Text.Json.JsonSerializer.Deserialize<TrackQcFailure>(failure.Detail!)!),
+            ErrorCodes.AttachmentCountInvalid => "成品字体附件数量不符。",
+            ErrorCodes.AttachmentMetadataInvalid => $"字体附件 {Index()} 的身份、类型或大小不符。",
+            ErrorCodes.SubtitleReferenceInvalid => $"新增字幕 {Index()} 未产出有效 ASS 校验参考字幕。",
+            ErrorCodes.SubtitleTextMismatch => $"新增字幕 {Index()} 提取后内容与同工具字幕参考不符。",
+            ErrorCodes.AttachmentPayloadMismatch => $"字体附件 {Index()} 提取后校验不一致。",
+            ErrorCodes.AudioPayloadMismatch => $"外加音频 {Index()} 数据与参考不符。",
+            ErrorCodes.SubtitleTextInvalid => SrtFailure(failure.Detail!),
+            _ => failure.Code
+        };
+    }
+    private static string SrtFailure(string detail)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(detail);
+        return "SRT 没有有效时间轴：" + document.RootElement.GetProperty("Path").GetString();
+    }
+
+    // 仅复制旧请求的路径投影；业务校验由用例完成，旧日志不从新规格反向解析。
+    internal static MuxRequest NormalizeRequestForLog(MuxRequest request)
+    {
+        var video = Path.GetFullPath(request.VideoPath);
+        return request with
+        {
+            VideoPath = video,
+            FontsDirectory = string.IsNullOrWhiteSpace(request.FontsDirectory) ? "" : Path.GetFullPath(request.FontsDirectory),
+            OutputDirectory = Path.GetFullPath(request.OutputDirectory),
+            OutputFileName = OutputNaming.ResolveForJob(request.OutputFileName, Path.GetFileNameWithoutExtension(video)),
+            Subtitles = request.Subtitles.Select(subtitle => subtitle with { Path = Path.GetFullPath(subtitle.Path) }).ToArray(),
+            Audios = request.Audios.Select(audio => audio with { Path = Path.GetFullPath(audio.Path) }).ToArray()
+        };
     }
 }

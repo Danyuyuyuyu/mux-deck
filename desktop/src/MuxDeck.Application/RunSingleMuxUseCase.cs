@@ -36,7 +36,7 @@ public sealed partial class RunSingleMuxUseCase(
             workspace = await workspaces.CreateAsync(spec.Tools, cancellationToken).ConfigureAwait(false);
             var context = new ToolCallContext(spec.Tools, workspace) { DiagnosticProgress = new InlineProgress<Diagnostic>(MergeDiagnostic) };
             Phase(JobStage.Validating);
-            var validated = await ValidateAsync(spec, context, cancellationToken).ConfigureAwait(false);
+            var validated = await ValidateAsync(spec, context, progress, cancellationToken).ConfigureAwait(false);
             Phase(JobStage.Probing);
             var probed = await ProbeAsync(validated, cancellationToken).ConfigureAwait(false);
             Phase(JobStage.Subsetting);
@@ -102,7 +102,7 @@ public sealed partial class RunSingleMuxUseCase(
         }
     }
 
-    private async Task<Validated> ValidateAsync(MuxJobSpec spec, ToolCallContext context, CancellationToken token)
+    private async Task<Validated> ValidateAsync(MuxJobSpec spec, ToolCallContext context, IProgress<JobProgress>? progress, CancellationToken token)
     {
         Require(!spec.ExternalTracks.IsEmpty, ErrorCodes.InputEmpty);
         Require(spec.SourceTracks.IsEmpty, ErrorCodes.SourceSelectionUnsupported);
@@ -141,6 +141,8 @@ public sealed partial class RunSingleMuxUseCase(
             tracks.Add(normalized);
         }
         var snapshot = spec with { VideoPath = video.Path, Fonts = new(fonts.Path), Output = output.Output, ExternalTracks = new(tracks) };
+        // 输入快照完成的事实通知；兼容入口在此写旧请求，用例不保存或解析旧格式。
+        SafeReport(progress, new(JobStage.Validating, "INPUT_VALIDATED", null, ""));
         await LogSafely(context.Workspace, "SPEC " + JsonSerializer.Serialize(snapshot)).ConfigureAwait(false);
         var destination = Path.Combine(snapshot.Output.Directory, snapshot.Output.FileName!);
         Require(!await inputs.DestinationExistsAsync(destination, token).ConfigureAwait(false), ErrorCodes.TargetAlreadyExists, destination);

@@ -99,7 +99,7 @@
 
 - **用户已批准的 3c/3d 调整**（本次先改计划再实施）：
   1. 新用例不持有可变配置，工具与目录配置通过 MuxJobSpec.Tools 随任务快照传入。SingleMuxService.UpdateWorkspace 作为旧入口外壳保留到 4a，仅影响下一次任务；“删除 UpdateWorkspace”的完成标准移到 4a。
-  2. 3c、3d 分别形成本地提交，均不推送；3d 完成后执行完整真实对照，等用户确认后才一起 pull --rebase、推送并核对 CI。
+  2. 3c、3d 分别形成本地提交；完整真实对照完成后只推送临时审查分支 review/3c-3d。用户确认后才 pull --rebase、推送到 v2/avalonia-rewrite、核对 CI，最后删除临时分支（用户已批准）。
   3. 真实基准起点使用 3b 前重跑记录 dbe9f56，取代 3f42228；完整电影入口为 --warning-synthetic-bold-real <task.log>。逐项对照另在 e005923 独立工作树与新代码上以同机、同输入、同工具运行，方法见下方 3d。
 
 - `SingleMuxService.RunAsync`（迁移前约 260 行）改写为 `RunSingleMuxUseCase`：检查输入 → 探测源 → 子集化 → 生成封装计划 → 封装临时成品 → 成品校验 → 不覆盖落位，阶段间用 record 传递。
@@ -107,17 +107,21 @@
 - QC 输出结构化 `CheckResult`；失败输出 `JobFailure`（含阶段与错误码）。
 - Application 测试：假端口覆盖各阶段失败、取消、清理、目标已存在与落位期间新出现目标。
 
+3c/3d 验收采用下方经用户批准的工具不确定性规则；生产规则、测试和架构护栏不变。
+
 ### 3d 旧入口（小）
 
 `SingleMuxService` 只保留旧模型转换并调用新用例；Desktop 与 Smoke 不改。
 
 3c/3d 本地验证与真实逐项对照（**用户已批准**）：
 
-- 先跑 locked restore、Release 0 警告 / 0 错误、dotnet test 全部通过及 13 个受控套件；3c、3d 各自本地提交，均不推送。
+- 先跑 locked restore、Release 0 警告 / 0 错误、dotnet test 全部通过及 13 个受控套件；3c、3d 各自本地提交，先不推主分支；最终对照完成后只推 review/3c-3d，等待用户确认。
 - 3d 完成后跑六项仅本地真实套件：--integration（121）、--media-drop-real（37）、--ui-integration（39）、--warning-synthetic-bold-real artifacts/runs/20261009-115919-18aeaf51f58d43e5a4b935b9ce8b8f5b/task.log（9，SyntheticBoldExpected=true）、--component-install-all-real（15，需联网）、--component-uninstall-real <固定发布包缓存目录>（17）。计数对照 dbe9f56 的重跑基准，不再用 3f42228；--warning-real 的 8 项仅保留历史补充记录。
 - 在 e005923 独立工作树与新代码上，以同一台机器、相同输入与工具，各重跑 integration、media-drop-real、ui-integration 和完整电影。逐成品提取并比较轨道类型/编码/语言/名称/default/forced、附件身份与 SHA-256、ASS 全文、音频 fullraw 哈希、检查项与告警。
+- **用户已批准的工具不确定性对照规则**（先用 e005923 的 integration-single-sc 连跑两遍证实来源）：ASS 使用每个文件自己的 `; Font Subset:` 映射，把随机名还原为原字体名后全文逐字比较，其他文字/空格/换行/顺序保留。字体附件按原字体（含 face/文件名与顺序）配对，所有表逐表比较哈希；只还原 name 表中的随机名称，并排除 head.modified / head.checkSumAdjustment，其他 head 字节保留。附件数量、顺序、MIME 与去随机部分的文件名逐项比较。轨道信息、音频 fullraw、检查项、告警和进度保持严格比较，不做处理。脚本必须用真实字体字形缺失、Dialogue 正文改动、字体表改动以及各规则的反例证明拒绝能力；授权范围之外的差异继续停止报告。
+
 - 不比较整个 MKV 文件哈希（日期与 UID 每次变化）。同一输入的逐项报告记录“一致 / 差异”，路径写入实施结果；对照脚本提交至 desktop/scripts/，不进解决方案或 CI。
-- 任一差异立即停止报告，不改测试或基准凑数。两个本地提交、全部计数和逐套件结论交用户确认后，才一起 pull --rebase、推送并确认 Desktop CI。
+- 开发中自己代码引起的构建或测试失败直接修复；只有最终基准逐项对照出现差异、修复必须改测试/基准/计划、需要放宽架构护栏才停止报告（用户已批准）。完成后将两笔提交推至 review/3c-3d 审查，主分支仍等待用户确认；确认后 pull --rebase、推送、确认 Desktop CI 并删除临时分支。
 
 ### 3e 操作协调与组件（中）
 
@@ -234,8 +238,8 @@
 | [2c · `90fea6b`](https://github.com/Danyuyuyuyu/mux-deck/commit/90fea6b02e421105cd3c7bdb45c69c4c69d1df8e) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38400687784) | restore 10/10；Release 0 警告 / 0 错误；test 427/427；受控 13/13、656/656；warning-policy 57/57 | DiagnosticPolicy、OutputQcRules、AssDocument 已落位；新增 Domain 76、架构 3；原 348 保留，白名单未变。 |
 | [3a · `da0f334`](https://github.com/Danyuyuyuyu/mux-deck/commit/da0f3342f2b50bccfdcf31f19212ee3bb63e9f91) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38406784353) | locked restore 10/10；Release 0 警告 / 0 错误；test 485/485；受控 13/13、656/656；warning-policy 57/57 | 九个 Application 业务端口；Domain 统一 MediaTrackInfo，删除重复 TrackQcFacts；新增 29，原 456 全部保留；详见 3a 实施与验证。 |
 | [3b · `a2b76d9`](https://github.com/Danyuyuyuyu/mux-deck/commit/a2b76d9588646265bfab68d0521928c8f881f94c) + [修正 · `d99781b`](https://github.com/Danyuyuyuyu/mux-deck/commit/d99781b5cb44ac4c2279d90225dd6412ba7d92b7) | 已完成，已推送，[修正 Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38494664905) | locked restore 11/11；Release 0 警告 / 0 错误；test 613/613；受控 13/13、656/656；真实 integration 121/121、media-drop-real 37/37 | 依用户批准保留 Desktop 直接依赖；Core → Infrastructure 过渡；初始新增 47，本次新增 12，原 601 保留。 |
-| 3c | 本地实现及通用验证通过；未推送 | restore 11/11；Release 0/0；test 675/675；受控 13/13、656/656 | 真实对照待 3d，经用户确认后一起推送。 |
-| 3d | 未开始 | | |
+| 3c · 7c9a477 | 完整验收通过，仅发布审查分支；主分支待用户确认 | restore 11/11；Release 0/0；test 675/675；受控 13/13、656/656 | 与 3d 共计 15/15 对照一致；见工具不确定性授权记录。 |
+| 3d | 完整验收通过，仅发布 review/3c-3d；主分支待用户确认 | restore 11/11；Release 0/0；test 676/676；受控 656/656；真实 238/238；对照 15/15；脚本反例 22/22 | 旧/旧来源复核及新规则 10/10；所有 15 项一致，原始报告保留；见工具不确定性授权记录。 |
 | 3e | 未开始 | | |
 | 4a | 未开始 | | |
 | 4b | 未开始 | | |
@@ -756,3 +760,153 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 - `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release [-- <入口>]`：无参数 28、--warning-policy 57、--single-mux-round1 89、--single-mux-ui-round1 176、--workbench-ui 38、--input-feedback 24、--media-drop 25、--environment-ui 23、--components 31、--component-install-ui 37、--component-install-all 41、--component-uninstall 26、--component-uninstall-ui 61；13/13 套件、656/656，与 dbe9f56 基准一致。
 
 证据：`artifacts/arch-corrections/3c/`。新补测试后再跑严格构建与全部单元测试。Desktop、Smoke、现有行为测试零改动；端口 XML 测试只新增参数。真实对照待 3d，不标已验收；未推送、未运行 CI。
+
+### 3d 暂停记录（2026-10-14）
+
+3d 开发中发现日志转换回归，已修复，见 ①
+
+### 3d 续跑与逐成品差异（2026-10-14）
+
+用户确认继续并批准修复上一条日志转换差异，限定生产修复范围为 LegacyTaskWorkspaceFactory（必要时才加 EquatableArray converter），不改测试/基准；全部通过后才本地提交 3d，推送前先汇总。本次只修复 Factory 的日志字段投影，直接生成旧 MuxRequest 日志，不反序列化 MuxJobSpec、不增加 converter。使用既有转换方法，未改变 Domain、Application、Desktop、Smoke、测试、ADR、解决方案或锁文件。请求日志额外作 16 组 UTF-8 字节核对，覆盖 null/空输出名、中文与转义、多字幕/音频，16/16 与旧序列化格式一致；该核对 console 位于忽略的 artifacts，不修改测试项目。
+
+通用验证实际命令（desktop/）：
+- `dotnet restore MuxDeck.sln --locked-mode`：11/11。
+- `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false`：0 警告 / 0 错误。
+- 修复后先跑 `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-policy`：57/57，失败 0。
+- `dotnet test MuxDeck.sln --no-build -c Release`：675/675（Domain 298 / Application 80 / Core 40 / Architecture 198 / Infrastructure 59），失败/跳过 0，与 3c 一致，原用例全部保留。
+- `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release [-- <入口>]`：无参数 28、--warning-policy 57、--single-mux-round1 89、--single-mux-ui-round1 176、--workbench-ui 38、--input-feedback 24、--media-drop 25、--environment-ui 23、--components 31、--component-install-ui 37、--component-install-all 41、--component-uninstall 26、--component-uninstall-ui 61；13/13 套件，656/656。
+
+六项真实验证依次运行，计数全部等于 dbe9f56 基准：
+
+| 真实参数（均为 dotnet run --project tests/MuxDeck.Smoke --no-build -c Release --） | 实际计数 | 本机证据 |
+|---|---|---|
+| --integration | 121/121，失败 0 | [报告](../../artifacts/phase1/20261014-030154-374c0ec0158e40ba9cf2afcbd1887456/report.json) |
+| --media-drop-real | 37/37，失败 0 | [报告](../../artifacts/automatic-drop/real-2c4609983ec64da29b2fe4117f9c16f1/report.json) |
+| --ui-integration artifacts/phase1/20261014-030154-374c0ec0158e40ba9cf2afcbd1887456 artifacts/arch-corrections/3d-resume/ui.png | 39/39，失败 0 | [报告](../../artifacts/single-mux-round1-b/real-4189e38529574e4695f462b612dcc6e3/report.json) |
+| --warning-synthetic-bold-real artifacts/runs/20261009-115919-18aeaf51f58d43e5a4b935b9ce8b8f5b/task.log | 9/9，失败 0，SyntheticBoldExpected=true | [报告](../../artifacts/warning-policy/real-6c4d9e5607a1486b820e10cfebd6a885/report.json) |
+| --component-install-all-real | 15/15，失败 0，实际联网下载 | [报告副本](../../artifacts/arch-corrections/3d-resume/component-install-all-real-report.json) |
+| --component-uninstall-real artifacts/arch-corrections/real-baseline/packages | 17/17，失败 0 | [报告副本](../../artifacts/arch-corrections/3d-resume/component-uninstall-real-report.json) |
+
+日期为 2026-10-14（Asia/Shanghai）。既有工具链路径与版本保持：MKVToolNix 100.0 / FFmpeg 8.1.1-full / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10；新安装包的输出为 MKV 101.0 / FFmpeg 8.1.1-essentials / AFS 2.1.1，固定卸载包包含 assfonts 0.7.3。逐任务实际工具路径和二进制 SHA-256 另保存在对照 host 结果。
+
+e005923 独立工作树 locked restore 11/11、严格 Release 0 警告 / 0 错误。共享工具目录只读复用；该树实际运行 --integration、--media-drop-real、--ui-integration（通过 junction 复用上述新 integration 输入）、--warning-synthetic-bold-real（同一绝对历史 task.log），分别 121/121、37/37、39/39、9/9，失败 0，电影 SyntheticBoldExpected=true。本机工作树与 native 路径见[四项摘要副本](../../artifacts/arch-corrections/3d-resume/e005923-integration-summary.json)及同目录的 e005923-media-drop-real/ui-integration/movie-summary.json。
+
+逐成品对照采用两个独立 console host，分别引用 e005923 与当前 Core；从四套件成功成品日志整理 [15 个原请求](../../artifacts/arch-corrections/3d-resume/comparison-cases.json)，将同一输入文件、同一工具根目录交给两个公开旧入口重新运行，只改变各自输出目录。每个输入及工具二进制计算 SHA-256，以核对确为同输入/同工具，输入运行前后哈希保持。host 不进解决方案或 CI，不修改 Smoke 或测试；脚本位于 `scripts/Run-ArchComparison.ps1` 与 `scripts/Compare-ArchArtifacts.ps1`，后者提取附件、ASS 全文与音频 fullraw，保留实际名称与字节差异，不计算整 MKV 哈希。
+
+实际对照命令（desktop/）：
+```powershell
+./scripts/Run-ArchComparison.ps1 -BaselineRoot 'C:\Users\ZhenXun\.codex\worktrees\arch-3c3d-baseline\mux-deck' -CurrentRoot 'E:\Video\mux-deck' -CaseManifest 'artifacts/arch-corrections/3d-resume/comparison-cases.json' -EvidenceDirectory 'artifacts/arch-corrections/3d-resume/paired' -Mkvmerge 'C:\Program Files\MKVToolNix\mkvmerge.exe' -Mkvextract 'C:\Program Files\MKVToolNix\mkvextract.exe'
+```
+
+首项 `integration / single-sc` **出现差异，立即停止**：轨道类型/编码/语言/名称/default/forced、音频 fullraw、检查项、告警、进度、输入与工具哈希七组一致；附件身份/SHA-256、ASS 全文两组不一致。示例：旧 `001-arial.0.H7X2U6I4.ttf`、新 `001-arial.0.GDYTFKZV.ttf`，附件 SHA-256 分别为 `FFA879DD4C940E6715E2B5B3BC6EBCDDC05EE5A984A562C3DB9118007C173B38` / `C420C02AEAA493249E68B92DFED124F83631AF06AC73844A60902F358B782933`。Microsoft YaHei token 为 MFG8BO2C / O3OGH0U2；ASS 的 Font Subset 映射、Style 及 Dialogue 的 fn 引用亦不同。现象指向 AFS 每次生成的字体名称，尚未用基准对基准复核，不能据此宣称只是随机性或改为一致。没有对名称、字体字节或 ASS 全文做归一化。
+
+| 套件 | 旧/新套件计数 | 逐成品结论 |
+|---|---|---|
+| integration | 121/121 / 121/121 | 差异：首个 single-sc 的附件及 ASS；本套其余 4 个成品未继续 |
+| media-drop-real | 37/37 / 37/37 | 未完成：按首项差异停止，6 个共享输入成品未运行 |
+| ui-integration | 39/39 / 39/39 | 未完成：3 个共享输入成品未运行 |
+| 完整电影 | 9/9 / 9/9，标志均 true | 未完成：1 个共享输入成品未运行 |
+
+证据：[逐项差异报告](../../artifacts/arch-corrections/3d-resume/paired/integration-single-sc/comparison.json)、[停止摘要](../../artifacts/arch-corrections/3d-resume/paired/summary.json)、同目录 baseline/current-result.json 与提取文件。1/15 已检查、14 项未验收。按用户停止规则未继续跑剩余对照、未修复其他代码、未改测试或基准。3d 保持未提交/未推送；仅有 3c 本地提交 `7c9a477410768aa1758551116193fac19e8172de`，未 pull --rebase、未运行 CI，等待用户确认下一步。
+
+### 3d ① 请求日志改用旧快照（2026-10-14）
+
+用户批准继续 3d，并限定最终交付只推临时分支 review/3c-3d；主分支等待确认。开发中的自身构建/测试失败直接修复，最终逐项差异、必须改测试/基准/计划、须放宽架构规则时才停下。
+
+日志工作区不解析 SPEC 或 MuxJobSpec，只提供原始日志边界；SingleMuxService 在首次回调前固定旧请求集合，在输入校验完成事实 INPUT_VALIDATED 后、目标存在性检查前，用它持有的旧 MuxRequest 路径投影直接序列化“请求 …”。默认序列化格式、字段顺序及写入时机沿用旧版；用例自己的 SPEC 日志保留原样，未给 EquatableArray 添加 JSON 反序列化支持。
+
+新增公开旧入口测试 LegacyRequestLogTests：先因 SPEC 消失失败，再修复后 1/1 通过；请求行（排除动态时间戳）与旧默认序列化字符串逐字一致，验证中文/引号转义、路径规范化、写入顺序、目标冲突和调用方集合修改隔离。原 675 全部保留，只新增 Core 1；Desktop、Smoke、ADR 与既有测试均未修改。旧流水线辅助删除，唯一七阶段流程在 Application，检查文本与旧进度由转换层生成。
+
+通用命令在 desktop/：
+- `dotnet restore MuxDeck.sln --locked-mode`：11/11。
+- `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false`：0 警告 / 0 错误。
+- `dotnet test MuxDeck.sln --no-build -c Release`：676/676，失败/跳过 0，Domain 298 / Application 80 / Core 41 / Architecture 198 / Infrastructure 59。
+- `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release [-- <入口>]`：无参数 28、warning-policy 57、single-mux-round1 89、single-mux-ui-round1 176、workbench-ui 38、input-feedback 24、media-drop 25、environment-ui 23、components 31、component-install-ui 37、component-install-all 41、component-uninstall 26、component-uninstall-ui 61；13/13、656/656，与 dbe9f56 基准一致。
+
+日志：`artifacts/arch-corrections/3d-request-log/`；真实套件正在续跑，最终逐成品对照尚未完成。本节取代此前续跑时对 SPEC 反向投影的实现描述；历史证据保留。
+
+本轮六项真实命令均为 `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- <参数>`（desktop/，2026-10-14 Asia/Shanghai），全部失败 0：
+
+| 参数 | 计数 | 证据 |
+|---|---|---|
+| --integration | 121/121 | [报告](../../artifacts/phase1/20261014-040759-5a03b2a1311741279fa7105cca80b0b6/report.json) |
+| --media-drop-real | 37/37 | [报告](../../artifacts/automatic-drop/real-9d9fe9ce65d54d169dffd6d54541bfec/report.json) |
+| --ui-integration artifacts/phase1/20261014-040759-5a03b2a1311741279fa7105cca80b0b6 artifacts/arch-corrections/3d-request-log/ui.png | 39/39 | [报告](../../artifacts/single-mux-round1-b/real-5c52172666c443bb85f7d2a9ae01c7c5/report.json) |
+| --warning-synthetic-bold-real artifacts/runs/20261009-115919-18aeaf51f58d43e5a4b935b9ce8b8f5b/task.log | 9/9；SyntheticBoldExpected=true | [报告](../../artifacts/warning-policy/real-91eef78266ea49549891d320369e35da/report.json) |
+| --component-install-all-real | 15/15，实际联网 | [报告副本](../../artifacts/arch-corrections/3d-request-log/component-install-all-real-report.json) |
+| --component-uninstall-real artifacts/arch-corrections/real-baseline/packages | 17/17 | [报告副本](../../artifacts/arch-corrections/3d-request-log/component-uninstall-real-report.json) |
+
+合计 6/6、238/238，与 dbe9f56 基准一致。工具版本：MKVToolNix 100.0、FFmpeg 8.1.1-full、AFS 2.1.1、fontTools 4.61.1、Python 3.12.10；联网安装验证使用 MKV 101.0、FFmpeg 8.1.1-essentials、AFS 2.1.1，固定卸载缓存含 assfonts 0.7.3。真实命令输出和计数摘要位于 `artifacts/arch-corrections/real-baseline/3d-request-log-*`。
+
+3d 代码与通用/六项真实验证完成，本地提交；最终 e005923 逐成品对照待运行，暂未推任何分支。比较采用同一输入请求与工具二进制，通过两份独立 Core host 重跑，严格脚本 `scripts/Run-ArchComparison.ps1` 和 `scripts/Compare-ArchArtifacts.ps1` 提交；不引用或采用归一化草稿。基准工作树已核对为 e0059231aef2d8c5fc8a936e91c83378c1a1dcd9，其先前四项 121/37/39/9 的报告保留在 3d-resume/；最终重新配对执行两个公开旧入口。
+
+### 3d ① 最终逐成品对照：差异停止（2026-10-14）
+
+实际命令（desktop/）：
+```powershell
+./scripts/Run-ArchComparison.ps1 -BaselineRoot 'C:/Users/ZhenXun/.codex/worktrees/arch-3c3d-baseline/mux-deck' -CurrentRoot 'E:/Video/mux-deck' -CaseManifest 'artifacts/arch-corrections/3d-resume/comparison-cases.json' -EvidenceDirectory 'artifacts/arch-corrections/3d-request-log/paired' -Mkvmerge 'C:/Program Files/MKVToolNix/mkvmerge.exe' -Mkvextract 'C:/Program Files/MKVToolNix/mkvextract.exe'
+```
+
+两份独立 Core host 均实际构建通过（各 0 警告 / 0 错误），随后使用同一原请求、输入文件与工具各生成一份成品。首项 integration / single-sc 最终比较有差异，脚本立即退出，不继续其余成品：
+
+- 一致：逐轨类型/编码/语言/名称/default/forced（含 codec_id、尺寸/声道/采样率）、音频 fullraw SHA-256、检查项与顺序、告警与次数、旧进度阶段/文字、输入哈希、工具二进制哈希；两侧输入运行前后哈希保持。
+- 差异：附件身份和 SHA-256、ASS 提取全文。示例旧附件 `001-arial.0.YZHZCGEL.ttf` / `2166C3189BE532F71A42410C437DEA6AD42A055D42BD658D382A914CCCEABB77`，新附件 `001-arial.0.F3GH93A8.ttf` / `27A583030A34B3CA426B0335D17F10BBC5135DDEDD27B0ADFBD597CB6D6C1EC9`；对应 ASS 中的字体映射与引用亦不同。未做字体名、字体字节或 ASS 全文归一化，不计算整个 MKV 哈希；原因未验收，不据此认定只是随机性。
+
+| 套件 | 本轮新代码计数（基准相同） | 最终逐成品结论 |
+|---|---|---|
+| integration | 121/121 | 差异：single-sc 附件与 ASS；本套其余 4 项未继续 |
+| media-drop-real | 37/37 | 未验收：按首项差异停止，6 项未运行 |
+| ui-integration | 39/39 | 未验收：3 项未运行 |
+| 完整电影 | 9/9；SyntheticBoldExpected=true | 未验收：1 项未运行 |
+
+[逐项报告](../../artifacts/arch-corrections/3d-request-log/paired/integration-single-sc/comparison.json)、[停止摘要](../../artifacts/arch-corrections/3d-request-log/paired/summary.json)。1/15 已对照、14 项未验收。按用户补充停止规则停止，不改测试/基准/计划或放宽架构护栏；仅补录证据到未推送的 3d 本地提交。3c / 3d 均已本地提交，主分支和 review/3c-3d 均未推送，未 pull --rebase、未运行 CI，等待用户决定该差异的处理。
+
+### 3c/3d 工具不确定性来源与授权对照（2026-10-14）
+
+用户批准本地对照脚本处理已证实的 AssFontSubset 不确定性，不改变生产 QC、现有 .NET/Smoke 测试、基准、架构护栏或 ADR。
+
+① 来源证据：使用 e005923 独立工作树对应的 Core host，读取同一 integration-single-sc 原请求，对相同输入与工具连续运行两遍；两次公开旧入口均成功，输入前后 SHA-256 保持。命令为：
+```powershell
+dotnet run --project artifacts/arch-corrections/3d-request-log/paired/host-baseline/host.csproj --no-build -c Release -- <同一 integration-single-sc 请求 JSON> E:/Video/mux-deck <first-output> <first-result.json>
+dotnet run --project artifacts/arch-corrections/3d-request-log/paired/host-baseline/host.csproj --no-build -c Release -- <同一 integration-single-sc 请求 JSON> E:/Video/mux-deck <second-output> <second-result.json>
+```
+旧、旧原始对照仍有附件身份、SHA-256、ASS 全文差异，其余七组一致。四份字体只有 name/head 表不同；name 变化仅为随机子集名称（name ID 1/3/4/6 等语言记录），head 差异全部在字节 8–11（checkSumAdjustment）或 28–35（modified），所有其他表原始字节一致。ASS 差异只在映射、Style.Fontname 和 fn 引用；使用各自映射还原后全文一致。依用户判定条件，来源为工具不确定性，不是本次流水线迁移引入的差异。[原始对照](../../artifacts/arch-corrections/3d-afs-proof/raw-comparison.json)、[逐字体定位](../../artifacts/arch-corrections/3d-afs-proof/source-proof.json)。
+
+② 实现：Compare-ArchArtifacts.ps1 先保留 comparison.json.raw.json 和提取文件，再调用 Normalize-AfsEvidence.py。ASS 仅还原映射标识、Style.Fontname 和覆盖标签 fn，保留映射行及顺序；不统一换行/BOM/空白或替换普通对白。字体依原字体、文件名/face 与序号配对，name 所有记录与元数据保留、只换回原名，head 只排除 modified/checkSumAdjustment，其他每个表用原始字节 SHA-256 比较。附件数量/顺序/ID/MIME/大小严格保留，去掉文件名随机段；字体整体哈希由逐表验证替代，原始整体哈希保留在原报告。非字体附件仍严格比整体哈希。轨道、音频 fullraw、检查项、告警、进度、输入及工具哈希沿用原脚本严格结果，不处理。未知格式或超出授权的差异失败退出。脚本只用于本地验收，不进解决方案与 CI。比较解析器使用本机 Python 3.12.10 / fontTools 4.63.0；产物生成的原工具链及二进制哈希不变（原 fontTools 后端 4.61.1）。
+
+③ 同一对照脚本用新规则重新比较①两份旧产物：完全一致，全部十组通过。[旧/旧新规则报告](../../artifacts/arch-corrections/3d-afs-proof/approved-v2/comparison.json)及同目录原始报告保存。
+
+反例命令：
+```powershell
+python -X utf8 ./scripts/Test-AfsEvidence.py --source artifacts/arch-corrections/3d-afs-proof/raw-comparison.json -v
+```
+22/22，通过/失败/跳过 = 22/0/0。使用真实提取的 Arial 子集删除正文 English 实际使用的 U+0045（E）及其字形，确认 cmap 与 glyphOrder 都不再包含该字形，必须拒绝；修改真实 OS/2 表内容必须拒绝。还覆盖 Dialogue 正文/时序/普通文本里的随机字串、空白/换行、映射原名/重复行、无关 name 记录、head.created、附件数量/顺序/MIME/非随机文件名、原始附件哈希完整性，以及既有严格轨道/fullraw/检查/告警/进度失败结果。既有 .NET 676 项与受控 656 项不变；[反例输出](../../artifacts/arch-corrections/3d-afs-proof/counter-tests-final.txt)。
+
+④ 全部 15 项新旧对照已完成，采用同一请求、输入与工具，分别调用 e005923 和本地 3d Core。命令：
+```powershell
+./scripts/Run-ArchComparison.ps1 -BaselineRoot 'C:/Users/ZhenXun/.codex/worktrees/arch-3c3d-baseline/mux-deck' -CurrentRoot 'E:/Video/mux-deck' -CaseManifest 'artifacts/arch-corrections/3d-resume/comparison-cases.json' -EvidenceDirectory 'artifacts/arch-corrections/3d-afs-approved-paired' -Mkvmerge 'C:/Program Files/MKVToolNix/mkvmerge.exe' -Mkvextract 'C:/Program Files/MKVToolNix/mkvextract.exe'
+```
+
+最终 15/15 项全部一致，每项十组比较均通过（旧代码重复运行 10/10；反例 22/22）。本次只修改本地对照脚本和任务文档，没有修改生产代码、原测试、基准、架构护栏或 ADR。
+
+| 套件 | 成品输入 | 逐项结果 |
+|---|---|---|
+| integration | single-sc | [一致](../../artifacts/arch-corrections/3d-afs-approved-paired/integration-single-sc/comparison.json) |
+| integration | dual-sc-tc | [一致](../../artifacts/arch-corrections/3d-afs-approved-paired/integration-dual-sc-tc/comparison.json) |
+| integration | tc-only | [一致](../../artifacts/arch-corrections/3d-afs-approved-paired/integration-tc-only/comparison.json) |
+| integration | mp4-to-mkv | [一致](../../artifacts/arch-corrections/3d-afs-approved-paired/integration-mp4-to-mkv/comparison.json) |
+| integration | cancel-at-completed | [一致](../../artifacts/arch-corrections/3d-afs-approved-paired/integration-cancel-at-completed/comparison.json) |
+| media-drop-real | srt-only | [一致](../../artifacts/arch-corrections/3d-afs-approved-paired/media-drop-real-srt-only/comparison.json) |
+| media-drop-real | audio-only | [一致](../../artifacts/arch-corrections/3d-afs-approved-paired/media-drop-real-audio-only/comparison.json) |
+| media-drop-real | multi-audio | [一致](../../artifacts/arch-corrections/3d-afs-approved-paired/media-drop-real-multi-audio/comparison.json) |
+| media-drop-real | multi-srt | [一致](../../artifacts/arch-corrections/3d-afs-approved-paired/media-drop-real-multi-srt/comparison.json) |
+| media-drop-real | multi-ass | [一致](../../artifacts/arch-corrections/3d-afs-approved-paired/media-drop-real-multi-ass/comparison.json) |
+| media-drop-real | mixed | [一致](../../artifacts/arch-corrections/3d-afs-approved-paired/media-drop-real-mixed/comparison.json) |
+| ui-integration | single-ass | [一致](../../artifacts/arch-corrections/3d-afs-approved-paired/ui-integration-single-ass/comparison.json) |
+| ui-integration | sc-tc | [一致](../../artifacts/arch-corrections/3d-afs-approved-paired/ui-integration-sc-tc/comparison.json) |
+| ui-integration | tc-only | [一致](../../artifacts/arch-corrections/3d-afs-approved-paired/ui-integration-tc-only/comparison.json) |
+| movie | complete | [一致](../../artifacts/arch-corrections/3d-afs-approved-movie-retry/movie-complete/comparison.json) |
+
+[15 项总摘要](../../artifacts/arch-corrections/3d-afs-proof/summary-all15.json)。首轮完整电影的旧入口在 NoOverwritePublisher.CopyToAsync 遇到 I/O 设备错误，源输入哈希保持，未生成可比较成品；[首次失败结果](../../artifacts/arch-corrections/3d-afs-approved-paired/movie-complete/baseline-result.json)和 task.log 保留。只在新目录重复电影输入，旧、新入口均成功，随后全部十组比较一致；其他 14 项未重跑或覆盖。电影重试的实际命令与前述命令相同，仅 CaseManifest 为 `artifacts/arch-corrections/3d-afs-proof/movie-retry-cases.json`、EvidenceDirectory 为 `artifacts/arch-corrections/3d-afs-approved-movie-retry`。
+
+全部验收通过后，把本次脚本与文档并入尚未推送的 3d 提交，继续保持 3c / 3d 两个提交；仅发布 [review/3c-3d](https://github.com/Danyuyuyuyu/mux-deck/tree/review/3c-3d) 供审查，不向 v2/avalonia-rewrite 推送、不 pull --rebase。主分支仍等用户确认；确认后按已批准顺序 pull --rebase、推送主分支、确认 Desktop CI、删除临时分支。

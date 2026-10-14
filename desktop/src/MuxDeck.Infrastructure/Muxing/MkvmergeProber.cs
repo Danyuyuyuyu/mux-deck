@@ -16,6 +16,16 @@ public sealed class MkvmergeProber(IMuxToolRunner? runner = null, IToolCatalog? 
             return Parse(path, result.StandardOutput);
         });
 
+    // 旧只读探测入口无需创建任务工作区；与任务端口共用同一工具、解析与失败边界。
+    public Task<MediaProbeResult> ProbeAsync(string path, ToolConfiguration tools, CancellationToken cancellationToken = default) =>
+        PortBoundary.Guard(async () =>
+        {
+            var executable = await ToolCatalog.Require(catalog ?? new ToolCatalog(), ToolCapability.ProbeMedia, tools, cancellationToken).ConfigureAwait(false);
+            var result = await new ToolExecutor(runner).RunAsync(executable, ["-J", Path.GetFullPath(path)], null, null,
+                cancellationToken, TimeSpan.FromMinutes(2), json: true).ConfigureAwait(false);
+            return Parse(path, result.StandardOutput);
+        });
+
     public static MediaProbeResult Parse(string path, string json) =>
         PortBoundary.Guard(() =>
         {
