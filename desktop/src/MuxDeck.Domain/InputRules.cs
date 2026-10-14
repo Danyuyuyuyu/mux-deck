@@ -14,6 +14,25 @@ public static class InputRules
     public static bool IsAssExtension(string extension) => extension.Equals(".ass", StringComparison.OrdinalIgnoreCase);
     public static bool IsFontExtension(string extension) => extension.ToLowerInvariant() is ".ttf" or ".otf" or ".ttc" or ".otc";
 
+    // 批量拖入的唯一校验顺序：数量 → 非本地 → 完整路径 → 是否存在 → 类型（逐项）→ 重复 → 字体目录。
+    // 只判断事实并返回命中项，中文文案由调用边界映射。
+    public static MediaBatchFailure CheckMediaBatch(IReadOnlyList<InputPathFacts> facts)
+    {
+        if (!AcceptsMediaSelectionCount(facts.Count)) return new(MediaBatchError.EmptySelection, null);
+        if (facts.Any(item => CheckCandidateKind(item.Kind, expectsDirectory: false) == InputKindError.NonLocal))
+            return new(MediaBatchError.NonLocal, null);
+        foreach (var item in facts)
+        {
+            if (!AcceptsMediaPath(item.Path, item.IsFullyQualified)) return new(MediaBatchError.PathNotAbsolute, item.Path);
+            if (!(item.Kind == InputLocationKind.LocalDirectory ? item.DirectoryExists : item.FileExists))
+                return new(MediaBatchError.PathMissing, item.Path);
+            if (!AcceptsMediaCandidateType(item.Kind, item.Extension)) return new(MediaBatchError.TypeUnsupported, item.Path);
+        }
+        if (HasDuplicatePaths(facts.Select(item => item.FullPath).ToArray())) return new(MediaBatchError.Duplicate, null);
+        return new(AcceptsFontDirectories(facts.Where(item => UsesFontDirectory(item.Kind, item.Extension)).Select(item => item.Directory))
+            ? MediaBatchError.None : MediaBatchError.MultipleFontDirectories, null);
+    }
+
     public static bool IsSupportedMediaExtension(string extension) =>
         IsVideoExtension(extension) || IsAudioExtension(extension) || IsSubtitleExtension(extension) || IsFontExtension(extension);
 

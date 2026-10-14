@@ -129,10 +129,10 @@ public sealed partial class RunSingleMuxUseCase(
                 try
                 {
                     if (IsAss(normalized)) AssDocument.ReadUsage(facts.SubtitleText!);
-                    else Require(SrtTimeline().IsMatch(facts.SubtitleText!), ErrorCodes.SubtitleTextInvalid, normalized.Path);
+                    else Require(SubtitleRules.HasSrtTimeline(facts.SubtitleText!), ErrorCodes.SubtitleTextInvalid, normalized.Path);
                 }
                 catch (MediaRuleException ex) { throw new MuxRuleFailureException(ErrorCodes.SubtitleTextInvalid, normalized.Path, detail: ex.Message); }
-                Require(ValidLanguage(normalized.Language.Value), ErrorCodes.SubtitleLanguageInvalid);
+                Require(LanguageRules.IsValidTag(normalized.Language.Value), ErrorCodes.SubtitleLanguageInvalid);
                 Require(normalized.Name is not null && !normalized.Name.Contains('\0'), ErrorCodes.SubtitleNameInvalid);
             }
             else
@@ -140,7 +140,7 @@ public sealed partial class RunSingleMuxUseCase(
                 Require(track.Kind == TrackKind.Audio && facts.Exists &&
                     (InputRules.IsAudioExtension(Path.GetExtension(normalized.Path)) || InputRules.IsVideoExtension(Path.GetExtension(normalized.Path))) &&
                     normalized.SourceTrackId is { Value: >= 0 }, ErrorCodes.AudioInputInvalid);
-                Require(ValidLanguage(normalized.Language.Value) && normalized.Name is not null && !normalized.Name.Contains('\0'), ErrorCodes.AudioMetadataInvalid);
+                Require(LanguageRules.IsValidTag(normalized.Language.Value) && normalized.Name is not null && !normalized.Name.Contains('\0'), ErrorCodes.AudioMetadataInvalid);
             }
             tracks.Add(normalized);
         }
@@ -277,7 +277,6 @@ public sealed partial class RunSingleMuxUseCase(
 
     private static bool IsAss(ExternalTrackSpec track) => track.Kind == TrackKind.Subtitle && InputRules.IsAssExtension(Path.GetExtension(track.Path));
     private static string AttachmentName(WorkFile font, int index) => $"{index + 1:D3}-{Path.GetFileName(font.Path)}";
-    private static bool ValidLanguage(string value) => !string.IsNullOrWhiteSpace(value) && LanguagePattern().IsMatch(value);
     private static CheckResult TrackCheck(TrackQcCheck check) => new(check.Kind switch
     {
         TrackQcCheckKind.Retained when check.TrackKind == TrackKind.Video => MuxCheckCodes.RetainedVideo,
@@ -309,8 +308,6 @@ public sealed partial class RunSingleMuxUseCase(
     { if (!valid) throw new MuxRuleFailureException(code, path, sequence); }
     private static void SafeReport(IProgress<JobProgress>? progress, JobProgress value) { try { progress?.Report(value); } catch (Exception) { } }
     private static async Task LogSafely(ITaskWorkspace workspace, string text) { try { await workspace.WriteLogAsync(text).ConfigureAwait(false); } catch (ToolFailureException) { } }
-    [GeneratedRegex(@"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$")] private static partial Regex LanguagePattern();
-    [GeneratedRegex(@"\d+:\d{2}:\d{2},\d{3}\s*-->\s*\d+:\d{2}:\d{2},\d{3}")] private static partial Regex SrtTimeline();
     private sealed class InlineProgress<T>(Action<T> action) : IProgress<T>
     {
         public void Report(T value) => action(value);

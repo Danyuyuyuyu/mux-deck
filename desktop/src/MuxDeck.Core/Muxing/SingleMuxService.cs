@@ -1,5 +1,9 @@
+using MuxDeck.Application;
 using MuxDeck.Application.Ports;
 using MuxDeck.Contracts;
+using MuxDeck.Domain;
+using MuxDeck.Infrastructure;
+using MuxDeck.Infrastructure.Muxing;
 
 namespace MuxDeck.Core.Muxing;
 
@@ -9,12 +13,26 @@ public sealed class SingleMuxService
     private readonly Func<ITaskWorkspaceFactory, IRunSingleMux> createRun;
     public ToolConfiguration Tools { get; }
     public IProbeMedia Prober { get; }
+    public IMuxInputReader InputReader { get; }
+    public IPathFacts PathFacts { get; }
+    // 拖入反馈的同步入口：与异步端口同一份事实实现，由装配注入（默认取 Infrastructure 的实现）。
+    public Func<IReadOnlyList<InputItem>, IReadOnlyList<InputPathFacts>> CollectFacts { get; }
+    public static Func<IReadOnlyList<InputItem>, IReadOnlyList<InputPathFacts>> DefaultCollectFacts { get; } = SystemPathFacts.Instance.Collect;
+    public static IPathFacts DefaultPathFacts { get; } = SystemPathFacts.Instance;
+    // 导入用例以契约形式交付给视图层；默认实现由基础设施端口组装，装配可覆盖。
+    public IPrepareImport Import { get; }
     public SingleMuxService(ToolConfiguration tools, IProbeMedia prober,
-        Func<ITaskWorkspaceFactory, IRunSingleMux> createRun)
+        Func<ITaskWorkspaceFactory, IRunSingleMux> createRun,
+        IMuxInputReader? inputReader = null, IPathFacts? pathFacts = null,
+        Func<IReadOnlyList<InputItem>, IReadOnlyList<InputPathFacts>>? collectFacts = null, IPrepareImport? import = null)
     {
         Tools = tools;
         Prober = prober;
         this.createRun = createRun;
+        InputReader = inputReader ?? new MuxInputReader();
+        PathFacts = pathFacts ?? DefaultPathFacts;
+        CollectFacts = collectFacts ?? DefaultCollectFacts;
+        Import = import ?? new PrepareImportUseCase(prober, InputReader, PathFacts);
     }
 
     public async Task<MediaProbe> ProbeAsync(string videoPath, CancellationToken cancellationToken = default) =>

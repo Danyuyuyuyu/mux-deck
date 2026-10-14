@@ -25,7 +25,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-FILES = ("EnvironmentUiChecks", "ComponentInstallationUiChecks", "ComponentUninstallUiChecks")
+FILES = ("EnvironmentUiChecks", "ComponentInstallationUiChecks", "ComponentUninstallUiChecks",
+         "AutomaticMediaDropChecks", "InputFeedbackChecks", "SingleMuxRound1Checks", "SingleMuxUiRound1Checks")
 RELATIVE = "desktop/tests/MuxDeck.Smoke/{0}.cs"
 LITERAL = re.compile(r'"((?:[^"\\]|\\.)*)"')
 CJK = re.compile(r"[\u4e00-\u9fff]")

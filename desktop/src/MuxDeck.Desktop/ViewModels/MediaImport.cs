@@ -1,5 +1,6 @@
-using MuxDeck.Domain;
+using MuxDeck.Contracts;
 using MuxDeck.Core.Muxing;
+using MuxDeck.Domain;
 
 namespace MuxDeck.Desktop.ViewModels;
 
@@ -21,27 +22,32 @@ public sealed partial class SingleMuxViewModel
 {
     private readonly CancellationTokenSource importCancellation = new();
     private readonly List<Task> importTasks = [];
-    public static string? MediaInputError(IReadOnlyList<InputCandidate> candidates)
+    // 识别与校验由 UseCase 承担；端口与用例都来自装配好的服务，不在 ViewModel 里创建默认实现。
+    private IPrepareImport Import => service.Import;
+
+    // 拖入反馈的同步路径与导入用例共用同一份 Domain 规则与同一份事实实现，这里只做错误码到文案的映射。
+    public static string? MediaInputError(IReadOnlyList<InputCandidate> candidates) =>
+        DescribeBatch(SingleMuxService.DefaultCollectFacts(Items(candidates)));
+
+    public string? ValidateMediaInput(IReadOnlyList<InputCandidate> candidates) =>
+        DescribeBatch(service.CollectFacts(Items(candidates)));
+
+    private static InputItem[] Items(IReadOnlyList<InputCandidate> candidates) =>
+        [.. candidates.Select(candidate => new InputItem(candidate.Path, candidate.LocationKind))];
+
+    private static string? DescribeBatch(IReadOnlyList<InputPathFacts> facts)
     {
-        if (!InputRules.AcceptsMediaSelectionCount(candidates.Count)) return "拖入本地视频、音频、ASS/SRT 或字体目录。";
-        if (candidates.Any(c => InputRules.CheckCandidateKind(c.LocationKind, expectsDirectory: false) == InputKindError.NonLocal)) return "仅接受系统本地文件或文件夹，URL / 文本路径不受支持。";
-        foreach (var c in candidates)
-        {
-            if (!InputRules.AcceptsMediaPath(c.Path, Path.IsPathFullyQualified(c.Path))) return "需要完整的本地路径。";
-            if (c.Kind == InputCandidateKind.LocalDirectory ? !Directory.Exists(c.Path) : !File.Exists(c.Path)) return "路径不存在或不可访问：" + c.Path;
-            if (!InputRules.AcceptsMediaCandidateType(c.LocationKind, Path.GetExtension(c.Path)))
-                return "不支持此文件类型：" + Path.GetFileName(c.Path) + "；支持视频、音频、ASS/SRT 和字体。";
-        }
-        if (InputRules.HasDuplicatePaths(candidates.Select(c => Path.GetFullPath(c.Path)).ToArray())) return "同一文件不能重复导入。";
-        var fonts = candidates.Where(c => InputRules.UsesFontDirectory(c.LocationKind, Path.GetExtension(c.Path))).Select(c => Path.GetFullPath(c.Kind == InputCandidateKind.LocalDirectory ? c.Path : Path.GetDirectoryName(c.Path)!)).ToArray();
-        return !InputRules.AcceptsFontDirectories(fonts) ? "一次只能设置一个字体目录。" : null;
+        var failure = InputRules.CheckMediaBatch(facts);
+        return failure.Succeeded ? null : MediaInputText.Describe(MediaBatchCodes.For(failure.Error)!, failure.Path);
     }
+
     public Task<MediaImportResult> PrepareMediaInputAsync(IReadOnlyList<InputCandidate> candidates)
     {
         importTasks.RemoveAll(t => t.IsCompleted);
         var task = PrepareMediaCoreAsync(Array.AsReadOnly(candidates.ToArray()));
         importTasks.Add(task); return task;
     }
+
     private async Task<MediaImportResult> PrepareMediaCoreAsync(IReadOnlyList<InputCandidate> candidates)
     {
         if (!CanEdit) return new(false, "当前任务已锁定，不能接纳输入。");
@@ -49,47 +55,41 @@ public sealed partial class SingleMuxViewModel
         BeginToolProbe();
         try
         {
-            if (MediaInputError(candidates) is { } error) return new(false, error);
-            string? video = null, fonts = null; var tracks = new List<ImportedTrack>();
-            foreach (var c in candidates)
-            {
-                var path = Path.GetFullPath(c.Path);
-                if (InputRules.UsesFontDirectory(c.LocationKind, Path.GetExtension(path))) { fonts = c.Kind == InputCandidateKind.LocalDirectory ? path : Path.GetDirectoryName(path); continue; }
-                var probe = await ProbeMediaAsync(path, importCancellation.Token);
-                if (!CanEdit || revision != DraftRevision) return new(false, "识别期间任务或草稿已变化，整批输入保持原样。");
-                if (MediaFileTypes.IsSubtitle(path))
-                {
-                    SubtitleText.Validate(path);
-                    var subtitle = probe.Tracks.Where(t => t.Type == "subtitles").ToArray();
-                    if (!InputRules.AcceptsSubtitleProbe(subtitle.Length, subtitle.Length == 1 ? subtitle[0].CodecId : null,
-                        subtitle.Length == 1 ? subtitle[0].Codec : "", MediaFileTypes.IsAss(path))) return new(false, "文件内容不是有效的 ASS/SRT：" + path);
-                    tracks.Add(new(path, subtitle[0], ImportedLanguage(path, subtitle[0])));
-                }
-                else if (InputRules.IsSourceVideo(probe.Tracks.Any(t => t.Type == "video"), MediaFileTypes.IsVideo(path)))
-                {
-                    if (!InputRules.AcceptsSourceVideoCount(video is null ? 1 : 2)) return new(false, "单个封装一次只能接纳一个源视频。");
-                    video = path;
-                }
-                else
-                {
-                    var audios = probe.Tracks.Where(t => t.Type == "audio").ToArray();
-                    if (!InputRules.AcceptsAudioProbe(audios.Length, MediaFileTypes.IsAudio(path), probe.Tracks.Any(t => t.Type == "video"))) return new(false, "文件没有可导入的音频轨：" + path);
-                    tracks.AddRange(audios.Select(t => new ImportedTrack(path, t, ImportedLanguage(path, t))));
-                }
-            }
-            if (tracks.Any(t => externalOrder.Any(r => InputRules.ImportedTrackConflicts(SamePath(r.InputPath, t.Path), r.IsSubtitle, r.OriginTrackId, t.Media.Id)))) return new(false, "文件中的轨道已加入；请在属性栏更换已有文件。");
-            return new(true, "已识别，等待接纳。", new(this, revision, video, fonts, tracks, candidates));
+            var request = new ImportRequest(Guid.NewGuid(), revision,
+                [.. candidates.Select(candidate => new InputItem(candidate.Path, candidate.LocationKind))], CurrentSpec());
+            // 视图层必须回到原同步上下文，EndToolProbe 等回调会触达界面对象。
+            var result = await Import.PrepareAsync(request, tools, importCancellation.Token);
+            if (!CanEdit || revision != DraftRevision) return new(false, "识别期间任务或草稿已变化，整批输入保持原样。");
+            if (result.Status != ImportStatus.Prepared) return new(false, MediaInputText.Describe(result.Failure!));
+            return new(true, "已识别，等待接纳。", ToPlan(result.Plan!, revision, candidates));
         }
         catch (OperationCanceledException) { return new(false, "识别已取消，原输入保持。"); }
         catch (Exception ex) { return new(false, "无法识别拖入文件，整批未接纳：" + ex.Message); }
         finally { EndToolProbe(); }
     }
-    private static string ImportedLanguage(string path, MediaTrack track) =>
-        LanguageRules.InferImported(Path.GetFileNameWithoutExtension(path), track.Language, track.LanguageIetf);
+
+    private MediaImportPlan ToPlan(ImportPlan plan, long revision, IReadOnlyList<InputCandidate> candidates) =>
+        new(this, revision, plan.VideoPath, plan.Fonts?.Directory,
+            plan.Tracks.Select(track => new ImportedTrack(track.Path, ToLegacyTrack(track.Track), track.Language.Value)), candidates);
+
+    // 冲突检查只需要已有外加轨道的身份；此处按当前草稿构造不可变快照。
+    private MuxJobSpec CurrentSpec()
+    {
+        var externals = externalOrder.Select(row => new ExternalTrackSpec(row.InputPath,
+            row.IsSubtitle ? TrackKind.Subtitle : TrackKind.Audio, new TrackId(row.OriginTrackId), row.Name,
+            new LanguageTag(row.Language ?? ""), new TrackFlags(row.IsDefault, row.IsForced))).ToArray();
+        return new(VideoPath, [.. externals], [], new FontSpec(FontsDirectory),
+            new OutputSpec(OutputDirectory, string.IsNullOrWhiteSpace(OutputFileName) ? null : OutputFileName), tools);
+    }
+
+    private static MediaTrack ToLegacyTrack(MediaTrackInfo track) => new(track.Id.Value, track.RawType, track.Codec, track.CodecId,
+        track.Language.Value, track.LanguageIetf?.Value, track.Name, track.Flags.IsDefault, track.Flags.IsForced,
+        track.PixelDimensions, track.AudioChannels, track.AudioSamplingFrequency, track.HasDefaultFlag, track.HasForcedFlag);
+
     public MediaImportResult CommitMediaInput(MediaImportPlan plan, bool videoReplacementConfirmed = false)
     {
         if (!CanEdit || !ReferenceEquals(plan.Owner, this) || plan.Revision != DraftRevision) return new(false, "草稿已变化或任务已锁定，原输入保持。");
-        if (MediaInputError(plan.Candidates) is { } error) return new(false, error);
+        if (ValidateMediaInput(plan.Candidates) is { } error) return new(false, error);
         if (plan.Video is not null && InputRules.RequiresReplacement(VideoPath, SamePath(VideoPath, plan.Video)) && !videoReplacementConfirmed) return new(false, "更换已有视频需要确认，整批未接纳。");
         ChangeConfiguration(() =>
         {

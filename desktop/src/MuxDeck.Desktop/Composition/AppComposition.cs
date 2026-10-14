@@ -46,7 +46,9 @@ public static class AppComposition
         return new(workspace, new ProbeMediaUseCase(prober), workspaces =>
             new RunSingleMuxUseCase(new MuxInputReader(), new ToolReadiness(runner), prober,
                 new AfsSubsetter(runner), new MkvmergeMuxer(runner), new MkvextractExtractor(runner),
-                new MediaReferenceBuilder(runner), new MuxEvidenceReader(), new NoOverwritePublisher(), workspaces));
+                new MediaReferenceBuilder(runner), new MuxEvidenceReader(), new NoOverwritePublisher(), workspaces),
+            // 拖入反馈的同步事实收集与导入用例的异步端口来自同一份实现。
+            collectFacts: SystemPathFacts.Instance.Collect);
     }
 
     public static SingleMuxViewModel CreateSingle(SingleMuxService service, UserPreferencesStore? preferences = null) =>

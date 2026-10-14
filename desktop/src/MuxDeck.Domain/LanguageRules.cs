@@ -2,8 +2,11 @@ using System.Text.RegularExpressions;
 
 namespace MuxDeck.Domain;
 
-public static class LanguageRules
+public static partial class LanguageRules
 {
+    [GeneratedRegex(@"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$")]
+    private static partial Regex LanguageTagPattern();
+
     // 仅在旧探测字段未声明语言时推断；保留 IETF 优先级、und 大小写和标签边界。
     public static string InferImported(string sourceBaseName, string legacyLanguage, string? languageIetf)
     {
@@ -13,6 +16,9 @@ public static class LanguageRules
             if (Regex.IsMatch(sourceBaseName, pattern, RegexOptions.IgnoreCase)) return code;
         return "und";
     }
+
+    // 语言标签语法校验：旧单任务链路与导入用例共用同一实现。
+    public static bool IsValidTag(string value) => !string.IsNullOrWhiteSpace(value) && LanguageTagPattern().IsMatch(value);
 
     public static bool Matches(string legacyLanguage, string? languageIetf, string expectedLanguage)
     {
