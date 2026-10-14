@@ -196,6 +196,8 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 
 tests/MuxDeck.Infrastructure.IntegrationTests 只直接引用 Infrastructure，固定 xUnit v3 3.2.2 / runner 3.1.4 / Test SDK 17.14.1，并提交 packages.lock.json。新增 45 项，使用测试程序集子进程与隔离文件验证六个工具适配的参数、UTF-8 双流、退出码与取消，另验证 JSON/XML 失败、AFS Fatal、超时、Job 后代进程、工具定位、工作区与不覆盖发布。CI 不要求本机媒体工具；真实媒体回归仍由 Smoke 的仅本地入口运行。Architecture 新增两项（直接引用、全部端口实现），原 554 项保留，共 601 项：Domain 298 / Application 27 / Core 37 / Architecture 194 / Infrastructure 45。受控入口与基准计数不变。
 
+3b 适配修正后累计 613 项：Domain 298 / Application 29 / Core 40 / Architecture 194 / Infrastructure 52。原 601 全部保留，新增日志失败与 Fatal 保留 7、来源显示 3、新错误码构造白名单 2；超时与缺失的原用例同步精确码预期并增加完整 Message 断言。修正与 CI 见[3b 实施记录](../tasks/arch-layering.md#3b-修正适配修正)。
+
 #### 阶段一 Desktop 单任务约定
 
 最新自动入口由 `ViewModels/MediaImport.cs` 和 `Views/SingleMuxView.MediaInput.cs` 承担：工作区文件格式优先，混合批次准备后一次提交；文件名仅在语言未声明时提供提示，路径拆分后调用 Domain `LanguageRules.InferImported`，不在 ViewModel 内保留推断实现。字幕/音频追加到共享 `externalOrder`，显示 ID 连续编号，GUID 只作内部身份；一份音频容器可以投影多条真实音轨。字幕/音频更换、移除与编辑守卫共同维护草稿版本。ASS 才要求字体目录和字体后端；SRT/音频可单独封装。`MuxRequest` 快照复制字幕与音频集合，开始/取消/关闭锁定不变，关闭等待还包含媒体识别进程。以下 SC/TC API 保留其旧草稿契约和回归，不再限制新拖放/添加入口。

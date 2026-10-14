@@ -225,7 +225,7 @@
 | [2b · `90fff6c`](https://github.com/Danyuyuyuyu/mux-deck/commit/90fff6c47d8a3fcef6c509fa81ec91f80425b865) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38393673757) | locked restore 10/10；Release 0 警告 / 0 错误；dotnet test 343/343；受控 13/13、656/656；接纳 89/89、自动导入 25/25 | InputRules 已落位；新增 Domain 134、架构 1，原 208 保留；IO 事实留边界，原入口差异不变；详见 2b 实施与验证。 |
 | [2c · `90fea6b`](https://github.com/Danyuyuyuyu/mux-deck/commit/90fea6b02e421105cd3c7bdb45c69c4c69d1df8e) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38400687784) | restore 10/10；Release 0 警告 / 0 错误；test 427/427；受控 13/13、656/656；warning-policy 57/57 | DiagnosticPolicy、OutputQcRules、AssDocument 已落位；新增 Domain 76、架构 3；原 348 保留，白名单未变。 |
 | [3a · `da0f334`](https://github.com/Danyuyuyuyu/mux-deck/commit/da0f3342f2b50bccfdcf31f19212ee3bb63e9f91) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38406784353) | locked restore 10/10；Release 0 警告 / 0 错误；test 485/485；受控 13/13、656/656；warning-policy 57/57 | 九个 Application 业务端口；Domain 统一 MediaTrackInfo，删除重复 TrackQcFacts；新增 29，原 456 全部保留；详见 3a 实施与验证。 |
-| [3b · `a2b76d9`](https://github.com/Danyuyuyuyu/mux-deck/commit/a2b76d9588646265bfab68d0521928c8f881f94c) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38427342392) | locked restore 11/11；Release 0 警告 / 0 错误；test 601/601；受控 13/13、656/656；真实 integration 121/121、media-drop-real 37/37 | 依用户批准保留 Desktop 直接依赖；Core → Infrastructure 过渡；新增 47，原 554 保留。 |
+| [3b · `a2b76d9`](https://github.com/Danyuyuyuyu/mux-deck/commit/a2b76d9588646265bfab68d0521928c8f881f94c) + [修正 · `d99781b`](https://github.com/Danyuyuyuyu/mux-deck/commit/d99781b5cb44ac4c2279d90225dd6412ba7d92b7) | 已完成，已推送，[修正 Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38494664905) | locked restore 11/11；Release 0 警告 / 0 错误；test 613/613；受控 13/13、656/656；真实 integration 121/121、media-drop-real 37/37 | 依用户批准保留 Desktop 直接依赖；Core → Infrastructure 过渡；初始新增 47，本次新增 12，原 601 保留。 |
 | 3c | 未开始 | | |
 | 3d | 未开始 | | |
 | 3e | 未开始 | | |
@@ -729,7 +729,7 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --integration` | 121/121 |
 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop-real` | 37/37 |
 
-真实 [integration 报告](../../artifacts/phase1/20261014-011113-5f2f6effc5eb4bf2a3b3ecf0a8aaf7a8/report.json)与 [media-drop-real 报告](../../artifacts/automatic-drop/real-4b4aeedca72f4f21bcfce2bd3c730341/report.json)分别 121/121、37/37，失败 0；工具版本继续为 MKVToolNix 100.0、FFmpeg 8.1.1、AFS 2.1.1、fontTools 4.61.1、Python 3.12.10。实现独立提交使用指定标题，推送后核对对应 SHA 的 Desktop CI，并补录链接。
+真实 [integration 报告](../../artifacts/phase1/20261014-011113-5f2f6effc5eb4bf2a3b3ecf0a8aaf7a8/report.json)与 [media-drop-real 报告](../../artifacts/automatic-drop/real-4b4aeedca72f4f21bcfce2bd3c730341/report.json)分别 121/121、37/37，失败 0；工具版本继续为 MKVToolNix 100.0、FFmpeg 8.1.1、AFS 2.1.1、fontTools 4.61.1、Python 3.12.10。实现提交 [d99781b](https://github.com/Danyuyuyuyu/mux-deck/commit/d99781b5cb44ac4c2279d90225dd6412ba7d92b7) 使用指定标题 `refactor(desktop): [3b] 适配修正`，全部本地验证后 pull --rebase 并推送；[Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38494664905) 完成 success，head_sha 核对一致，全部必需检查通过。仅补录结果表与修正记录，不开始 3c。
 
 ## 发现的旧缺陷
 
