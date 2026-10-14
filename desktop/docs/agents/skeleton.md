@@ -86,7 +86,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 - LanguageTag 的相等与哈希按 Value 比较，default 与空字符串相等；MediaTrackInfo 的 HasDefaultFlag / HasForcedFlag 必须显式传入，不再默认猜测元数据存在。ErrorCodes 为 static 常量类，现有常量和调用写法不变。
 - 输入契约 `InputItem.Kind` 直接使用 Domain 的 `InputLocationKind`（LocalFile / LocalDirectory / NonLocal / Unknown）；不在 Contracts 中重复定义输入位置枚举。Desktop 的旧候选类型暂由边界映射，随草稿迁移处理。
 - Domain 已定义 `TrackKind`、`LanguageTag`、`TrackFlags`、`TrackId`。语言值保留原字符串（含空值和传统/IETF 标签），1b 不引入规范化或匹配规则。
-- `Contracts/` 已定义单任务规格/结果/进度、媒体探测、导入计划、组件操作及协调器接口。集合统一使用 Domain 的 `EquatableArray<T>`（只读包装 ImmutableArray，按元素比较相等与哈希，default 视为空），仅保存数据；导入会话由调用方提供 ID 与修订号，不暴露 ViewModel 或 Application 内部对象。组件阶段独立于 `JobStage`，协调器目前只有契约，没有实现。
+- `Contracts/` 已定义单任务规格/结果/进度、媒体探测、导入计划、组件操作及协调器接口。集合统一使用 Domain 的 `EquatableArray<T>`（只读包装 ImmutableArray，按元素比较相等与哈希，default 视为空），仅保存数据；导入会话由调用方提供 ID 与修订号，不暴露 ViewModel 或 Application 内部对象。组件阶段独立于 `JobStage`；3e 已实现 Application 内存协调器与组件用例，过渡装配及组件外部操作暂留 Core，到 4a 搬迁。
 - `MuxJobSpec.Tools` 显式携带工具、日志、缓存及独立 fonttools 后端配置；Core 的 `Muxing/LegacyMuxContractConverter.cs` 提供 `ToSpec(MuxRequest, Workspace/ToolConfiguration)`、`ToLegacyRequest(MuxJobSpec)` 与 `ToResult(MuxResult)`。3d 的旧 SingleMuxService 已通过转换调用新用例；ToResult 仍用于显式转换历史旧结果，保持原字段含义。3a 新增 ToTrackInfo / ToProbeResult 纯转换，旧 QC 边界已调用 ToTrackInfo。
 - 旧请求的字幕与音频各自保留顺序，新规格先列字幕、再列音频；空输出名与 null 分别原样往返。旧模型无法表达的源轨选择、跨类型交错顺序、字幕来源轨号或无来源轨号的音频，转换回旧请求时明确拒绝，不丢弃字段。
 - 旧检查文本使用唯一过渡码 `ErrorCodes.LegacyCheck`（`MUX_LEGACY_CHECK`），原文完整保存在 `CheckResult.LegacyText`，状态为 `NotEvaluated`，不根据文案判定成败；旧失败码为 `MUX_LEGACY_FAILURE`，取消码为 `MUX_CANCELLED`。旧结果未记录失败阶段，暂为 `JobStage.Unknown`。旧入口调用新用例时使用真实阶段与结构化信息；上述过渡映射仅用于显式 ToResult 历史转换。
@@ -214,7 +214,7 @@ tests/MuxDeck.Infrastructure.IntegrationTests 只直接引用 Infrastructure，�
 
 环境规则位于 Core `Components/`：`ComponentModels` 分开定义检测状态、安装阶段与能力；`ComponentVerifier` 复用 `ToolLocator` 和 `ProcessRunner`，验证启动、版本与必要依赖；`ComponentReleases` 维护固定版本、包布局、体积和哈希；`ComponentInstaller` 拥有四组件下载、校验、暂存验证、不覆盖提交、安装日志和取消清理，`AssfontsInstaller` 仅保留首轮兼容入口并共用并发守卫。`FontToolsLocator` 由检测和封装共用，优先管理目录内的独立后端，其次保留旧系统查找；安装暂存验证通过 `Workspace.FontToolsDirectoryOverride` 强制检查候选依赖。Desktop `EnvironmentViewModel` 保留稳定条目、检测修订与安装任务；`EnvironmentComponentViewModel` 投影状态点、行内动作和详情。`StoragePaths` 与 `StorageSettingsStore` 负责路径布局和持久化；MainWindow 仅接线操作互斥、目录选择、官方链接与关闭等待。实际封装参数和 QC 仍由原单任务流程决定，当前范围见[补齐组件安装](../tasks/component-installation-complete.md)。
 
-组件卸载以当前配置目录为管理边界：手动复制的组件也计为 Mux Deck 来源，不使用安装归属记录。Core `ComponentDirectories` 只生成固定直接子目录的计划并检查边界/链接，`ComponentUninstaller` 重新验证后逐项删除并记录日志，与安装器共用 `ComponentOperations.Gate`。AFS 的随包 Python 随主目录删除，独立 `fonttools` 保留并单独管理；重装可复用已验证的独立后端。Desktop 保存待确认计划、卸载任务和错误；MainWindow 结合单任务、导入与真实工具探测忙碌态禁止删除，关闭等待收尾。完整边界与证据见[组件卸载任务](../tasks/component-uninstall.md)。
+组件卸载以当前配置目录为管理边界：手动复制的组件也计为 Mux Deck 来源，不使用安装归属记录。Core `ComponentDirectories` 只生成固定直接子目录的计划并检查边界/链接，`ComponentUninstaller` 重新验证后逐项删除并记录日志，与安装器共用 Application `OperationCoordinator` 的租约。AFS 的随包 Python 随主目录删除，独立 `fonttools` 保留并单独管理；重装可复用已验证的独立后端。Desktop 保存待确认计划、卸载任务和错误；MainWindow 结合单任务、导入与真实工具探测忙碌态禁止删除，关闭等待收尾。完整边界与证据见[组件卸载任务](../tasks/component-uninstall.md)。
 
 单任务交互由 `ViewModels/SingleMuxViewModel.cs` 持有；它构造 `MuxRequest` 快照并调用 `SingleMuxService`，包含 `StartAsync`、`CancelAndWaitAsync`、`RunTask`、`IsRunning`、`CanEdit`、`Tracks`、`SelectedTrack`、`Log`、`Result` 与 `StatusText`。`TrackRowViewModel` 表示内封来源轨道与外加字幕的展示行；SC/TC 外加字幕各自显式维护名称、语言、default 和 forced，输入组合变更时只调用一次 Domain `TrackPolicy.SubtitleDefaults`；同槽替换、纳入切换和后续显式旗标编辑不重算默认值。`MainWindowViewModel` 继续负责导航和工具环境摘要。UI 不承担 QC，也不构造 AFS 或 mkvmerge 参数。
 
@@ -301,3 +301,14 @@ QC 返回 `TrackQcReport` 的结构化事实，经 `QC_SUBSET_FONTS`、`QC_TRACK
 
 
 3c 小修已删除仅由测试使用的 CheckTracks、Domain 的 LegacyTrackQcText 和无人调用的 TrackQcFailed 旧码。所有相关测试改为 CheckFacts 的种类、轨道类型、序号、数量和完整轨道字段断言，正式用例/转换路径保持；已移除旧码新增拒绝验证，原有效码案例迁移为拒绝案例，总数保持 717。
+
+
+### 3e 操作协调与组件用例
+
+`OperationCoordinator` 实现 `IOperationCoordinator`，不涉及 IO。兼容矩阵以[3e 检索记录](../tasks/arch-layering.md#现有操作互斥矩阵3e-检索结论)为依据：安装与卸载同类/异类互斥，其他 Core 操作允许并行。租约释放幂等；`ShutdownAsync` 关闭接纳并等待所有租约，取消仅取消等待。`StateChanged` 按变更顺序报告不可变快照，订阅者异常不泄漏租约。Desktop 原有方向性的忙碌态、检测重启与关闭取消接线保持原样，随第 4 步迁移，不把 UI 条件扩成新的全局锁。
+
+`ManageComponentsUseCase` 实现 `IManageComponents`，检测、卸载计划检查使用检测租约，安装/卸载使用互斥租约；成功、失败、异常、取消均释放。每次调用只使用 `ComponentConfiguration` 快照；拒绝仍为“已有组件安装或卸载正在进行。”。集中错误码新增 `MUX_COMPONENT_OPERATION_BUSY`、`MUX_COMPONENT_INSTALL_FAILED`、`MUX_COMPONENT_UNINSTALL_FAILED`。组件检查增加按 ID 检测入口，`ComponentPart` 保留 Purpose/Source，保证旧工具用途与来源显示不变。
+
+Core `ComponentManagement` 暂时装配用例并适配既有组件实现：外部操作使用原下载/验证/目录规则，旧入口只转换与调用接口，保留原异常类型/消息、阶段、进度、日志与取消处理。候选验证和卸载内部边界复核属于已有租约，关闭时继续收尾。Core `ComponentOperations` 仅保留共享协调器的过渡装配，Gate 已删除。经用户批准，ComponentVerifier、ComponentInstaller、ComponentUninstaller、ComponentDirectories、ComponentReleases 与 StoragePaths/ToolLocator 在 4a 构造函数注入完成后迁入 Infrastructure；3e 不新增引用或架构例外，Desktop/Smoke 零改动。
+
+3e 新增协调器矩阵及生命周期 35 项、组件用例 17 项、过渡转换与实际卸载边界 5 项，集中错误码自动增加 3 项注册码用例；原 717 项全部保留，总计 777（Domain 298 / Application 158 / Core 59 / 架构 198 / Infrastructure 64）。现有测试和护栏未改动。

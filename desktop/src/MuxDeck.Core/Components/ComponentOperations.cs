@@ -1,9 +1,9 @@
 namespace MuxDeck.Core.Components;
 
-// 安装和卸载共用守卫，避免两个服务实例同时改动同一工具目录。
+// 过渡装配共用协调器，保持旧 Gate 跨服务实例的安装/卸载互斥范围。
 internal static class ComponentOperations
 {
-    internal static SemaphoreSlim Gate { get; } = new(1, 1);
+    internal static MuxDeck.Contracts.IOperationCoordinator Coordinator { get; } = new MuxDeck.Application.OperationCoordinator();
 }
 
 public enum ComponentRemovalKind { Component, Dependencies }

@@ -18,6 +18,20 @@ public sealed class ComponentInstaller(HttpClient? httpClient = null, IComponent
 
     public async Task<ComponentInstallResult> InstallAsync(string id, StoragePaths storage, IProgress<ComponentInstallProgress> progress, CancellationToken cancellationToken)
     {
+        if (!ComponentCatalog.SupportsInstall(id) || !catalog.ContainsKey(id)) throw new NotSupportedException("此组件当前不支持自动安装。");
+        MuxDeck.Contracts.IManageComponents manager = new ComponentManagement(null, this, null, null, true, null);
+        var result = await manager.InstallAsync(id, ComponentManagement.Configuration(storage),
+            new LegacyInstallProgress(progress), cancellationToken).ConfigureAwait(false);
+        ComponentManagement.RequireSuccess(result, cancellationToken);
+        return new(result.Directory!, result.Log!.Path);
+    }
+    private sealed class LegacyInstallProgress(IProgress<ComponentInstallProgress> progress) : IProgress<MuxDeck.Contracts.ComponentProgress>
+    {
+        public void Report(MuxDeck.Contracts.ComponentProgress value) => progress.Report(new(Enum.Parse<ComponentInstallPhase>(value.Phase.ToString()), value.Message, value.Bytes, value.TotalBytes));
+    }
+
+    internal async Task<ComponentInstallResult> InstallCoreAsync(string id, StoragePaths storage, IProgress<ComponentInstallProgress> progress, CancellationToken cancellationToken)
+    {
         if (!ComponentCatalog.SupportsInstall(id) || !catalog.TryGetValue(id, out var release)) throw new NotSupportedException("此组件当前不支持自动安装。");
         var runId = Guid.NewGuid().ToString("N");
         var cache = Path.Combine(storage.CacheDirectory, "component-install-" + runId);
@@ -28,7 +42,6 @@ public sealed class ComponentInstaller(HttpClient? httpClient = null, IComponent
         var target = Path.Combine(storage.ToolsDirectory, folder);
         var logPath = Path.Combine(storage.LogsDirectory, "components", runId + ".log");
         StreamWriter? log = null;
-        if (!await ComponentOperations.Gate.WaitAsync(0, cancellationToken).ConfigureAwait(false)) throw new IOException("已有组件安装或卸载正在进行。");
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -40,7 +53,7 @@ public sealed class ComponentInstaller(HttpClient? httpClient = null, IComponent
             string? reusableBackend = null;
             if (id == "afs" && !dependenciesOnly && Directory.Exists(Path.Combine(storage.ToolsDirectory, "fonttools")))
             {
-                var managed = ComponentDirectories.TryPlan(storage, id, ComponentRemovalKind.Dependencies);
+                var managed = ComponentDirectories.TryPlanCore(storage, id, ComponentRemovalKind.Dependencies);
                 if (managed is null) throw new IOException("独立依赖目录包含链接或无法读取，请检查组件目录。");
                 reusableBackend = Path.Combine(managed.TargetDirectory, "Scripts");
                 if (!await CanReuseBackendAsync(reusableBackend, cancellationToken).ConfigureAwait(false))
@@ -91,7 +104,11 @@ public sealed class ComponentInstaller(HttpClient? httpClient = null, IComponent
             // 显式指定暂存后端，避免用户已有 Python 掩盖候选环境的问题。
             var stagedWorkspace = dependenciesOnly ? currentWorkspace with { FontToolsDirectoryOverride = backend }
                 : new Workspace(stage) { ToolsDirectoryOverride = stage, FontToolsDirectoryOverride = backend };
-            var inspection = await checker.VerifyAsync(ComponentCatalog.All.Single(c => c.Id == id), stagedWorkspace, cancellationToken).ConfigureAwait(false);
+            var component = ComponentCatalog.All.Single(c => c.Id == id);
+            // 候选验证属于已有安装租约，关闭期间仍允许它收尾。
+            var inspection = await (checker is ComponentVerifier concrete
+                ? concrete.VerifyCoreAsync(component, stagedWorkspace, cancellationToken)
+                : checker.VerifyAsync(component, stagedWorkspace, cancellationToken)).ConfigureAwait(false);
             if (inspection.State != ComponentState.Available) throw new IOException(inspection.Reason ?? "组件启动验证失败。");
             cancellationToken.ThrowIfCancellationRequested();
             Directory.Move(candidate, target);
@@ -103,7 +120,7 @@ public sealed class ComponentInstaller(HttpClient? httpClient = null, IComponent
         finally
         {
             try { Cleanup(stage, log); Cleanup(cache, log); }
-            finally { try { log?.Dispose(); } finally { ComponentOperations.Gate.Release(); } }
+            finally { log?.Dispose(); }
         }
 
         async Task<string> DownloadAsync(ComponentPackage package, string label, string fileName)

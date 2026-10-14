@@ -8,7 +8,8 @@ public enum ComponentOperationStatus { Succeeded, Failed, Cancelled }
 public enum ComponentRemovalKind { Component, Dependencies }
 public sealed record ComponentConfiguration(string WorkspaceRoot, string ToolsDirectory,
     string LogsDirectory, string CacheDirectory, string? FontToolsDirectoryOverride = null);
-public sealed record ComponentPart(string Name, string? Path, ComponentState State, string? Reason);
+public sealed record ComponentPart(string Name, string? Path, ComponentState State, string? Reason,
+    string Purpose = "", string Source = "未找到");
 public sealed record ComponentInspection(string Id, ComponentState State, EquatableArray<ComponentPart> Parts,
     string? Version = null, string? Reason = null);
 public sealed record ComponentProgress(ComponentPhase Phase, string Message, long Bytes = 0, long? TotalBytes = null);

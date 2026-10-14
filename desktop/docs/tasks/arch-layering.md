@@ -126,12 +126,43 @@
 ### 3e 操作协调与组件（中）
 
 - 实现 `IOperationCoordinator`（内存租约），替换 `ComponentOperations.Gate`。
-- 组件检测/安装/卸载经 `IManageComponents`；`ComponentVerifier`、`ComponentInstaller`、`ComponentUninstaller`、`ComponentDirectories`、`ComponentReleases` 移入 Infrastructure；`AssfontsInstaller` 兼容入口随第 5 步评估移除。
+- 组件检测/安装/卸载经 `IManageComponents`；`AssfontsInstaller` 兼容入口随第 5 步评估移除。
+- **用户已批准**：`ComponentVerifier`、`ComponentInstaller`、`ComponentUninstaller`、`ComponentDirectories`、`ComponentReleases` 迁入 Infrastructure 从 3e 移到 4a，与 `StoragePaths`、`ToolLocator` 一起在构造函数注入完成后搬迁。3e 保留这些 Core 类。
+- **用户已批准**：3e 不新增过渡引用或架构测试例外，Desktop 与 Smoke 零改动。
 - 验证：组件受控、安装 UI、卸载、卸载 UI、环境 UI 回归；固定缓存真实卸载循环 `--component-uninstall-real`。
+
+#### 现有操作互斥矩阵（3e 检索结论）
+
+输入为组件配置快照/组件 ID/卸载计划，输出为组件检测与操作结果；拒绝租约保留“已有组件安装或卸载正在进行。”。异常与取消都释放租约；关闭协调器拒绝新租约并等待全部已有租约，不代替现有 UI 的取消操作。
+
+Core 的全局 Gate 仅覆盖安装与卸载（含 AssfontsInstaller 兼容入口）；直接 Core 调用的矩阵如下，行是已有操作，列是新操作。“允许”不追加原先不存在的限制，检测含安装候选验证。
+
+| 已有 / 新操作 | 单任务封装 | 媒体导入/探测 | 组件检测 | 组件安装 | 组件卸载 |
+|---|---|---|---|---|---|
+| 单任务封装 | 允许 | 允许 | 允许 | 允许 | 允许 |
+| 媒体导入/探测 | 允许 | 允许 | 允许 | 允许 | 允许 |
+| 组件检测 | 允许 | 允许 | 允许 | 允许 | 允许 |
+| 组件安装 | 允许 | 允许 | 允许 | 拒绝 | 拒绝 |
+| 组件卸载 | 允许 | 允许 | 允许 | 拒绝 | 拒绝 |
+
+3e 的内存租约严格采用此矩阵，不把 UI 接纳条件扩大成全局服务禁令。Desktop 零改动，以下 UI 条件继续在原位置生效；第 4 步再迁移忙碌态与关闭接线。UI 矩阵具有方向性（行已有，列新请求），不能改为对称锁：
+
+| 已有 / 新请求 | 封装 | 媒体导入 | 组件刷新检测 | 安装 | 卸载确认/执行 | 改路径 |
+|---|---|---|---|---|---|---|
+| 封装 | 拒绝 | 拒绝 | 允许 | 拒绝 | 拒绝 | 拒绝 |
+| 媒体探测（含导入、源与结果探测） | 允许 | 允许 | 允许 | 拒绝 | 拒绝 | 拒绝 |
+| 组件检测 | 允许 | 允许 | 取消旧检测后重启 | 取消旧检测后开始 | 确认拒绝；已有确认执行会取消检测 | 允许 |
+| 安装 | 拒绝 | 允许 | 拒绝 | 拒绝 | 拒绝 | 拒绝 |
+| 卸载 | 拒绝 | 拒绝 | 拒绝 | 拒绝 | 拒绝 | 拒绝 |
+
+证据：ComponentInstaller.InstallAsync / ComponentUninstaller.UninstallAsync 的零等待 Gate；EnvironmentViewModel.CanRefresh / CanChangePaths / Refresh / InstallAsync / RequestRemoval / RemoveAsync；MainWindowViewModel.SetWorkGuard 接线；SingleMuxViewModel.CanEdit / CanStart / PrepareMediaCoreAsync。直接 ProbeVideoAsync 只检查关闭标志（不像导入接纳那样检查 CanEdit），不额外增加服务限制。关闭时 Single.CancelAndWaitAsync 取消并等待封装、源/结果探测和导入；Environment.CancelAndWaitAsync 取消并等待全部检测、安装、卸载；MainWindow 等二者及列宽持久化。卸载实际删除开始后忽略取消并完整收尾，全部保持不变。
+
 
 ## 第 4 步：拆分 Desktop
 
 ### 4a 集中装配（中）
+
+- **用户已批准**：从 3e 移入组件类搬迁；构造函数注入完成后，将 `ComponentVerifier`、`ComponentInstaller`、`ComponentUninstaller`、`ComponentDirectories`、`ComponentReleases` 与 `StoragePaths`、`ToolLocator` 一起迁入 Infrastructure。3e 不新增过渡引用或架构测试例外，Desktop 与 Smoke 零改动。
 
 - **用户已批准**：此步删除 SingleMuxService.UpdateWorkspace 外壳；3c/3d 新用例已只消费 MuxJobSpec.Tools 快照，4a 替换旧装配后不再需要可变入口。
 - 新增 `Composition/AppComposition.cs` 创建对象图，`Program` 只调用它；移除静态 `App.Workspace`、`App.Storage`。
@@ -221,7 +252,7 @@
 | **3c** | 七个阶段各有 Application 假端口测试，覆盖成功、本阶段失败（`JobFailure.Stage` 与 `Code` 正确）、取消、临时目录无残留、目标已存在、落位期间新出现目标；新用例无可变配置，并有“运行中修改配置不影响已提交任务”的测试；旧 UpdateWorkspace 按用户批准留到 4a；3c 只本地提交，3d 后执行全部仅本地真实套件与[逐项对照](#3d-旧入口小)，报告写入结果表；**两笔一起推送前经用户确认** |
 | **3d** | SingleMuxService 只含旧模型转换与用例调用（用户批准 UpdateWorkspace 外壳留到 4a）；Desktop 与 Smoke 零改动；全部受控与六项真实套件等于 dbe9f56 基准；e005923 与新代码四项逐产物对照一致；只本地提交，报告与两个哈希交用户确认后一起推送 |
 | **3e** | `ComponentOperations.Gate` 删除，所有互斥经 `IOperationCoordinator`；协调器测试覆盖同类/异类互斥矩阵、异常与取消后的租约释放、`ShutdownAsync` 等待全部租约；组件与环境相关套件等于基准；本地 `--component-uninstall-real` 17/17 |
-| **4a** | 用户已批准从 3c 移入的 UpdateWorkspace 外壳删除；App.Workspace、App.Storage 删除；新增架构测试：ViewModels/Views 不引用 Infrastructure，装配只在 `Program`/`Composition/`；`--root` 便携模式与默认存储路径行为不变（有测试或记录手动验证）；全部 UI 套件等于基准 |
+| **4a** | 组件类已迁入 Infrastructure；用户已批准从 3c 移入的 UpdateWorkspace 外壳删除；App.Workspace、App.Storage 删除；新增架构测试：ViewModels/Views 不引用 Infrastructure，装配只在 `Program`/`Composition/`；`--root` 便携模式与默认存储路径行为不变（有测试或记录手动验证）；全部 UI 套件等于基准 |
 | **4b** | `MuxDraft` 测试覆盖：同值赋值不增修订号、一次接纳批次只增一次、准备→提交、运行中锁定拒绝、`ToSpec()` 快照与后续修改隔离；ViewModel 中不再有 SC/TC 默认规则等业务代码；UI、接纳、工作台、输入反馈、自动导入套件等于基准；1040×760 与 1280×900 截图与基线逐张对照无差异（差异须逐项说明）；本地 `--ui-integration` 等于基准；**推送前经用户确认** |
 | **4c** | `SingleMuxViewModel` 只做组合与过渡转发；六个区域 ViewModel 的绑定均为编译绑定且构建通过；可访问名称不变；全部 UI 套件等于基准 |
 | **4d** | 结果详情直接展示结构化检查项、诊断与失败阶段，代码中不再对检查文本做字符串匹配；`MainWindow` 关闭只等待 `IOperationCoordinator.ShutdownAsync()`；关闭等待相关用例通过；两尺寸截图检查 |
@@ -240,7 +271,7 @@
 | [3b · `a2b76d9`](https://github.com/Danyuyuyuyu/mux-deck/commit/a2b76d9588646265bfab68d0521928c8f881f94c) + [修正 · `d99781b`](https://github.com/Danyuyuyuyu/mux-deck/commit/d99781b5cb44ac4c2279d90225dd6412ba7d92b7) | 已完成，已推送，[修正 Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38494664905) | locked restore 11/11；Release 0 警告 / 0 错误；test 613/613；受控 13/13、656/656；真实 integration 121/121、media-drop-real 37/37 | 依用户批准保留 Desktop 直接依赖；Core → Infrastructure 过渡；初始新增 47，本次新增 12，原 601 保留。 |
 | [3c · 7c9a477](https://github.com/Danyuyuyuyu/mux-deck/commit/7c9a477410768aa1758551116193fac19e8172de) + [修正 · a3dbea9](https://github.com/Danyuyuyuyu/mux-deck/commit/a3dbea92f867a739aae4490e249ace1a493300d3) | 用户已确认，保留三提交推送主分支；[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38530034209)，head_sha=a3dbea9 | 初验 675；结构化修正 test 717/717；restore 11/11、Release 0/0；受控 656/656；真实 238/238 | 原 676 保留，新增 41；[15/15、150/150 对照报告](../../artifacts/arch-corrections/3c-structured-final/summary-all15.json)；远端审查分支已删除。 |
 | [3d · 0f1927b](https://github.com/Danyuyuyuyu/mux-deck/commit/0f1927b5b374eee9198ff9c22e3e047c27dad448) | 用户已确认并推送主分支；[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38530034209)，head_sha=a3dbea9 | 初验 676；结构化修正 test 717/717；restore 11/11、Release 0/0；受控 656/656；真实 238/238；脚本反例 22/22 | [15 项逐项对照报告](../../artifacts/arch-corrections/3c-structured-final/summary-all15.json)全部一致；旧/旧来源复核 10/10，原始报告保留。 |
-| 3e | 未开始 | | |
+| 3e | 本地已验收，待推送与 CI | locked restore 11/11；Release 0 警告 / 0 错误；test 777/777；受控 13/13、656/656；真实卸载 17/17 | 内存租约与 IManageComponents 已接入；原 717 保留，新增 60；Desktop/Smoke/ADR/护栏零改动；组件搬迁按批准留到 4a；见下方实际验证。 |
 | 4a | 未开始 | | |
 | 4b | 未开始 | | |
 | 4c | 未开始 | | |
@@ -1034,3 +1065,35 @@ restore 11 个项目成功，Release 0 警告 / 0 错误，test 717/717。[构�
 | --component-uninstall-ui | 61/61 |
 
 13/13 套件、656/656，全部等于基准，输出保留在 `artifacts/arch-corrections/3c-domain-text-validation/`。按用户指定，正式代码路径未改，本次不重跑真实套件；沿用此前真实 238/238、逐成品 15/15 一致的报告，不将历史真实计数记录为本次执行。推送后的 Desktop CI 结果见交付回报；3e 未开始。
+
+
+### 3e 实施与实际验证（2026-10-14）
+
+按已接受 ADR-0001 与上方用户批准调整实施。Application 新增 OperationCoordinator 与 ManageComponentsUseCase，Core 组件旧入口改为经 IManageComponents 调用；删除 Gate，不改变下载、目录边界、日志、检查、提示或删除开始后的取消处理。Core 的共享协调器仅作为迁移期装配，Desktop 原忙碌态与关闭等待接线继续有效。共享规范 skeleton.md 同步组件契约字段、集中错误码、租约语义和 4a 搬迁事实；解决方案、项目引用、锁文件、ADR、既有测试及架构护栏均未改动。
+
+实际在 desktop/ 执行：
+
+- `dotnet restore MuxDeck.sln --locked-mode`：11/11 项目成功，无锁文件变化。
+- `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false`：0 警告 / 0 错误。
+- `dotnet test MuxDeck.sln --no-build -c Release`：777/777，失败/跳过 0。Domain 298、Application 158、Core 59、Architecture 198、Infrastructure 64。原 717 全部保留；新增协调器 35（含 25 格矩阵）、组件假实现流程 17、Core 转换/真实文件边界 5、集中错误码自动注册测试 3，共 60。
+- 下表命令均为 `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release` 加所列参数，共 13/13 套件、656/656，全部与基准一致。
+
+| 参数 | 本次 / 基准 |
+|---|---|
+| 无参数 | 28/28 |
+| `--warning-policy` | 57/57 |
+| `--single-mux-round1` | 89/89 |
+| `--single-mux-ui-round1` | 176/176 |
+| `--workbench-ui` | 38/38 |
+| `--input-feedback` | 24/24 |
+| `--media-drop` | 25/25 |
+| `--environment-ui` | 23/23 |
+| `--components` | 31/31 |
+| `--component-install-ui` | 37/37 |
+| `--component-install-all` | 41/41 |
+| `--component-uninstall` | 26/26 |
+| `--component-uninstall-ui` | 61/61 |
+
+- `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-real artifacts/arch-corrections/real-baseline/packages`：17/17，失败 0，等于固定七包基准。使用固定缓存，无重新下载；受管 MKV 101.0（系统回退 100.0）/ FFmpeg 8.1.1-essentials_build / AFS 2.1.1 / assfonts 0.7.3 / fontTools 4.61.1 / Python 3.12.10。[本次报告](../../artifacts/arch-corrections/3e/component-uninstall-real-report.json)。
+
+构建与全部受控输出保存在 `desktop/artifacts/arch-corrections/3e/`；报告为仅本地证据。未启动 4a，也未将组件实现提前搬迁。

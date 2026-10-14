@@ -4,9 +4,19 @@ public sealed class ComponentUninstaller : IComponentUninstaller
 {
     public async Task<ComponentRemovalResult> UninstallAsync(ComponentRemovalPlan plan, StoragePaths storage, IProgress<ComponentRemovalProgress> progress, CancellationToken cancellationToken)
     {
+        MuxDeck.Contracts.IManageComponents manager = new ComponentManagement(null, null, this, null, true, null);
+        var result = await manager.UninstallAsync(ComponentManagement.Contract(plan), ComponentManagement.Configuration(storage),
+            new LegacyRemovalProgress(progress), cancellationToken).ConfigureAwait(false);
+        ComponentManagement.RequireSuccess(result, cancellationToken);
+        return new(result.Directory!, result.Log!.Path);
+    }
+    private sealed class LegacyRemovalProgress(IProgress<ComponentRemovalProgress> progress) : IProgress<MuxDeck.Contracts.ComponentProgress>
+    { public void Report(MuxDeck.Contracts.ComponentProgress value) => progress.Report(new(value.Message)); }
+
+    internal async Task<ComponentRemovalResult> UninstallCoreAsync(ComponentRemovalPlan plan, StoragePaths storage, IProgress<ComponentRemovalProgress> progress, CancellationToken cancellationToken)
+    {
         var logPath = Path.Combine(storage.LogsDirectory, "components", "uninstall-" + Guid.NewGuid().ToString("N") + ".log");
         StreamWriter? log = null;
-        if (!await ComponentOperations.Gate.WaitAsync(0, cancellationToken).ConfigureAwait(false)) throw new IOException("已有组件安装或卸载正在进行。");
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
@@ -31,7 +41,6 @@ public sealed class ComponentUninstaller : IComponentUninstaller
         {
             try { log?.Dispose(); }
             catch (IOException) { }
-            finally { ComponentOperations.Gate.Release(); }
         }
 
         void ValidateTree(string directory)

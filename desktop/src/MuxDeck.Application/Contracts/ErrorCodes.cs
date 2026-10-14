@@ -4,6 +4,9 @@ namespace MuxDeck.Contracts;
 public static class ErrorCodes
 {
 
+    public const string ComponentOperationBusy = "MUX_COMPONENT_OPERATION_BUSY";
+    public const string ComponentInstallFailed = "MUX_COMPONENT_INSTALL_FAILED";
+    public const string ComponentUninstallFailed = "MUX_COMPONENT_UNINSTALL_FAILED";
     public const string LegacyCheck = "MUX_LEGACY_CHECK";
     public const string LegacyFailure = "MUX_LEGACY_FAILURE";
     public const string Cancelled = "MUX_CANCELLED";

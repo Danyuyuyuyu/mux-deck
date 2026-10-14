@@ -10,6 +10,12 @@ public sealed class ComponentVerifier(IComponentProbeRunner? probeRunner = null,
 
     public async Task<ComponentInspection> VerifyAsync(ComponentDefinition component, Workspace workspace, CancellationToken cancellationToken)
     {
+        MuxDeck.Contracts.IManageComponents manager = new ComponentManagement(this, null, null, null, true, component);
+        return ComponentManagement.Legacy(await manager.InspectAsync(component.Id, ComponentManagement.Configuration(workspace), cancellationToken).ConfigureAwait(false));
+    }
+
+    internal async Task<ComponentInspection> VerifyCoreAsync(ComponentDefinition component, Workspace workspace, CancellationToken cancellationToken)
+    {
         var located = new ToolLocator(workspace).Inspect();
         var parts = component.ToolNames.Select(name => located.Single(t => t.Name == name)).ToArray();
         if (parts.All(p => p.Path is null)) return new(ComponentState.Missing, parts, Reason: "未检测到可执行文件。");
