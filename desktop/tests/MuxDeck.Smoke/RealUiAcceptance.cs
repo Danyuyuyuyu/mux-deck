@@ -1,3 +1,4 @@
+using MuxDeck.Desktop.Composition;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Avalonia;
@@ -38,7 +39,7 @@ internal static class RealUiAcceptance
                 foreach (var path in Directory.EnumerateFiles(Path.Combine(sourceFixture, "fonts-yahei"))) System.IO.File.Copy(path, Path.Combine(fonts, Path.GetFileName(path)));
                 var inputs = new[] { video, sc, tc }.Concat(Directory.EnumerateFiles(fonts)).ToArray(); var beforeHashes = inputs.ToDictionary(path => path, Hash);
                 AppBuilder.Configure<App>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-                var main = new MainWindowViewModel(workspace); single = main.Single;
+                var main = AppComposition.CreateMain(workspace); single = main.Single;
                 window = new MainWindow { DataContext = main }; window.Show(); Dispatcher.UIThread.RunJobs();
                 var view = window.FindControl<SingleMuxView>("SingleView")!; var interactions = new ScriptedInteractions(); view.Interactions = interactions;
                 Pick(window, view, interactions, "PickVideoButton", File(window, video)); Pump(single.ProbeVideoAsync(), 45);
@@ -79,7 +80,7 @@ internal static class RealUiAcceptance
                     var result = single.Result ?? throw new InvalidOperationException("真实封装没有结果");
                     Check(result.Status == MuxStatus.Succeeded && System.IO.File.Exists(single.OutputPath) && single.HasCurrentSuccess && !single.IsResultHistorical, name + " Core 真实成功与当前结果回到新 UI");
                     Check(result.Checks.Count > 0 && System.IO.File.Exists(single.LogPath), name + " 成品 QC 和日志可定位");
-                    var probeTask = new SingleMuxService(workspace).ProbeAsync(single.OutputPath); Pump(probeTask, 45); var probe = probeTask.Result;
+                    var probeTask = AppComposition.CreateSingleService(workspace).ProbeAsync(single.OutputPath); Pump(probeTask, 45); var probe = probeTask.Result;
                     var subtitles = probe.Tracks.Where(t => t.Type == "subtitles").ToArray();
                     var expectedTracks = single.ExternalTracks.Where(t => t.IsSubtitle && t.IsIncluded).ToArray();
                     Check(subtitles.Length == expectedLanguages.Length && expectedLanguages.All(language => subtitles.Count(t => t.LanguageIetf == language) == 1), name + " 实际产物只含本次启用的字幕语言");

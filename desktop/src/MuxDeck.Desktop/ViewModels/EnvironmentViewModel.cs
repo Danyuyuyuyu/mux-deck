@@ -1,17 +1,17 @@
 using System.Collections.ObjectModel;
 using MuxDeck.Core;
 using MuxDeck.Core.Components;
-using MuxDeck.Desktop.Preferences;
 
 namespace MuxDeck.Desktop.ViewModels;
 
 public sealed class EnvironmentViewModel : ObservableObject
 {
     private Workspace workspace;
-    private readonly StorageSettingsStore settingsStore;
+    private readonly Action<StoragePaths> saveSettings;
     private readonly IComponentVerifier verifier;
     private readonly IComponentInstaller installer;
     private readonly IComponentUninstaller uninstaller;
+    private readonly Func<Workspace, IReadOnlyList<ToolStatus>> inspectTools;
     private Func<bool> workBusy = () => false;
     private bool settingsOpen, installing, uninstalling, checking, closing;
     private string toolsDirectoryInput, workDirectoryInput, lastChecked = "尚未检测", settingsMessage = "";
@@ -19,22 +19,24 @@ public sealed class EnvironmentViewModel : ObservableObject
     private readonly List<Task> checkTasks = [];
     private long checkRevision, installRevision;
 
-    public EnvironmentViewModel(Workspace workspace, StoragePaths storage, StorageSettingsStore? settingsStore = null,
-        IComponentVerifier? verifier = null, IComponentInstaller? installer = null, IComponentUninstaller? uninstaller = null)
+    public EnvironmentViewModel(Workspace workspace, StoragePaths storage, Action<StoragePaths> saveSettings,
+        IComponentVerifier verifier, IComponentInstaller installer, IComponentUninstaller uninstaller,
+        Func<Workspace, IReadOnlyList<ToolStatus>> inspectTools)
     {
         this.workspace = workspace;
         Storage = storage;
-        this.settingsStore = settingsStore ?? new StorageSettingsStore(StorageSettingsStore.DefaultPath);
-        this.verifier = verifier ?? new ComponentVerifier();
-        this.installer = installer ?? new ComponentInstaller(verifier: this.verifier);
-        this.uninstaller = uninstaller ?? new ComponentUninstaller();
+        this.saveSettings = saveSettings;
+        this.verifier = verifier;
+        this.installer = installer;
+        this.uninstaller = uninstaller;
+        this.inspectTools = inspectTools;
         toolsDirectoryInput = storage.ToolsDirectory;
         workDirectoryInput = storage.AppDataRoot;
         RefreshCommand = new(Refresh);
         ToggleSettingsCommand = new(() => IsSettingsOpen = !IsSettingsOpen);
         SaveSettingsCommand = new(SaveSettings);
         ResetSettingsCommand = new(ResetSettings);
-        var located = new ToolLocator(workspace).Inspect();
+        var located = inspectTools(workspace);
         foreach (var part in located) Tools.Add(part);
         foreach (var definition in ComponentCatalog.All)
         {
@@ -104,7 +106,7 @@ public sealed class EnvironmentViewModel : ObservableObject
         checkCancellation = lifetime;
         var revision = ++checkRevision;
         var snapshot = workspace;
-        var located = new ToolLocator(snapshot).Inspect();
+        var located = inspectTools(snapshot);
         Tools.Clear();
         foreach (var part in located) Tools.Add(part);
         var rows = Components.ToArray();
@@ -277,7 +279,7 @@ public sealed class EnvironmentViewModel : ObservableObject
             if (!Path.IsPathFullyQualified(work) || !Path.IsPathFullyQualified(toolsPath)) throw new ArgumentException("请选择绝对目录路径。");
             var next = StoragePaths.ForRoot(work, toolsPath);
             next.EnsureDirectories();
-            settingsStore.Save(next);
+            saveSettings(next);
             Storage = next;
             workspace = workspace with { ToolsDirectoryOverride = next.ToolsDirectory, StorageOverride = next };
             StorageChanged?.Invoke(next);

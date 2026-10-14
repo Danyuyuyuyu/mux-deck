@@ -5,13 +5,15 @@ using System.Globalization;
 using Avalonia.Threading;
 using MuxDeck.Core;
 using MuxDeck.Core.Muxing;
-using MuxDeck.Desktop.Preferences;
+using MuxDeck.Contracts;
 
 namespace MuxDeck.Desktop.ViewModels;
 
 public sealed partial class SingleMuxViewModel : ObservableObject
 {
     private readonly SingleMuxService service;
+    private readonly IProbeMedia prober;
+    private ToolConfiguration tools;
     private readonly Queue<string> logLines = new();
     private CancellationTokenSource? runCancellation;
     private CancellationTokenSource? probeCancellation;
@@ -43,10 +45,12 @@ public sealed partial class SingleMuxViewModel : ObservableObject
     public TrackColumnLayout TrackColumns { get; }
     public InteractionNotification Notification { get; } = new();
     public MediaDropFeedback DropFeedback { get; } = new();
-    public SingleMuxViewModel(SingleMuxService service, UserPreferencesStore? preferences = null)
+    public SingleMuxViewModel(SingleMuxService service, TrackColumnLayout columns)
     {
         this.service = service;
-        TrackColumns = new(preferences);
+        prober = service.Prober;
+        tools = service.Tools;
+        TrackColumns = columns;
         StartCommand = new(StartAsync, () => CanStart, ReportCommandError);
         CancelCommand = new(CancelAsync, () => CanCancel, ReportCommandError);
         SourceTracks = new(sourceTracks);
@@ -59,7 +63,10 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         }
     }
 
-    public void UpdateWorkspace(Workspace workspace) => service.UpdateWorkspace(workspace);
+    public void ConfigureTools(ToolConfiguration configuration) => tools = configuration;
+
+    private async Task<MediaProbe> ProbeMediaAsync(string path, CancellationToken token) =>
+        LegacyMuxContractConverter.ToLegacyProbe(await prober.ProbeAsync(path, tools, token).ConfigureAwait(false));
 
     public TrackRowViewModel ScTrack { get; } = new() { Id = "SC", Type = "字幕", Codec = "ASS", Source = "外加 · 简体", Language = "zh-Hans", Name = "SC", IsDefault = TrackPolicy.InitialScDefault, IsEditable = true, Policy = "新增", Detail = "子集化后新增 ASS；固定语言 zh-Hans。轨道名称、默认与强制旗标可编辑。" };
     public TrackRowViewModel TcTrack { get; } = new() { Id = "TC", Type = "字幕", Codec = "ASS", Source = "外加 · 繁体", Language = "zh-Hant", Name = "TC", IsDefault = TrackPolicy.InitialTcDefault, IsEditable = true, Policy = "新增", Detail = "子集化后新增 ASS；固定语言 zh-Hant。仅选择繁体时默认启用默认旗标。" };
@@ -527,7 +534,7 @@ public sealed partial class SingleMuxViewModel : ObservableObject
             await Task.Delay(350, cancellation.Token);
             if (string.IsNullOrWhiteSpace(path)) { ProbeText = "选择视频后显示源轨道。"; return; }
             if (!File.Exists(path)) { ProbeText = "视频路径不存在，修正后自动重新探测。"; ProbeState = VideoProbeState.Failed; return; }
-            var probe = await Task.Run(() => service.ProbeAsync(path, cancellation.Token), cancellation.Token);
+            var probe = await Task.Run(() => ProbeMediaAsync(path, cancellation.Token), cancellation.Token);
             if (cancellation.IsCancellationRequested || isClosing || !ReferenceEquals(probeCancellation, cancellation) || path != VideoPath) return;
             sourceProbe = probe;
             RebuildTracks();
@@ -563,7 +570,7 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         BeginToolProbe();
         try
         {
-            var probe = await Task.Run(() => service.ProbeAsync(path, cancellation.Token), cancellation.Token);
+            var probe = await Task.Run(() => ProbeMediaAsync(path, cancellation.Token), cancellation.Token);
             // 迟到或被更新的结果取代时不得把探测计数挂到别的成品上。
             if (cancellation.IsCancellationRequested || isClosing || !ReferenceEquals(Result, owner)) return;
             outputProbe = probe;
@@ -602,10 +609,10 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         Percent = 0;
         IsIndeterminate = true;
         runCancellation = new();
-        RunTask = RunCoreAsync(request, runCancellation);
+        RunTask = RunCoreAsync(request, tools, runCancellation);
         return RunTask;
     }
-    private async Task RunCoreAsync(MuxRequest request, CancellationTokenSource cancellation)
+    private async Task RunCoreAsync(MuxRequest request, ToolConfiguration configuration, CancellationTokenSource cancellation)
     {
         try
         {
@@ -619,7 +626,7 @@ public sealed partial class SingleMuxViewModel : ObservableObject
                 Percent = Math.Clamp(value.Percent ?? 0, 0, 100);
                 AppendLog(value.Message);
             });
-            Result = await Task.Run(() => service.RunAsync(request, progress, cancellation.Token));
+            Result = await Task.Run(() => service.RunAsync(request, configuration, progress, cancellation.Token));
             StatusText = FormatStatus(Result);
             StageText = Result.Status == MuxStatus.Succeeded ? "完成" : StatusText;
             IsIndeterminate = false;

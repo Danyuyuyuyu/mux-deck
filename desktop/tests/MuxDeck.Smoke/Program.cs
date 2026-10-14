@@ -1,3 +1,4 @@
+using MuxDeck.Desktop.Composition;
 using MuxDeck.Infrastructure;
 using MuxDeck.Infrastructure.Muxing;
 using MuxDeck.Infrastructure.Components;
@@ -35,6 +36,7 @@ if (args.FirstOrDefault() == "--long-line")
 if (args.FirstOrDefault() == "--tree-parent") return await RunTreeParent(exitAfterLaunch: false);
 if (args.FirstOrDefault() == "--tree-parent-exit") return await RunTreeParent(exitAfterLaunch: true);
 if (args.FirstOrDefault() == "--wait") { await Task.Delay(TimeSpan.FromSeconds(30)); return 0; }
+AppComposition.InitializeLegacyComponents();
 if (args.FirstOrDefault() == "--integration") return await Phase1Integration.RunAsync();
 if (args.FirstOrDefault() == "--single-mux-round1") return SingleMuxRound1Checks.Run();
 if (args.FirstOrDefault() == "--single-mux-ui-round1") return SingleMuxUiRound1Checks.Run();
@@ -145,8 +147,8 @@ foreach (var path in new[]
 }) File.WriteAllText(path, "fixture");
 var environmentStorePath = Path.Combine(environmentRoot, "settings.json");
 var environmentStorage = StoragePaths.ForRoot(Path.Combine(environmentRoot, "data"), portableTools);
-var environment = new EnvironmentViewModel(new Workspace(environmentRoot) { ToolsDirectoryOverride = portableTools },
-    environmentStorage, new StorageSettingsStore(environmentStorePath));
+var environment = AppComposition.CreateEnvironment(new Workspace(environmentRoot) { ToolsDirectoryOverride = portableTools },
+    environmentStorage, environmentStorePath);
 Check(environment.CoreComponents.Count == 2 && environment.ExtensionComponents.Count == 2 && environment.Tools.Count == 6,
     "环境页按组件分组并保留六项工具状态");
 var customTools = Path.Combine(environmentRoot, "custom-tools");
@@ -167,7 +169,7 @@ var uiThread = new Thread(() =>
     {
         AppBuilder.Configure<App>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions
             { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var model = new MainWindowViewModel(root);
+        var model = AppComposition.CreateMain(root);
         var window = new MainWindow { DataContext = model };
         window.Show();
         Dispatcher.UIThread.RunJobs();

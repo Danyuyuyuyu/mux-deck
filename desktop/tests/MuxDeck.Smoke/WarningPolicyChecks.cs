@@ -1,3 +1,4 @@
+using MuxDeck.Desktop.Composition;
 using MuxDeck.Infrastructure;
 using MuxDeck.Infrastructure.Muxing;
 using MuxDeck.Infrastructure.Components;
@@ -72,7 +73,7 @@ internal static class WarningPolicyChecks
 
             using var cancellation = scenario.CancelAfterPartialWarning ? new CancellationTokenSource() : null;
             var runner = new WarningPolicyRunner(source, subtitles, scenario, fonts, cancellation);
-            var service = new SingleMuxService(new Workspace(workspaceRoot), runner);
+            var service = AppComposition.CreateSingleService(new Workspace(workspaceRoot), runner);
             var protectedHashes = new[] { source }.Concat(subtitles.Select(item => item.Path))
                 .Concat(Directory.EnumerateFiles(fonts, "*", SearchOption.AllDirectories))
                 .ToDictionary(path => path, Hash, StringComparer.OrdinalIgnoreCase);
@@ -565,7 +566,7 @@ internal static class WarningPolicyChecks
             var sourceWrite = File.GetLastWriteTimeUtc(videoPath);
             var sourceSubtitleHashes = subtitles.ToDictionary(item => item.Path, item => Hash(item.Path), StringComparer.OrdinalIgnoreCase);
             var outputName = Path.GetFileNameWithoutExtension(videoPath) + ".warning-policy.muxed.mkv";
-            muxResult = await new SingleMuxService(workspace).RunAsync(
+            muxResult = await AppComposition.CreateSingleService(workspace).RunAsync(
                 new MuxRequest(videoPath, subtitles, fontsDirectory, outputDirectory, outputName));
             var outputExists = muxResult.OutputPath is { } finalPath && File.Exists(finalPath);
             if (muxResult.LogPath is { } taskLog && File.Exists(taskLog))
@@ -671,7 +672,7 @@ internal static class WarningPolicyChecks
             Diagnostics: index => index == 0 ? [new ProcessLine(true, Timestamp + "|WRN|" + ColorWarning)] : [],
             BoldRequest: true, SecondFontName: secondaryFontName);
         var runner = new WarningPolicyRunner(video, subtitles, scenario, fonts);
-        var model = new SingleMuxViewModel(new SingleMuxService(new Workspace(workspaceRoot), runner))
+        var model = new SingleMuxViewModel(AppComposition.CreateSingleService(new Workspace(workspaceRoot), runner), new TrackColumnLayout())
         {
             FontsDirectory = fonts,
             OutputDirectory = output,

@@ -7,5 +7,6 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
     <ProjectReference Include="../MuxDeck.Core/MuxDeck.Core.csproj" />
     <ProjectReference Include="../MuxDeck.Application/MuxDeck.Application.csproj" />
+    <ProjectReference Include="../MuxDeck.Infrastructure/MuxDeck.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

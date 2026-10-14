@@ -1,3 +1,4 @@
+using MuxDeck.Desktop.Composition;
 using MuxDeck.Infrastructure;
 using MuxDeck.Infrastructure.Muxing;
 using MuxDeck.Infrastructure.Components;
@@ -140,7 +141,7 @@ internal static class Phase1Integration
                 "-c", "copy", mp4Source], "fixture-mp4.log");
 
             Check(File.Exists(source), "生成隔离的短时视频源");
-            var service = new SingleMuxService(workspace);
+            var service = AppComposition.CreateSingleService(workspace);
             var sourceProbe = await service.ProbeAsync(source, CancellationToken.None);
             probeSummaries.Add(SummarizeProbe("source-mkv", sourceProbe));
             Check(sourceProbe.Tracks.Any(IsType("video")) && sourceProbe.Tracks.Any(IsType("audio")) &&
@@ -463,7 +464,7 @@ internal static class Phase1Integration
         await File.WriteAllTextAsync(fakeSource, "fixture source", new UTF8Encoding(false));
         await File.WriteAllTextAsync(fakeSubtitle, MakeAss("测试", "Tree cancel"), new UTF8Encoding(false));
         var fakeRunner = new ProcessTreeMuxToolRunner(subsetterPath);
-        var service = new SingleMuxService(Workspace.Discover(), fakeRunner);
+        var service = AppComposition.CreateSingleService(Workspace.Discover(), fakeRunner);
         using var cancellation = new CancellationTokenSource();
         var run = service.RunAsync(new MuxRequest(fakeSource,
                 [new SubtitleInput(fakeSubtitle, "取消测试", "zh-Hans", true)], fontsDirectory, outputDirectory),
@@ -516,7 +517,7 @@ internal static class Phase1Integration
         var outputDirectory = Path.Combine(runRoot, "outputs", "ietf-mismatch");
         Directory.CreateDirectory(outputDirectory);
         var runner = new IetfMismatchMuxToolRunner(sourcePath);
-        var service = new SingleMuxService(Workspace.Discover(), runner);
+        var service = AppComposition.CreateSingleService(Workspace.Discover(), runner);
         var result = await service.RunAsync(new MuxRequest(sourcePath,
             [new SubtitleInput(subtitlePath, "IETF 检查", "zh-Hans", true)], fontsPath, outputDirectory));
         var metadataFailure = result.Error is { } error &&

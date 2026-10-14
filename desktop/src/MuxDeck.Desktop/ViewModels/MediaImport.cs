@@ -55,7 +55,7 @@ public sealed partial class SingleMuxViewModel
             {
                 var path = Path.GetFullPath(c.Path);
                 if (InputRules.UsesFontDirectory(c.LocationKind, Path.GetExtension(path))) { fonts = c.Kind == InputCandidateKind.LocalDirectory ? path : Path.GetDirectoryName(path); continue; }
-                var probe = await service.ProbeAsync(path, importCancellation.Token);
+                var probe = await ProbeMediaAsync(path, importCancellation.Token);
                 if (!CanEdit || revision != DraftRevision) return new(false, "识别期间任务或草稿已变化，整批输入保持原样。");
                 if (MediaFileTypes.IsSubtitle(path))
                 {

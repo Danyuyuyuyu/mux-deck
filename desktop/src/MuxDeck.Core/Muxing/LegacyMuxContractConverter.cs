@@ -109,14 +109,14 @@ public static class LegacyMuxContractConverter
     }
 
     // 旧入口的非法请求文案在转换处保留；新用例只接收完整的不可变规格。
-    internal static MuxJobSpec ToRunSpec(MuxRequest request, Workspace workspace)
+    internal static MuxJobSpec ToRunSpec(MuxRequest request, ToolConfiguration tools)
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.Subtitles is null || request.Audios is null || request.Subtitles.Count + request.Audios.Count == 0)
-            return ToSpec(request with { Subtitles = [], Audios = [] }, workspace);
+            return ToSpec(request with { Subtitles = [], Audios = [] }, tools);
         if (request.Subtitles.Any(item => item is null)) throw new ArgumentException("字幕参数不能为空。");
         if (request.Audios.Any(item => item is null)) throw new ArgumentException("音频参数不能为空。");
-        return ToSpec(request, workspace);
+        return ToSpec(request, tools);
     }
 
     public static MediaProbe ToLegacyProbe(MediaProbeResult probe) => new(probe.Path,

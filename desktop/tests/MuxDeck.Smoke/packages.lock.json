@@ -225,7 +225,8 @@
           "Avalonia.Desktop": "[12.1.2, )",
           "Avalonia.Themes.Fluent": "[12.1.2, )",
           "MuxDeck.Application": "[1.0.0, )",
-          "MuxDeck.Core": "[1.0.0, )"
+          "MuxDeck.Core": "[1.0.0, )",
+          "MuxDeck.Infrastructure": "[1.0.0, )"
         }
       },
       "muxdeck.domain": {

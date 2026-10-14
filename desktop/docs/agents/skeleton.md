@@ -35,9 +35,9 @@ Domain ← Application ← Infrastructure
 | Application | Domain |
 | Infrastructure | Application、Domain |
 | Core | Domain、Application、Infrastructure（3b 用户批准过渡，第 5 步移除） |
-| Desktop | Core、Application |
+| Desktop | Core、Application、Infrastructure（4a-1 接入，仅 Program / Composition 使用） |
 
-Core → Infrastructure 为 3b 用户批准的单向过渡，到第 5 步移除；Infrastructure 不引用 Core 的护栏不变。StoragePaths、ToolLocator、Workspace 及任务文档列出的 Desktop 直接依赖本步留 Core，4a 替换直接依赖与装配。Desktop → Core 保留到既有入口迁移完成；Desktop → Infrastructure 在集中装配接入时建立。上述过渡引用不豁免目标命名空间规则：Core 内先改为 `MuxDeck.Domain`、`MuxDeck.Contracts`、`MuxDeck.Application`、`MuxDeck.Infrastructure` 的类型与对应新项目一起接受架构测试，搬迁时只移动文件。每完成一步，在同一改动中更新本节与下方“迁移前现状”。
+Core → Infrastructure 为 3b 用户批准的单向过渡，到第 5 步移除；Infrastructure 不引用 Core 的护栏不变。4a-1 已接入 Desktop → Infrastructure，只有 Program / Composition 使用；Desktop → Core 保留到第 5 步。StoragePaths、ToolLocator 与组件实现留 Core 到 4a-2，导入逻辑留 Desktop 到 4a-3。上述过渡引用不豁免目标命名空间规则：Core 内先改为 `MuxDeck.Domain`、`MuxDeck.Contracts`、`MuxDeck.Application`、`MuxDeck.Infrastructure` 的类型与对应新项目一起接受架构测试，搬迁时只移动文件。每完成一步，在同一改动中更新本节与下方“迁移前现状”。
 
 测试按层划分：
 
@@ -169,6 +169,8 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 | 工作区、日志与不覆盖发布 | Infrastructure/FileTaskWorkspace.cs、NoOverwritePublisher.cs | 独占 cache/run-id/work，异步释放等待清理；日志保留；同目录暂存、刷盘、最后取消检查与不覆盖 rename；提交后不取消已完成成品 |
 | QC 判定 | Core/Muxing/SingleMuxService.cs 调用 Domain OutputQcRules；Infrastructure/Muxing/AssGlyphValidator.cs 保留字体 IO 核验 | 对比源视频与音轨，逐轨验证新增 ASS 名称/语言/default/forced；验证附件身份、大小、类型、提取 SHA-256 和 ASS 内容；不能仅按语言找到任意轨即通过。ASS 以同一 MKVToolNix 将每条修正 ASS 单独封装、提取为参考，与真实成品提取全文比较；仅统一 CRLF/LF，Dialogue 文本、时序、Style、字体、事件顺序和文本边缘空格均须一致 |
 | 工具配置与定位 | Infrastructure/ToolCatalog.cs、ToolPathLookup.cs、Components/FontToolsLocator.cs；Core/ToolLocator.cs、StoragePaths.cs、Workspace.cs | Infrastructure 不使用 Core；Desktop 直接依赖按用户批准留 Core 到 4a，共用路径查找和 fontTools 后端已迁出 |
+| 集中装配与设置存储 | Desktop/Composition/AppComposition.cs；Infrastructure/StorageSettingsStore.cs；Desktop/Preferences/UserPreferencesStore.cs | Program 只调用装配；App 注入窗口工厂，无静态 Workspace / Storage；MainWindow、Environment、SingleMux ViewModel 注入服务依赖；存储索引只保存工作与工具目录，装配转换为旧 StoragePaths；界面偏好留 Desktop |
+| 只读媒体探测 | Application/ProbeMediaUseCase.cs；Infrastructure/Muxing/MkvmergeProber.cs | IProbeMedia 消费配置快照，IMediaProber.ProbeReadOnlyAsync 接入既有无工作区只读路径，不新增端口、不改变命令参数；旧 MediaProbe 由转换类完整投影 |
 
 新增的多轨与自动导入范围以 [自动拖放任务](../tasks/automatic-media-drop.md) 为准：`SubtitleText` 统一 ASS/SRT 的 UTF-8 与结构校验，ASS 继续使用 `AssGlyphValidator`；外加音频包含真实输入 Track ID，`ExternalMedia` 构建选择参数；编码、声道、采样率与元数据的 QC 调用 Domain `OutputQcRules`。字幕采用同工具往返全文参考，音频采用同工具参考的 `--fullraw`（含 CodecPrivate）SHA-256，任一不符阻止发布。只在 A/V 输入时长均已声明时检查总时长，不以字幕尾时间替代未知容器数据。
 
@@ -249,7 +251,7 @@ tests/MuxDeck.Infrastructure.IntegrationTests 只直接引用 Infrastructure，�
 
 ### 3c 单任务用例
 
-`RunSingleMuxUseCase` 只持有端口，按检查输入、探测源、子集化、计划、临时封装、校验、不覆盖落位七阶段传递不可变 record。工具与目录从 `MuxJobSpec.Tools` 取得；旧 `UpdateWorkspace` 外壳保留至 4a，只改变下一次任务快照。
+`RunSingleMuxUseCase` 只持有端口，按检查输入、探测源、子集化、计划、临时封装、校验、不覆盖落位七阶段传递不可变 record。工具与目录从 `MuxJobSpec.Tools` 取得；4a-1 已删除旧 `UpdateWorkspace` 外壳，ViewModel 向每次运行/探测传入配置快照，旧服务只持有不可变的初始配置和装配依赖。
 
 文件事实由业务端口 `IMuxInputReader` 和 `IMuxEvidenceReader` 提供，分别实现为 Infrastructure 的 `MuxInputReader`、`MuxEvidenceReader`；同工具参考往返通过 `IMediaReferenceBuilder` / `MediaReferenceBuilder`，工具启动前验证通过 `IToolReadiness` / `ToolReadiness`。不建立通用文件系统接口，Application 仅使用允许的 Path 字符串成员。
 
@@ -261,7 +263,7 @@ QC 返回 `TrackQcReport` 的结构化事实，经 `QC_SUBSET_FONTS`、`QC_TRACK
 
 `SingleMuxService` 仅固定旧 `MuxRequest` 集合快照、配置快照并调用用例；旧进度、检查顺序、错误文案与告警由 `LegacyMuxContractConverter` 转换。用例在输入校验完成、目标存在性检查之前发出 `INPUT_VALIDATED` 事实，旧服务直接用手上的旧请求快照写 `请求 …` 行，沿用原 JsonSerializer 默认格式及规范路径/输出名。用例自己的 `SPEC` 日志保持原样，日志工作区不反向解析规格，EquatableArray 不增加 JSON 反序列化支持。
 
-当前累计测试 676：Domain 298 / Application 80 / Core 41 / Architecture 198 / Infrastructure 59；3c 的 675 项全部保留，新增旧入口 task.log 的请求行逐字、时序与集合隔离检查。Desktop 和 Smoke 不改；UpdateWorkspace 只影响下一次任务，4a 删除。
+3d 历史累计测试 676：Domain 298 / Application 80 / Core 41 / Architecture 198 / Infrastructure 59；3c 的 675 项全部保留，新增旧入口 task.log 的请求行逐字、时序与集合隔离检查。该步 Desktop 和 Smoke 不改；UpdateWorkspace 后于 4a-1 删除。
 
 ## 单任务接口
 
@@ -309,6 +311,6 @@ QC 返回 `TrackQcReport` 的结构化事实，经 `QC_SUBSET_FONTS`、`QC_TRACK
 
 `ManageComponentsUseCase` 实现 `IManageComponents`，检测、卸载计划检查使用检测租约，安装/卸载使用互斥租约；成功、失败、异常、取消均释放。每次调用只使用 `ComponentConfiguration` 快照；拒绝仍为“已有组件安装或卸载正在进行。”。集中错误码新增 `MUX_COMPONENT_OPERATION_BUSY`、`MUX_COMPONENT_INSTALL_FAILED`、`MUX_COMPONENT_UNINSTALL_FAILED`。组件检查增加按 ID 检测入口，`ComponentPart` 保留 Purpose/Source，保证旧工具用途与来源显示不变。
 
-Core `ComponentManagement` 暂时装配用例并适配既有组件实现：外部操作使用原下载/验证/目录规则，旧入口只转换与调用接口，保留原异常类型/消息、阶段、进度、日志与取消处理。候选验证和卸载内部边界复核属于已有租约，关闭时继续收尾。Core `ComponentOperations` 仅保留共享协调器的过渡装配，Gate 已删除。经用户批准，ComponentVerifier、ComponentInstaller、ComponentUninstaller、ComponentDirectories、ComponentReleases 与 StoragePaths/ToolLocator 在 4a 构造函数注入完成后迁入 Infrastructure；3e 不新增引用或架构例外，Desktop/Smoke 零改动。
+Core `ComponentManagement` 暂时装配用例并适配既有组件实现：外部操作使用原下载/验证/目录规则，旧入口只转换与调用接口，保留原异常类型/消息、阶段、进度、日志与取消处理。候选验证和卸载内部边界复核属于已有租约，关闭时继续收尾。4a-1 的协调器由 Desktop `AppComposition` 创建并接入旧组件共享桥接；Core 不创建默认协调器，Gate 已删除，静态桥接随 4a-2 组件迁移清理。经用户批准，ComponentVerifier、ComponentInstaller、ComponentUninstaller、ComponentDirectories、ComponentReleases 与 StoragePaths/ToolLocator 在 4a-2 迁入 Infrastructure；3e 历史范围不新增引用或架构例外，Desktop/Smoke 零改动。
 
 3e 新增协调器矩阵及生命周期 35 项、组件用例 17 项、过渡转换与实际卸载边界 5 项，集中错误码自动增加 3 项注册码用例；原 717 项全部保留，总计 777（Domain 298 / Application 158 / Core 59 / 架构 198 / Infrastructure 64）。现有测试和护栏未改动。

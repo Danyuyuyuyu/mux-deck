@@ -1,3 +1,4 @@
+using MuxDeck.Desktop.Composition;
 using MuxDeck.Infrastructure;
 using MuxDeck.Infrastructure.Muxing;
 using MuxDeck.Infrastructure.Components;
@@ -49,7 +50,7 @@ internal static class AutomaticMediaDropChecks
         foreach (var p in files.Values) System.IO.File.WriteAllText(p, p.EndsWith(".ass") ? Ass : Srt);
         var fonts = Path.Combine(root, "fonts"); Directory.CreateDirectory(fonts);
         var fakeWorkspace = Path.Combine(root, "workspace"); var merge = Path.Combine(fakeWorkspace, "bin", "mkvtoolnix", "mkvmerge.exe"); Directory.CreateDirectory(Path.GetDirectoryName(merge)!); System.IO.File.WriteAllText(merge, "controlled runner");
-        var runner = new ImportRunner(); var vm = new MainWindowViewModel(new Workspace(fakeWorkspace), new SingleMuxService(new Workspace(fakeWorkspace), runner));
+        var runner = new ImportRunner(); var vm = AppComposition.CreateMain(new Workspace(fakeWorkspace), AppComposition.CreateSingleService(new Workspace(fakeWorkspace), runner));
         var window = new MainWindow { DataContext = vm }; window.Show(); Dispatcher.UIThread.RunJobs();
         var view = window.FindControl<SingleMuxView>("SingleView")!; var single = vm.Single; var interactions = new ScriptedInteractions(); view.Interactions = interactions;
         void Drop(string zone, params string[] names)
@@ -132,7 +133,7 @@ internal static class AutomaticMediaDropChecks
         string[] inputs = [video, mkvVideo, audio, multiAudio, .. srts, .. asses, Path.Combine(fonts, "arial.ttf")]; var hashes = inputs.ToDictionary(p => p, p => SHA256.HashData(System.IO.File.ReadAllBytes(p)));
         foreach (var (name, added, needFonts) in new[] { ("srt-only", srts.Take(1).ToArray(), false), ("audio-only", new[] { audio }, false), ("multi-audio", new[] { multiAudio }, false), ("multi-srt", srts, false), ("multi-ass", asses, true), ("mixed", new[] { srts[0], asses[0], audio, srts[1] }, true) })
         {
-            var main = new MainWindowViewModel(workspace); var vm = main.Single; var window = new MainWindow { DataContext = main }; window.Show(); Dispatcher.UIThread.RunJobs();
+            var main = AppComposition.CreateMain(workspace); var vm = main.Single; var window = new MainWindow { DataContext = main }; window.Show(); Dispatcher.UIThread.RunJobs();
             var view = window.FindControl<SingleMuxView>("SingleView")!;
             try
             {
@@ -144,7 +145,7 @@ internal static class AutomaticMediaDropChecks
                 check(vm.ExternalTracks.Count == (name == "multi-audio" ? 2 : added.Length) && vm.CanStart && vm.RequiresFonts == needFonts, name + " 真实文件自动识别并可提交");
                 Pump(vm.StartAsync(), 180);
                 check(vm.Result?.Status == MuxStatus.Succeeded && System.IO.File.Exists(vm.OutputPath), name + " 真实封装及全部成品校验通过：" + vm.Result?.Error);
-                var probe = vm.Result?.Status == MuxStatus.Succeeded ? new SingleMuxService(workspace).ProbeAsync(vm.OutputPath) : throw new InvalidOperationException(vm.Result?.Error); Pump(probe);
+                var probe = vm.Result?.Status == MuxStatus.Succeeded ? AppComposition.CreateSingleService(workspace).ProbeAsync(vm.OutputPath) : throw new InvalidOperationException(vm.Result?.Error); Pump(probe);
                 check(probe.Result.Tracks.Count(t => t.Type == "subtitles") == added.Count(MediaFileTypes.IsSubtitle) && probe.Result.Tracks.Count(t => t.Type == "audio") == 1 + expectedAudio, name + " 源音轨与新增轨道数量准确");
                 check(!needFonts || probe.Result.Attachments.Count > 0, name + " 字体附件策略正确");
                 if (!needFonts) check(probe.Result.Attachments.Count == 0 && vm.Result!.Checks.Any(c => c.Contains("SHA-256") || c.Contains("参考全文")), name + " 无字体流程也完成内容校验");
@@ -157,7 +158,7 @@ internal static class AutomaticMediaDropChecks
         foreach (var corruptMetadata in new[] { true, false })
         {
             var output = Path.Combine(root, corruptMetadata ? "metadata-rejected" : "payload-rejected");
-            var service = new SingleMuxService(workspace, new CorruptAudioRunner(corruptMetadata));
+            var service = AppComposition.CreateSingleService(workspace, new CorruptAudioRunner(corruptMetadata));
             var request = new MuxRequest(mkvVideo, [], "", output) { Audios = [new(audio, 0, "", "ja")] };
             var task = service.RunAsync(request); Pump(task, 90);
             check(task.Result.Status == MuxStatus.Failed && !System.IO.File.Exists(Path.Combine(output, "video.muxed.mkv")) && task.Result.Error!.Contains(corruptMetadata ? "元数据" : "数据与参考"), corruptMetadata ? "篡改新增音轨语言时 QC 阻止发布" : "篡改新增音轨 payload 时 SHA-256 阻止发布");

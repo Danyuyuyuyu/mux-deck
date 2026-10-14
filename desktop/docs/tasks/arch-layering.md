@@ -274,6 +274,7 @@ Core 的全局 Gate 仅覆盖安装与卸载（含 AssfontsInstaller 兼容入�
 
 | PR | 状态 | 验证 | 备注 |
 |---|---|---|---|
+| 4a-1 | 本地验证完成，待推送与 CI 核对 | locked restore 11/11；Release 0 警告 / 0 错误；test 786/786（原 777 保留，新增 9）；架构 198/198；受控 13/13、656/656，UI 全套通过；存储装配隔离检查 5/5 | AppComposition、构造注入、不可变配置与 IProbeMedia、存储索引迁入 Infrastructure；Smoke 仅装配，17 个源文件经精确替换比对；详见下方 4a-1 实施与实际验证和[后续调查报告](arch-layering-4a-investigation.md)。 |
 | [1a · PR #3](https://github.com/Danyuyuyuyu/mux-deck/pull/3) | 已合并（`c4f932e`） | 锁定 restore：9/9 项目；Release build：0 警告 / 0 错误；dotnet test：32/32（架构规则 27 + 扫描反例 5），失败/跳过 0；Smoke：28/28 | 三个空生产项目、三个 xUnit 测试项目、过渡引用、NetArchTest 护栏、CI test 步骤与全部新增项目锁文件；按已接受 ADR-0001 实施，未移动代码、定义契约或修改行为。Domain/Application 业务测试 0；未重放真实工具链或原生 UI。 |
 | [1b · `aa85458`](https://github.com/Danyuyuyuyu/mux-deck/commit/aa85458a3caf7b11e76ae5f7d60317d3c862ffe8) | 已完成，已推送，Desktop CI 通过 | restore 10/10；Release 0 警告 / 0 错误；dotnet test 71/71（转换 26、Domain 8、架构 37）；受控 13/13 套件、656/656；契约两条故意违反均被拒绝 | 公共不可变契约、四个 Domain 值类型与 Core 兼容转换；旧调用方零改动；详见下方命令与计数。未重放真实工具链或原生 UI。 |
 | [2a · `34c4c18`](https://github.com/Danyuyuyuyu/mux-deck/commit/34c4c1827169270c715a955fe027a0bd6622509d) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38390147903) | locked restore 10/10；Release 0 警告 / 0 错误；dotnet test 208/208；受控 13/13、656/656 | TrackPolicy、LanguageRules、OutputNaming 已迁入 Domain；新增 Domain 69、架构 3，原 136 全部保留；详见 2a 实际验证。 |
@@ -1117,3 +1118,41 @@ restore 11 个项目成功，Release 0 警告 / 0 错误，test 717/717。[构�
 - **4a-2**：旧公开方法经 ComponentManagement、用例、Backend 绕回 `*CoreAsync`，以及 `legacyExceptions` 开关；`checker is ComponentVerifier` 特判；`ComponentPart.Source/Purpose` 是中文显示文字，应改为枚举；协调器是 Core 静态单例（创建归属先在 4a-1 调整，组件迁移时清理过渡入口）。
 - **4d**：关闭期间组件检测抛 `InvalidOperationException`，和忙碌时返回结果的行为不一致。
 - **第 5 步**：`AssfontsInstaller` 未使用。
+
+### 4a-1 实施与实际验证（2026-10-14）
+
+输入：`208796d` 与独立计划调整提交 `96089df`。输出：Desktop `Composition/AppComposition.cs` 集中创建对象图，Program 只调用它，App 通过注入的窗口工厂启动，无静态 Workspace / Storage；MainWindow、Environment、SingleMux ViewModel 构造注入服务与列布局，不创建默认服务；Core 单任务旧入口保留只读初始配置与显式每次运行配置，删除 UpdateWorkspace；Application `ProbeMediaUseCase` 实现 IProbeMedia，经已有 IMediaProber 的只读成员调用现有 MkvmergeProber 无工作区探测路径，旧 MediaProbe 完整转换；StorageSettingsStore 迁入 Infrastructure，以工作/工具目录索引隔离 Core StoragePaths，装配进行转换，UserPreferencesStore 留 Desktop。
+
+失败行为：保存失败仍显示原消息并保留已生效配置；探测失败/取消原样传递，迟到探测与关闭保护沿用原逻辑；既有单任务失败/日志/提交后取消由原用例与转换保留。验收覆盖工具与工作目录更换、只读探测配置隔离、未知原始轨道类型、null/空 IETF、全部媒体字段、取消、原始端口失败、便携与默认存储恢复及全部既有 UI 场景。
+
+协调器由 AppComposition 创建并接入旧组件共享桥接；Core 的默认创建已删除，桥接拒绝未装配与运行期间替换。五个组件类、StoragePaths、ToolLocator 未迁移，旧入口回绕、legacyExceptions、候选 verifier 特判与中文组件字段等留到 4a-2；静态访问桥接也随 4a-2 清理。导入只更换探测依赖，接纳、校验与字幕读取未迁移。
+
+依赖与共享文件：只新增计划内 Desktop → Infrastructure；Core → Infrastructure、Desktop → Core 的既有过渡保留到第 5 步。ProjectDependencyTests 仅同步这一已批准的直接项目引用，所有命名空间、PDB 装配路径与禁止反向依赖规则保留，未新增过渡引用、架构例外或跳过。Architecture.Tests 与 Smoke 的锁文件仅更新 Desktop 的项目依赖清单，无包版本变化；MuxDeck.sln、Directory.Build.props、ADR 和 diagnostics.md 未改。skeleton.md 同步当前装配、探测与存储归属。
+
+以下命令实际在 desktop/ 执行；日志与 TRX 保存在 `artifacts/arch-corrections/4a-1/`：
+
+| 命令 / 套件 | 本次结果 |
+|---|---|
+| `dotnet restore MuxDeck.sln --locked-mode` | 11/11 项目成功 |
+| `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false` | 0 警告 / 0 错误 |
+| `dotnet test MuxDeck.sln --no-build -c Release --logger trx --results-directory artifacts/arch-corrections/4a-1/tests` | 786/786；Domain 298、Application 161、Core 65、Architecture 198、Infrastructure 64；失败/跳过 0；原 777 全部保留，新增探测用例 3 与旧探测完整字段往返 6 |
+| Smoke 无参数 | 28/28 |
+| `--warning-policy` | 57/57 |
+| `--single-mux-round1` | 89/89 |
+| `--single-mux-ui-round1` | 176/176 |
+| `--workbench-ui` | 38/38 |
+| `--input-feedback` | 24/24 |
+| `--media-drop` | 25/25 |
+| `--environment-ui` | 23/23 |
+| `--components` | 31/31 |
+| `--component-install-ui` | 37/37 |
+| `--component-install-all` | 41/41 |
+| `--component-uninstall` | 26/26 |
+| `--component-uninstall-ui` | 61/61 |
+| artifacts 隔离装配检查 | 5/5：--root 忽略安装版索引、默认启动恢复路径、创建五目录、缺失索引回退、损坏索引回退 |
+
+Smoke 表中每项命令为 `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release` 加对应参数，共 13/13 套件、656/656；全部受控 UI 套件通过。对 17 个 Smoke `.cs` 文件逐个与 `208796d` 精确比对，只允许工厂/构造参数、using 与协调器初始化替换，断言、场景和测试逻辑完全保留。
+
+未改探测命令行或参数：MkvmergeProber 的既有只读方法保留原 `-J`、完整路径、两分钟超时、无工作目录/环境覆盖、JSON 捕获与失败边界；新增接口成员仅转发。按用户要求本次不运行真实工具链基准或真实探测套件，不把历史真实计数记录为本次结果。原生选择器、Explorer、DPI 与播放器未人工验收，本步不改变这些交互。
+
+第三部分的目录查询两个方案、字幕读取差异和语言规则结论见[只读调查报告](arch-layering-4a-investigation.md)，本次不实施调查中的改造。

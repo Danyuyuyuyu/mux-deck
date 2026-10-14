@@ -1,3 +1,4 @@
+using MuxDeck.Desktop.Composition;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
@@ -39,7 +40,7 @@ internal static class WorkbenchUiChecks
     private static void Verify(string root, Action<bool, string> check)
     {
         var preferencePath = Path.Combine(root, "preferences.json");
-        var main = new MainWindowViewModel(new Workspace(root), preferences: new UserPreferencesStore(preferencePath));
+        var main = AppComposition.CreateMain(new Workspace(root), preferences: new UserPreferencesStore(preferencePath));
         var vm = main.Single; var layout = vm.TrackColumns;
         var window = new MainWindow { DataContext = main, Width = 1040, Height = 760 }; window.Show(); Dispatcher.UIThread.RunJobs();
         var view = window.FindControl<SingleMuxView>("SingleView")!;

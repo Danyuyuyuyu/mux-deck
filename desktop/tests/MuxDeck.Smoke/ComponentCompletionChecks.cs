@@ -1,3 +1,4 @@
+using MuxDeck.Desktop.Composition;
 using MuxDeck.Infrastructure;
 using MuxDeck.Infrastructure.Muxing;
 using MuxDeck.Infrastructure.Components;
@@ -167,7 +168,7 @@ internal static class ComponentCompletionChecks
             Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             Dialogue: 0,0:00:00.00,0:00:00.90,Default,,0,0,0,,Managed fonttools test
             """);
-        var result = await new SingleMuxService(workspace).RunAsync(new(video, [new(subtitle, "Test", "eng", true)], fonts, Path.Combine(root, "output")), new MuxProgressSink(), default);
+        var result = await AppComposition.CreateSingleService(workspace).RunAsync(new(video, [new(subtitle, "Test", "eng", true)], fonts, Path.Combine(root, "output")), new MuxProgressSink(), default);
         check(result.Status == MuxStatus.Succeeded && File.Exists(result.OutputPath), "新安装三组件与独立后端完成真实 ASS 子集、封装和任务 QC：" + result.Error);
         check(File.ReadAllText(result.LogPath!).Contains(Path.Combine(workspace.ToolsDirectory, "assfontsubset", "python", "Scripts")), "真实任务使用 Mux Deck 管理的依赖目录");
         check(!Directory.EnumerateFiles(workspace.TaskCacheDirectory, "*", SearchOption.AllDirectories).Any(), "真实任务完成后缓存工作数据已清理");

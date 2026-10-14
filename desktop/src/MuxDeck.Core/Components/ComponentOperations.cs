@@ -1,9 +1,17 @@
 namespace MuxDeck.Core.Components;
 
-// 过渡装配共用协调器，保持旧 Gate 跨服务实例的安装/卸载互斥范围。
+// 4a-2 前保留旧入口共享桥接，实例由外部装配提供，Core 不再创建协调器。
 internal static class ComponentOperations
 {
-    internal static MuxDeck.Contracts.IOperationCoordinator Coordinator { get; } = new MuxDeck.Application.OperationCoordinator();
+    private static MuxDeck.Contracts.IOperationCoordinator? coordinator;
+    internal static MuxDeck.Contracts.IOperationCoordinator Coordinator => coordinator ??
+        throw new InvalidOperationException("组件协调器尚未装配。");
+    internal static void Configure(MuxDeck.Contracts.IOperationCoordinator value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        if (Interlocked.CompareExchange(ref coordinator, value, null) is { } existing && !ReferenceEquals(existing, value))
+            throw new InvalidOperationException("组件协调器已装配，不能替换。");
+    }
 }
 
 public enum ComponentRemovalKind { Component, Dependencies }

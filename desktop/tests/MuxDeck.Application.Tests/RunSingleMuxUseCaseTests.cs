@@ -259,6 +259,8 @@ public sealed class RunSingleMuxUseCaseTests
             if (Unexpected) throw new InvalidOperationException("unexpected");
             throw new ToolFailureException(ErrorCodes.ToolExitFailed, "port failure", "original detail");
         }
+        public Task<MediaProbeResult> ProbeReadOnlyAsync(string path, ToolConfiguration tools, CancellationToken cancellationToken = default) =>
+            ProbeAsync(path, new ToolCallContext(tools, this), cancellationToken);
         public Task<ITaskWorkspace> CreateAsync(ToolConfiguration tools, CancellationToken cancellationToken = default)
         { Disposed = false; ResidualFiles.Add("work"); ObservedTools.Add(tools); return Task.FromResult<ITaskWorkspace>(this); }
         public async ValueTask DisposeAsync() { await Task.Yield(); ResidualFiles.Clear(); Disposed = true; }

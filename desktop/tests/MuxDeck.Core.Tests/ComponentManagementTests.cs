@@ -9,6 +9,7 @@ namespace MuxDeck.Core.Tests;
 
 public sealed class ComponentManagementTests
 {
+    static ComponentManagementTests() => ComponentManagement.ConfigureLegacyCoordinator(new OperationCoordinator());
     [Fact]
     public async Task Inspection_contract_preserves_legacy_tool_identity_source_version_and_reason()
     {
@@ -19,7 +20,7 @@ public sealed class ComponentManagementTests
         var verifier = new ComponentVerifier(new VersionRunner());
         var definition = ComponentCatalog.All.Single(value => value.Id == "mkvtoolnix");
         var legacy = await verifier.VerifyAsync(definition, new(fixture.Root), TestContext.Current.CancellationToken);
-        IManageComponents manager = new ComponentManagement(verifier);
+        IManageComponents manager = new ComponentManagement(verifier, coordinator: new OperationCoordinator());
         var result = await manager.InspectAsync("mkvtoolnix", new(fixture.Root, tools, "logs", "cache"), TestContext.Current.CancellationToken);
         Assert.Equal(C.ComponentState.Available, result.State);
         Assert.Equal(legacy.Version, result.Version);

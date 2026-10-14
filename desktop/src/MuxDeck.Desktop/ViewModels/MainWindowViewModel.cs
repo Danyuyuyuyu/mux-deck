@@ -1,7 +1,5 @@
 using System.Collections.ObjectModel;
 using MuxDeck.Core;
-using MuxDeck.Core.Muxing;
-using MuxDeck.Desktop.Preferences;
 
 namespace MuxDeck.Desktop.ViewModels;
 
@@ -10,15 +8,13 @@ public sealed class MainWindowViewModel : ObservableObject
     private int selectedPage;
     private string log = "桌面工作区已就绪。选择视频或检查本机工具环境。";
 
-    public MainWindowViewModel(Workspace workspace, SingleMuxService? singleService = null, UserPreferencesStore? preferences = null,
-        StoragePaths? storage = null, EnvironmentViewModel? environment = null)
+    public MainWindowViewModel(Workspace workspace, StoragePaths storage, EnvironmentViewModel environment,
+        SingleMuxViewModel single)
     {
         WorkspaceRoot = workspace.Root;
-        Storage = storage ?? StoragePaths.ForWorkspace(workspace.Root);
-        if (storage is not null)
-            workspace = workspace with { ToolsDirectoryOverride = storage.ToolsDirectory, StorageOverride = storage };
-        Environment = environment ?? new EnvironmentViewModel(workspace, Storage);
-        Single = new SingleMuxViewModel(singleService ?? new SingleMuxService(workspace), preferences);
+        Storage = storage;
+        Environment = environment;
+        Single = single;
         Environment.SetWorkGuard(() => !Single.CanEdit || Single.IsProbing || Single.HasActiveToolProbes);
         Environment.OperationChanged += () =>
         {
@@ -35,7 +31,7 @@ public sealed class MainWindowViewModel : ObservableObject
             Storage = next;
             Raise(nameof(Storage));
             if (!Single.IsRunning)
-                Single.UpdateWorkspace(workspace with { ToolsDirectoryOverride = next.ToolsDirectory, StorageOverride = next });
+                Single.ConfigureTools(workspace with { ToolsDirectoryOverride = next.ToolsDirectory, StorageOverride = next });
         };
         ShowSingleCommand = new(() => SelectedPage = 0);
         ShowBatchCommand = new(() => SelectedPage = 1);

@@ -1,3 +1,4 @@
+using MuxDeck.Desktop.Composition;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -23,7 +24,7 @@ internal static class EnvironmentUiChecks
             try
             {
                 AppBuilder.Configure<App>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-                var model = new MainWindowViewModel(new Workspace(root));
+                var model = AppComposition.CreateMain(new Workspace(root));
                 model.SelectedPage = 3;
                 var env = model.Environment;
                 // 只替换展示集合，不启动工具，不写真实用户设置。

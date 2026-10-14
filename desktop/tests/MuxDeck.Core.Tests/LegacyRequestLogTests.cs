@@ -1,6 +1,10 @@
 using System.Text.Json;
 using MuxDeck.Core;
 using MuxDeck.Core.Muxing;
+using MuxDeck.Application;
+using MuxDeck.Contracts;
+using MuxDeck.Infrastructure.Muxing;
+using MuxDeck.Infrastructure;
 using Xunit;
 
 namespace MuxDeck.Core.Tests;
@@ -25,7 +29,13 @@ public sealed class LegacyRequestLogTests
         // 期望来自旧版日志协议：字段顺序和 escaping 使用原 MuxRequest 默认序列化格式。
         var expected = new MuxRequest(video,
             [new(subtitle, "中文 \"名称\"", "zh-Hans", true, true)], "", output, "final.mkv");
-        var result = await new SingleMuxService(new(root)).RunAsync(request,
+        var runner = new MuxToolRunner();
+        var prober = new MkvmergeProber(runner);
+        var service = new SingleMuxService((ToolConfiguration)new Workspace(root), new ProbeMediaUseCase(prober), workspaces =>
+            new RunSingleMuxUseCase(new MuxInputReader(), new ToolReadiness(runner), prober,
+                new AfsSubsetter(runner), new MkvmergeMuxer(runner), new MkvextractExtractor(runner),
+                new MediaReferenceBuilder(runner), new MuxEvidenceReader(), new NoOverwritePublisher(), workspaces));
+        var result = await service.RunAsync(request,
             new Sink(value => { if (value.Stage == MuxStage.Validating) subtitles[0] = new("changed.srt", "", "en", false); }),
             TestContext.Current.CancellationToken);
         Assert.Equal(MuxStatus.Failed, result.Status);

@@ -1,3 +1,4 @@
+using MuxDeck.Desktop.Composition;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
@@ -40,7 +41,7 @@ internal static class InputFeedbackChecks
     }
     private static void Verify(string root, Action<bool, string> check)
     {
-        var vm = new MainWindowViewModel(Workspace.Discover());
+        var vm = AppComposition.CreateMain(Workspace.Discover());
         var window = new MainWindow { DataContext = vm };
         window.Show(); Dispatcher.UIThread.RunJobs();
         var view = window.FindControl<SingleMuxView>("SingleView")!;

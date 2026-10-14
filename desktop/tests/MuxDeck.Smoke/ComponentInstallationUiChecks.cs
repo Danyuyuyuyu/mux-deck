@@ -1,3 +1,4 @@
+using MuxDeck.Desktop.Composition;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -27,8 +28,8 @@ internal static class ComponentInstallationUiChecks
                 var checker = new Checker();
                 var installer = new Installer(checker);
                 var storePath = Path.Combine(root, "settings.json");
-                var env = new EnvironmentViewModel(workspace, storage, new StorageSettingsStore(storePath), checker, installer);
-                var main = new MainWindowViewModel(workspace, storage: storage, environment: env);
+                var env = AppComposition.CreateEnvironment(workspace, storage, storePath, checker, installer);
+                var main = AppComposition.CreateMain(workspace, storage: storage, environment: env);
                 var window = new MainWindow { DataContext = main };
                 window.Show(); main.ShowEnvironmentCommand.Execute(null);
                 UiInputTestSupport.Pump(env.ValidationTask);

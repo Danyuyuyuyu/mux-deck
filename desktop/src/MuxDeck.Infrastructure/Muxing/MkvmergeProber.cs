@@ -7,6 +7,9 @@ namespace MuxDeck.Infrastructure.Muxing;
 
 public sealed class MkvmergeProber(IMuxToolRunner? runner = null, IToolCatalog? catalog = null) : IMediaProber
 {
+    // 接入现有只读路径，保留命令、超时、工作目录与失败行为。
+    Task<MediaProbeResult> IMediaProber.ProbeReadOnlyAsync(string path, ToolConfiguration tools, CancellationToken cancellationToken) =>
+        ProbeAsync(path, tools, cancellationToken);
     public Task<MediaProbeResult> ProbeAsync(string path, ToolCallContext context, CancellationToken cancellationToken = default) =>
         PortBoundary.Guard(async () =>
         {

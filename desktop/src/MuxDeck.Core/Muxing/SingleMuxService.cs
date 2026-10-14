@@ -1,45 +1,39 @@
-using MuxDeck.Application;
 using MuxDeck.Application.Ports;
 using MuxDeck.Contracts;
-using MuxDeck.Infrastructure;
-using MuxDeck.Infrastructure.Muxing;
 
 namespace MuxDeck.Core.Muxing;
 
-// 4a 前保留旧 API；流程只由 Application 用例实现。
+// 第 5 步前保留旧 API；流程依赖由装配提供，配置只在每次调用时取快照。
 public sealed class SingleMuxService
 {
-    private Workspace workspace;
-    private readonly IMuxToolRunner runner;
-    public SingleMuxService(Workspace workspace) : this(workspace, new MuxToolRunner()) { }
-    public SingleMuxService(Workspace workspace, IMuxToolRunner runner)
-    { this.workspace = workspace; this.runner = runner; }
-
-    /// <summary>只改变下一次任务配置，已开始任务持有自己的不可变快照；4a 删除该入口。</summary>
-    public void UpdateWorkspace(Workspace nextWorkspace)
+    private readonly Func<ITaskWorkspaceFactory, IRunSingleMux> createRun;
+    public ToolConfiguration Tools { get; }
+    public IProbeMedia Prober { get; }
+    public SingleMuxService(ToolConfiguration tools, IProbeMedia prober,
+        Func<ITaskWorkspaceFactory, IRunSingleMux> createRun)
     {
-        if (string.IsNullOrWhiteSpace(nextWorkspace.Root)) throw new ArgumentException("工作区不能为空。", nameof(nextWorkspace));
-        workspace = nextWorkspace;
+        Tools = tools;
+        Prober = prober;
+        this.createRun = createRun;
     }
 
     public async Task<MediaProbe> ProbeAsync(string videoPath, CancellationToken cancellationToken = default) =>
-        LegacyMuxContractConverter.ToLegacyProbe(await new MkvmergeProber(runner)
-            .ProbeAsync(videoPath, (ToolConfiguration)workspace, cancellationToken).ConfigureAwait(false));
+        LegacyMuxContractConverter.ToLegacyProbe(await Prober.ProbeAsync(videoPath, Tools, cancellationToken).ConfigureAwait(false));
 
-    public async Task<MuxResult> RunAsync(MuxRequest request, IProgress<MuxProgress>? progress = null,
+    public Task<MuxResult> RunAsync(MuxRequest request, IProgress<MuxProgress>? progress = null,
+        CancellationToken cancellationToken = default) => RunAsync(request, Tools, progress, cancellationToken);
+
+    public async Task<MuxResult> RunAsync(MuxRequest request, ToolConfiguration tools, IProgress<MuxProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        var configuration = workspace;
+        var configuration = tools;
         var legacyWorkspace = new LegacyTaskWorkspaceFactory();
         try
         {
             // 在首次回调和等待前固定旧请求集合，后续调用方修改不影响本次任务与日志。
             request = request with { Subtitles = request.Subtitles?.ToArray()!, Audios = request.Audios?.ToArray()! };
             var spec = LegacyMuxContractConverter.ToRunSpec(request, configuration);
-            var useCase = new RunSingleMuxUseCase(new MuxInputReader(), new ToolReadiness(runner),
-                new MkvmergeProber(runner), new AfsSubsetter(runner), new MkvmergeMuxer(runner),
-                new MkvextractExtractor(runner), new MediaReferenceBuilder(runner), new MuxEvidenceReader(),
-                new NoOverwritePublisher(), legacyWorkspace);
+            var useCase = createRun(legacyWorkspace);
             var result = await useCase.RunAsync(spec, new LegacyProgress(value =>
             {
                 if (value.StepCode == "INPUT_VALIDATED")

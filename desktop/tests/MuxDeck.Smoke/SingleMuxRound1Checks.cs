@@ -1,3 +1,4 @@
+using MuxDeck.Desktop.Composition;
 using MuxDeck.Infrastructure;
 using MuxDeck.Infrastructure.Muxing;
 using MuxDeck.Infrastructure.Components;
@@ -63,7 +64,7 @@ internal static class SingleMuxRound1Checks
         var runner = new ControlledRunner();
         var workspace = Path.Combine(root, "workspace");
         PrepareTools(workspace);
-        var vm = new SingleMuxViewModel(new SingleMuxService(new Workspace(workspace), runner));
+        var vm = new SingleMuxViewModel(AppComposition.CreateSingleService(new Workspace(workspace), runner), new TrackColumnLayout());
         InputCandidate FileCandidate(string path) => new(path, InputCandidateKind.LocalFile);
         SubtitleAssignment Assignment(SubtitleSlot slot, string path) => new(slot, FileCandidate(path));
         InputAcceptanceResult Commit(InputAcceptanceResult prepared, bool confirm = false)
@@ -238,7 +239,7 @@ internal static class SingleMuxRound1Checks
     private static void VerifyLateProbe(string root, string video, string secondVideo, Action<bool, string> check)
     {
         var runner = new ControlledRunner { DelayVideo = video };
-        var vm = new SingleMuxViewModel(new SingleMuxService(new Workspace(Path.Combine(root, "workspace")), runner));
+        var vm = new SingleMuxViewModel(AppComposition.CreateSingleService(new Workspace(Path.Combine(root, "workspace")), runner), new TrackColumnLayout());
         vm.VideoPath = video; var oldProbe = vm.ProbeVideoAsync(); Until(() => runner.ProbeStarted.Task.IsCompleted);
         vm.VideoPath = secondVideo; Pump(vm.ProbeVideoAsync());
         check(vm.ProbeState == VideoProbeState.Succeeded && vm.VideoDimensions is null && vm.SourceTrackCount == 1, "新视频探测结果独立显示");
@@ -259,7 +260,7 @@ internal static class SingleMuxRound1Checks
 
     private static void VerifyNavigation(string root, string sc, string fonts, string output, Action<bool, string> check)
     {
-        var main = new MainWindowViewModel(new Workspace(Path.Combine(root, "workspace")));
+        var main = AppComposition.CreateMain(new Workspace(Path.Combine(root, "workspace")));
         var vm = main.Single;
         vm.VideoPath = Path.Combine(root, "不存在.mkv"); vm.ScSubtitle = sc; vm.FontsDirectory = fonts; vm.OutputDirectory = output;
         Pump(vm.ProbeVideoAsync()); Pump(vm.StartAsync());

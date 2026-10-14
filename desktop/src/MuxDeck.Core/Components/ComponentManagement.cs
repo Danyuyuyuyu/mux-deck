@@ -8,6 +8,8 @@ namespace MuxDeck.Core.Components;
 /// <summary>3e 过渡装配与旧模型转换；组件工具/文件实现按批准计划留到 4a 搬迁。</summary>
 public sealed class ComponentManagement : IManageComponents
 {
+    // 仅供过渡期集中装配接入旧组件入口；4a-2 随旧入口迁移删除。
+    public static void ConfigureLegacyCoordinator(IOperationCoordinator coordinator) => ComponentOperations.Configure(coordinator);
     private readonly IManageComponents useCase;
 
     public ComponentManagement(ComponentVerifier? verifier = null, ComponentInstaller? installer = null,

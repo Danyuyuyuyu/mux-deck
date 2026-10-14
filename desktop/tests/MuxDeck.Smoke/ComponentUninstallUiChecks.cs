@@ -1,3 +1,4 @@
+using MuxDeck.Desktop.Composition;
 using MuxDeck.Infrastructure;
 using MuxDeck.Infrastructure.Muxing;
 using MuxDeck.Infrastructure.Components;
@@ -35,9 +36,9 @@ internal static class ComponentUninstallUiChecks
                 var installer = new Installer();
                 var remover = new DelayedRemover();
                 var workspace = new Workspace(root) { ToolsDirectoryOverride = storage.ToolsDirectory };
-                var env = new EnvironmentViewModel(workspace, storage, new StorageSettingsStore(Path.Combine(root, "settings.json")), checker, installer, remover);
+                var env = AppComposition.CreateEnvironment(workspace, storage, Path.Combine(root, "settings.json"), checker, installer, remover);
                 var probeRunner = new BlockingProbeRunner();
-                var main = new MainWindowViewModel(workspace, new SingleMuxService(workspace, probeRunner), preferences: new UserPreferencesStore(Path.Combine(root, "preferences.json")), storage: storage, environment: env);
+                var main = AppComposition.CreateMain(workspace, AppComposition.CreateSingleService(workspace, probeRunner), preferences: new UserPreferencesStore(Path.Combine(root, "preferences.json")), storage: storage, environment: env);
                 var window = new MainWindow { DataContext = main };
                 window.Show(); main.ShowEnvironmentCommand.Execute(null); UiInputTestSupport.Pump(env.ValidationTask);
                 var assfonts = env.ExtensionComponents.Single(c => c.Id == "assfonts");

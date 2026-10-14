@@ -1,3 +1,4 @@
+using MuxDeck.Desktop.Composition;
 using MuxDeck.Infrastructure;
 using MuxDeck.Infrastructure.Muxing;
 using MuxDeck.Infrastructure.Components;
@@ -34,7 +35,7 @@ internal static class UiSingleMuxContractChecks
         }
 
         var runner = new BlockingMuxToolRunner();
-        var model = new SingleMuxViewModel(new SingleMuxService(new Workspace(workspaceRoot), runner))
+        var model = new SingleMuxViewModel(AppComposition.CreateSingleService(new Workspace(workspaceRoot), runner), new TrackColumnLayout())
         {
             FontsDirectory = fonts,
             OutputDirectory = output,

@@ -1,7 +1,8 @@
 using System.Text.Json;
-using MuxDeck.Core;
 
-namespace MuxDeck.Desktop.Preferences;
+namespace MuxDeck.Infrastructure;
+
+public sealed record StorageSettings(string WorkDirectory, string ToolsDirectory);
 
 /// <summary>
 /// 固定保存路径索引，让应用在用户自定义工作目录后仍能找到真实配置位置。
@@ -11,7 +12,7 @@ public sealed class StorageSettingsStore(string path)
     public static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MuxDeck", "settings.json");
 
-    public StoragePaths Load(StoragePaths fallback)
+    public StorageSettings Load(StorageSettings fallback)
     {
         try
         {
@@ -19,20 +20,20 @@ public sealed class StorageSettingsStore(string path)
             var data = JsonSerializer.Deserialize<StorageData>(File.ReadAllText(path));
             if (data is not { Version: 1 } || string.IsNullOrWhiteSpace(data.WorkDirectory) ||
                 string.IsNullOrWhiteSpace(data.ToolsDirectory)) return fallback;
-            return StoragePaths.ForRoot(data.WorkDirectory, data.ToolsDirectory);
+            return new(Path.GetFullPath(data.WorkDirectory), Path.GetFullPath(data.ToolsDirectory));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         { return fallback; }
     }
 
-    public void Save(StoragePaths paths)
+    public void Save(StorageSettings paths)
     {
         var fullPath = Path.GetFullPath(path);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         var temporary = fullPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
-            var data = new StorageData(1, paths.AppDataRoot, paths.ToolsDirectory);
+            var data = new StorageData(1, paths.WorkDirectory, paths.ToolsDirectory);
             File.WriteAllText(temporary, JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }));
             File.Move(temporary, fullPath, overwrite: true);
         }

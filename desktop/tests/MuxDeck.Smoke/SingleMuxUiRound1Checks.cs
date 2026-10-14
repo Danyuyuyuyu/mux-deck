@@ -1,3 +1,4 @@
+using MuxDeck.Desktop.Composition;
 using MuxDeck.Infrastructure;
 using MuxDeck.Infrastructure.Muxing;
 using MuxDeck.Infrastructure.Components;
@@ -51,7 +52,7 @@ internal static class SingleMuxUiRound1Checks
         foreach (var path in new[] { video, video2 }) System.IO.File.WriteAllText(path, "controlled video");
         foreach (var path in new[] { sc, tc, other, tc2, other2 }) System.IO.File.WriteAllText(path, Ass);
         var workspace = Path.Combine(root, "workspace"); PrepareTools(workspace);
-        var runner = new UiRunner(); var main = new MainWindowViewModel(new Workspace(workspace), new SingleMuxService(new Workspace(workspace), runner));
+        var runner = new UiRunner(); var main = AppComposition.CreateMain(new Workspace(workspace), AppComposition.CreateSingleService(new Workspace(workspace), runner));
         var vm = main.Single; var window = new MainWindow { DataContext = main }; window.Show(); Dispatcher.UIThread.RunJobs();
         var view = window.FindControl<SingleMuxView>("SingleView")!; var interactions = new ScriptedInteractions(); view.Interactions = interactions;
         var videoZone = view.FindControl<Border>("VideoDropZone")!; var assZone = view.FindControl<Border>("AssDropZone")!; var fontZone = view.FindControl<Border>("FontsDropZone")!;
