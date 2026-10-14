@@ -20,7 +20,7 @@
 ## 依赖顺序
 
 ```text
-1a → 1b → 2a / 2b / 2c（可并行）→ 3a → 3b → 3c → 3d → 3e → 4a → 4b → 4c → 4d → 5
+1a → 1b → 2a / 2b / 2c（可并行）→ 3a → 3b → 3c → 3d → 3e → 4a-1 → 4a-2 → 4a-3 → 4b → 4c → 4d → 5
 ```
 
 高风险步骤为 **3c**（流水线改写）与 **4b**（草稿会话），推送前须经用户确认，分别要求真实工具链对照与 UI 截图对照。
@@ -160,14 +160,24 @@ Core 的全局 Gate 仅覆盖安装与卸载（含 AssfontsInstaller 兼容入�
 
 ## 第 4 步：拆分 Desktop
 
-### 4a 集中装配（中）
+### 4a-1 集中装配（中）
 
-- **用户已批准**：从 3e 移入组件类搬迁；构造函数注入完成后，将 `ComponentVerifier`、`ComponentInstaller`、`ComponentUninstaller`、`ComponentDirectories`、`ComponentReleases` 与 `StoragePaths`、`ToolLocator` 一起迁入 Infrastructure。3e 不新增过渡引用或架构测试例外，Desktop 与 Smoke 零改动。
+**用户已批准**：新增 `Composition/AppComposition.cs`，`Program` 只调用它；去掉静态 `App.Workspace`、`App.Storage`；`EnvironmentViewModel` 等改为构造函数注入，不再自己创建默认依赖；删除 `SingleMuxService.UpdateWorkspace` 外壳；协调器改由装配创建；`StorageSettingsStore` 移入 Infrastructure（`UserPreferencesStore` 留在 Desktop）；实现 Application 用例 `IProbeMedia`，复用现有探测端口、不新增端口，替换 `SingleMuxService.ProbeAsync` 对可变工作区的依赖。
 
-- **用户已批准**：此步删除 SingleMuxService.UpdateWorkspace 外壳；3c/3d 新用例已只消费 MuxJobSpec.Tools 快照，4a 替换旧装配后不再需要可变入口。
-- 新增 `Composition/AppComposition.cs` 创建对象图，`Program` 只调用它；移除静态 `App.Workspace`、`App.Storage`。
-- `EnvironmentViewModel` 等改为构造函数注入，不再创建默认依赖。
-- `StorageSettingsStore` 移入 Infrastructure；界面偏好 `UserPreferencesStore` 留在 Desktop。
+- Desktop 新增对 Infrastructure 的引用；Desktop → Core 保留到第 5 步，不新增其他过渡引用。
+- 组件类和导入逻辑不动；Smoke 只改装配方式，不改断言和测试逻辑。
+- 验证：locked restore、Release 0 警告 / 0 错误、全部单元测试（原 777 全部保留）、受控 13/13 与 656/656、UI 全套；仅碰到探测命令行或参数时运行真实探测相关套件并与 `208796d` 对照，不要求真实工具链基准。
+
+### 4a-2 组件迁移（中）
+
+**用户已批准**：`ComponentVerifier`、`ComponentInstaller`、`ComponentUninstaller`、`ComponentDirectories`、`ComponentReleases` 五个组件类与 `StoragePaths`、`ToolLocator` 迁入 Infrastructure；`EnvironmentViewModel`、`EnvironmentComponentViewModel` 改为调用 `IManageComponents` 和契约模型；清理下方“3e 遗留问题”中列入 4a-2 的问题，不含 4d 和第 5 步条目；组件和环境 Smoke 按需改测试逻辑。
+
+### 4a-3 导入用例（中）
+
+**用户已批准**：实现 `IPrepareImport`，`MediaImport.cs` 的接纳和校验逻辑迁进用例；SRT 时间轴规则移进 Domain，由 `RunSingleMuxUseCase` 和导入用例共用；字幕读取统一走 Infrastructure `MuxInputReader`；删除 Core `SubtitleText`。
+
+- 验证：接纳 88/89、输入反馈 24 及相关 UI 套件。
+- 执行顺序：4a-1 → 4a-2 → 4a-3 → 4b。
 
 ### 4b 草稿会话 `MuxDraft`（大，高风险）
 
@@ -252,7 +262,9 @@ Core 的全局 Gate 仅覆盖安装与卸载（含 AssfontsInstaller 兼容入�
 | **3c** | 七个阶段各有 Application 假端口测试，覆盖成功、本阶段失败（`JobFailure.Stage` 与 `Code` 正确）、取消、临时目录无残留、目标已存在、落位期间新出现目标；新用例无可变配置，并有“运行中修改配置不影响已提交任务”的测试；旧 UpdateWorkspace 按用户批准留到 4a；3c 只本地提交，3d 后执行全部仅本地真实套件与[逐项对照](#3d-旧入口小)，报告写入结果表；**两笔一起推送前经用户确认** |
 | **3d** | SingleMuxService 只含旧模型转换与用例调用（用户批准 UpdateWorkspace 外壳留到 4a）；Desktop 与 Smoke 零改动；全部受控与六项真实套件等于 dbe9f56 基准；e005923 与新代码四项逐产物对照一致；只本地提交，报告与两个哈希交用户确认后一起推送 |
 | **3e** | `ComponentOperations.Gate` 删除，所有互斥经 `IOperationCoordinator`；协调器测试覆盖同类/异类互斥矩阵、异常与取消后的租约释放、`ShutdownAsync` 等待全部租约；组件与环境相关套件等于基准；本地 `--component-uninstall-real` 17/17 |
-| **4a** | 组件类已迁入 Infrastructure；用户已批准从 3c 移入的 UpdateWorkspace 外壳删除；App.Workspace、App.Storage 删除；新增架构测试：ViewModels/Views 不引用 Infrastructure，装配只在 `Program`/`Composition/`；`--root` 便携模式与默认存储路径行为不变（有测试或记录手动验证）；全部 UI 套件等于基准 |
+| **4a-1** | `AppComposition` 集中装配，ViewModel 构造注入，协调器由装配创建；UpdateWorkspace 外壳与 App.Workspace / App.Storage 删除；StorageSettingsStore 位于 Infrastructure；IProbeMedia 复用已有端口并以配置快照探测；仅新增 Desktop → Infrastructure，装配边界护栏保持通过；`--root` 与默认存储路径行为不变；原 777 单元测试保留，受控 13/13、656/656 与 UI 全套通过；Smoke 仅改装配 |
+| **4a-2** | 五个组件类、StoragePaths、ToolLocator 位于 Infrastructure；环境 ViewModel 只调用 IManageComponents 与契约模型；4a-2 的 3e 遗留问题清理完成；组件和环境 Smoke 按需迁移并保留行为覆盖 |
+| **4a-3** | IPrepareImport 接管接纳与校验；Domain SRT 时间轴规则由导入和 RunSingleMuxUseCase 共用；字幕只经 MuxInputReader 读取，Core SubtitleText 删除；接纳 88/89、输入反馈 24 及相关 UI 套件通过 |
 | **4b** | `MuxDraft` 测试覆盖：同值赋值不增修订号、一次接纳批次只增一次、准备→提交、运行中锁定拒绝、`ToSpec()` 快照与后续修改隔离；ViewModel 中不再有 SC/TC 默认规则等业务代码；UI、接纳、工作台、输入反馈、自动导入套件等于基准；1040×760 与 1280×900 截图与基线逐张对照无差异（差异须逐项说明）；本地 `--ui-integration` 等于基准；**推送前经用户确认** |
 | **4c** | `SingleMuxViewModel` 只做组合与过渡转发；六个区域 ViewModel 的绑定均为编译绑定且构建通过；可访问名称不变；全部 UI 套件等于基准 |
 | **4d** | 结果详情直接展示结构化检查项、诊断与失败阶段，代码中不再对检查文本做字符串匹配；`MainWindow` 关闭只等待 `IOperationCoordinator.ShutdownAsync()`；关闭等待相关用例通过；两尺寸截图检查 |
@@ -1099,3 +1111,9 @@ restore 11 个项目成功，Release 0 警告 / 0 错误，test 717/717。[构�
 构建与全部受控输出保存在 `desktop/artifacts/arch-corrections/3e/`；报告为仅本地证据。未启动 4a，也未将组件实现提前搬迁。
 
 实施提交 `292f2afd8441188bae47f09fbb86b255d311cea1`；本地验证通过后 `git pull --rebase origin v2/avalonia-rewrite` 无冲突、`git push origin v2/avalonia-rewrite` 成功。[Desktop CI #38535828389](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38535828389) completed/success，head_sha 与实施提交完整哈希一致；锁定还原、构建、分层测试与 13 个受控套件均通过。CI 核对证据在 `desktop/artifacts/arch-corrections/3e/ci-292f2afd8441188bae47f09fbb86b255d311cea1.json`。结果表补录为纯文档提交，按现有工作流文档路径过滤规则不重复触发构建。
+
+### 3e 遗留问题
+
+- **4a-2**：旧公开方法经 ComponentManagement、用例、Backend 绕回 `*CoreAsync`，以及 `legacyExceptions` 开关；`checker is ComponentVerifier` 特判；`ComponentPart.Source/Purpose` 是中文显示文字，应改为枚举；协调器是 Core 静态单例（创建归属先在 4a-1 调整，组件迁移时清理过渡入口）。
+- **4d**：关闭期间组件检测抛 `InvalidOperationException`，和忙碌时返回结果的行为不一致。
+- **第 5 步**：`AssfontsInstaller` 未使用。
