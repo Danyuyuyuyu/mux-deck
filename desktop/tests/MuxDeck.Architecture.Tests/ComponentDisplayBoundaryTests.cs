@@ -6,6 +6,7 @@ using MuxDeck.Desktop.ViewModels;
 using MuxDeck.Domain;
 using MuxDeck.Infrastructure;
 using Xunit;
+using Directories = MuxDeck.Infrastructure.Components.ComponentDirectories;
 
 namespace MuxDeck.Architecture.Tests;
 
@@ -73,6 +74,29 @@ public sealed class ComponentDisplayBoundaryTests : IDisposable
         Assert.Equal(expected.LogsDirectory, environment.Storage.LogsDirectory);
         Assert.Equal(expected.CacheDirectory, environment.Storage.CacheDirectory);
         Assert.True(Directory.Exists(expected.ConfigDirectory) && Directory.Exists(expected.ToolsDirectory));
+    }
+
+    // 直接驱动行级归属判断：注入 Infrastructure 的 IsInside，把契约目录查询交给 UpdateManagedDirectories。
+    [Theory]
+    [InlineData("inside", true, true)]
+    [InlineData("sibling", true, false)]
+    [InlineData("null", true, true)]
+    [InlineData("inside", false, false)]
+    public void Removal_candidate_follows_tool_location_and_directory_query(string location, bool hasQuery, bool expected)
+    {
+        var tools = Path.Combine(root, "tools");
+        var target = Path.Combine(tools, "assfontsubset");
+        var partPath = location switch
+        {
+            "inside" => Path.Combine(target, "AssFontSubset.Console.exe"),
+            "sibling" => Path.Combine(tools, "assfontsubset-old", "AssFontSubset.Console.exe"),
+            _ => null
+        };
+        var row = new EnvironmentComponentViewModel("afs", "AssFontSubset", "核心组件",
+            [new("AssFontSubset", "", partPath)], Directories.IsInside);
+        var query = hasQuery ? new ComponentDirectoryQuery("afs", ComponentRemovalKind.Component, tools, target) : null;
+        row.UpdateManagedDirectories(query, null);
+        Assert.Equal(expected, row.CanRemoveComponent);
     }
 
     private EnvironmentViewModel CreateEnvironment(IOperationCoordinator coordinator)

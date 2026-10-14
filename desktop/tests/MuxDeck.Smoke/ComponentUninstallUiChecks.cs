@@ -145,10 +145,27 @@ internal static class ComponentUninstallUiChecks
                 Check(afs.IsHealthy && !afs.ShowManagementMenu && File.Exists(externalAfs), "存在其他后端时卸载依赖后保持可用，保留外部主程序");
 
                 // 工具落在同前缀的兄弟目录（assfontsubset-old）时，不能当成组件目录内的文件提供卸载。
-                var sibling = Path.Combine(storage.ToolsDirectory, "assfontsubset-old", "AssFontSubset.Console.exe"); Write(sibling);
+                // 受管目标目录必须存在，QueryUninstallDirectory 才会返回计划，用例才会真正走到归属判断。
+                var toolsDirectory = storage.ToolsDirectory;
+                var targetDirectory = Path.Combine(toolsDirectory, "assfontsubset");
+                var siblingDirectory = Path.Combine(toolsDirectory, "assfontsubset-old");
+                var sibling = Path.Combine(siblingDirectory, "AssFontSubset.Console.exe"); Write(sibling);
+                Directory.CreateDirectory(targetDirectory);
                 checker.External["afs"] = sibling;
                 env.Refresh(); UiInputTestSupport.Pump(env.ValidationTask);
+                var afsQuery = new ManageComponentsUseCase(new InfrastructureComponentManager(checker, installer, remover), env.Coordinator)
+                    .QueryUninstallDirectory("afs", C.ComponentRemovalKind.Component,
+                        new C.ComponentConfiguration(workspace.Root, toolsDirectory, storage.LogsDirectory, storage.CacheDirectory));
+                Check(afsQuery is not null && string.Equals(afsQuery.TargetDirectory, targetDirectory, StringComparison.OrdinalIgnoreCase),
+                    "前提：afs 目录查询返回 assfontsubset 目标目录");
+                Check(afs.Parts.Count > 0 && afs.Parts.All(part => part.Path is { } located &&
+                    located.StartsWith(siblingDirectory, StringComparison.OrdinalIgnoreCase)), "前提：afs 部件路径位于 assfontsubset-old 下");
                 Check(!afs.CanRemoveComponent && !afs.ShowManagementMenu, "同前缀兄弟目录中的工具不提供目录卸载候选");
+                // 恢复到用例开始前的状态，后面的检查不受影响。
+                Directory.Delete(targetDirectory);
+                Directory.Delete(siblingDirectory, recursive: true);
+                checker.External["afs"] = externalAfs;
+                env.Refresh(); UiInputTestSupport.Pump(env.ValidationTask);
 
                 var mkv = env.CoreComponents.Single(c => c.Id == "mkvtoolnix");
                 var video = Path.Combine(root, "probe.mkv"); Write(video);
