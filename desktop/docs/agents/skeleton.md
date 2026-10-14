@@ -243,6 +243,16 @@ tests/MuxDeck.Infrastructure.IntegrationTests 只直接引用 Infrastructure，�
 
 上述为职责落位规则，按实际任务创建文件和子目录；不预建空模块或按每个动作拆分项目。
 
+### 3c 单任务用例
+
+`RunSingleMuxUseCase` 只持有端口，按检查输入、探测源、子集化、计划、临时封装、校验、不覆盖落位七阶段传递不可变 record。工具与目录从 `MuxJobSpec.Tools` 取得；旧 `UpdateWorkspace` 外壳保留至 4a，只改变下一次任务快照。
+
+文件事实由业务端口 `IMuxInputReader` 和 `IMuxEvidenceReader` 提供，分别实现为 Infrastructure 的 `MuxInputReader`、`MuxEvidenceReader`；同工具参考往返通过 `IMediaReferenceBuilder` / `MediaReferenceBuilder`，工具启动前验证通过 `IToolReadiness` / `ToolReadiness`。不建立通用文件系统接口，Application 仅使用允许的 Path 字符串成员。
+
+QC 返回 `TrackQcReport` 的结构化事实，经 `QC_SUBSET_FONTS`、`QC_TRACK_FACTS`、`QC_ATTACHMENTS`、`QC_MEDIA_READABLE`、`QC_AUDIO_PAYLOAD` 生成 `CheckResult`。旧 `OutputQcRules.CheckTracks` 是兼容值转换，共享唯一 `CheckFacts` 规则；旧文本由 `LegacyTrackQcText` 转换。用例不保存旧检查文案。
+
+失败保留实际阶段；端口码原样传递。用例自身的集中码见 `ErrorCodes`：输入/视频/字体目录/输出路径/字幕与音频元数据、源轨缺失、封装计划、轨道 QC、附件数量/身份/数据、字幕参考/全文、音频 payload、源选择与未预期异常。取消返回 Cancelled；工作区所有终态都等待异步释放。只有发布端口成功才产生最终 `OutputArtifact`，提交成功后忽略取消。
+
 ## 单任务接口
 
 单任务入口封装子集化、封装、校验与成品落位的整条流程。界面和批量共用这一入口，参数组装与业务规则只有一份实现。目标入口为 `IRunSingleMux.RunAsync(MuxJobSpec, IProgress<JobProgress>?, CancellationToken)`，返回 `MuxJobResult`；迁移完成前为 `SingleMuxService.RunAsync(MuxRequest, …)`。

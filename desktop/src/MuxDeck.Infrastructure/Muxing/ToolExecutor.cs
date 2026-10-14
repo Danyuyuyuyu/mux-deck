@@ -11,14 +11,14 @@ public sealed class ToolExecutor(IMuxToolRunner? runner = null)
     private readonly IMuxToolRunner runner = runner ?? new MuxToolRunner();
     public Task<ProcessResult> RunAsync(string executable, IReadOnlyList<string> args, string? work,
         Action<string>? log, CancellationToken token, TimeSpan timeout,
-        bool json = false, bool rejectDiagnostics = false, List<Diagnostic>? warnings = null) =>
-        PortBoundary.Guard(() => RunCoreAsync(executable, args, work, log, token, timeout, json, rejectDiagnostics, warnings));
+        bool json = false, bool rejectDiagnostics = false, List<Diagnostic>? warnings = null, IProgress<Diagnostic>? diagnosticProgress = null) =>
+        PortBoundary.Guard(() => RunCoreAsync(executable, args, work, log, token, timeout, json, rejectDiagnostics, warnings, diagnosticProgress));
 
     internal Task<ProcessResult> RunAsync(string executable, IReadOnlyList<string> args, ToolCallContext context,
         CancellationToken token, TimeSpan timeout, bool json = false, bool rejectDiagnostics = false,
         List<Diagnostic>? warnings = null) =>
         RunAsync(executable, args, context.Workspace.WorkDirectory,
-            message => WriteLogSafely(context.Workspace, message), token, timeout, json, rejectDiagnostics, warnings);
+            message => WriteLogSafely(context.Workspace, message), token, timeout, json, rejectDiagnostics, warnings, context.DiagnosticProgress);
     // 日志只提供诊断证据；磁盘或已释放句柄不能改变工具退出、诊断与取消结果。
     private static void WriteLogSafely(ITaskWorkspace workspace, string message)
     {
@@ -28,12 +28,12 @@ public sealed class ToolExecutor(IMuxToolRunner? runner = null)
 
     private async Task<ProcessResult> RunCoreAsync(string executable, IReadOnlyList<string> args,
         string? work, Action<string>? log, CancellationToken token, TimeSpan timeout,
-        bool json = false, bool rejectDiagnostics = false, List<Diagnostic>? warnings = null)
+        bool json = false, bool rejectDiagnostics = false, List<Diagnostic>? warnings = null, IProgress<Diagnostic>? diagnosticProgress = null)
     {
         log?.Invoke("工具 " + executable + " " + JsonSerializer.Serialize(args));
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(token);
         lifetime.CancelAfter(timeout);
-        var diagnostics = rejectDiagnostics ? new AfsDiagnosticCollector(warnings) : null;
+        var diagnostics = rejectDiagnostics ? new AfsDiagnosticCollector(warnings, diagnosticProgress) : null;
         var sink = new InlineProgress<ProcessLine>(line =>
         {
             log?.Invoke((line.IsError ? "stderr " : "stdout ") + line.Text);

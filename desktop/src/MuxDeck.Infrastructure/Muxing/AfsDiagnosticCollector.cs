@@ -4,7 +4,7 @@ using System.Text;
 namespace MuxDeck.Infrastructure.Muxing;
 
 /// <summary>按真实行边界重组有界进程块；完整日志另行保存，不能靠截断尾部猜测告警。</summary>
-internal sealed class AfsDiagnosticCollector(List<Diagnostic>? warnings)
+internal sealed class AfsDiagnosticCollector(List<Diagnostic>? warnings, IProgress<Diagnostic>? progress = null)
 {
     private const int MaximumLineLength = 64 * 1024;
     private readonly StringBuilder[] lines = [new(), new()];
@@ -121,6 +121,7 @@ internal sealed class AfsDiagnosticCollector(List<Diagnostic>? warnings)
 
     private void AddWarning((string Code, string Message) key, int occurrences)
     {
+        progress?.Report(new Diagnostic(key.Code, DiagnosticSeverity.Warning, key.Message, occurrences));
         if (warnings is null) return;
         var index = warnings.FindIndex(warning => warning.Code == key.Code && warning.Message == key.Message);
         if (index < 0) warnings.Add(new Diagnostic(key.Code, DiagnosticSeverity.Warning, key.Message, occurrences));

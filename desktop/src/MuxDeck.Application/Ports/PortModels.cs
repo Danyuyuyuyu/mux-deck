@@ -4,7 +4,11 @@ using MuxDeck.Domain;
 namespace MuxDeck.Application.Ports;
 
 // 工作区只在端口边界使用，不向 Desktop 的 Contracts 泄露资源生命周期。
-public sealed record ToolCallContext(ToolConfiguration Tools, ITaskWorkspace Workspace);
+public sealed record ToolCallContext(ToolConfiguration Tools, ITaskWorkspace Workspace)
+{
+    public int SubtitleIndex { get; init; }
+    public IProgress<Diagnostic>? DiagnosticProgress { get; init; }
+}
 public sealed record FontSubsetRequest(ExternalTrackSpec Subtitle, FontSpec Fonts);
 public sealed record FontSubsetResult(WorkFile CorrectedSubtitle, EquatableArray<WorkFile> Fonts,
     EquatableArray<Diagnostic> Diagnostics);

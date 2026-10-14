@@ -13,7 +13,11 @@ public sealed record JobFailure(string Code, JobStage Stage, string? Message, st
 public sealed record Diagnostic(string Code, DiagnosticSeverity Severity, string Message, int Occurrences = 1);
 public sealed record OutputArtifact(string Path);
 public sealed record LogRef(string Path);
-public sealed record JobProgress(JobStage Stage, string StepCode, double? Percent, string Message);
+public sealed record JobProgress(JobStage Stage, string StepCode, double? Percent, string Message)
+{
+    // 阶段事实供兼容入口转换文案，不在用例内重复保存旧文本。
+    public string? Detail { get; init; }
+}
 public sealed record MuxJobResult(MuxJobStatus Status, EquatableArray<OutputArtifact> Outputs,
     EquatableArray<CheckResult> Checks, EquatableArray<Diagnostic> Diagnostics,
     JobFailure? Failure, LogRef? Log);

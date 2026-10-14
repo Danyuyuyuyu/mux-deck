@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using MuxDeck.Application.Ports;
 using MuxDeck.Contracts;
 using MuxDeck.Domain;
@@ -9,13 +10,14 @@ public sealed class AfsSubsetter(IMuxToolRunner? runner = null, IToolCatalog? ca
     int subtitleIndex = 0, List<Diagnostic>? diagnostics = null,
     Dictionary<(string Path, int Index), string>? metadataCache = null) : IFontSubsetter
 {
+    private static readonly ConditionalWeakTable<ITaskWorkspace, Dictionary<(string Path, int Index), string>> Metadata = new();
     public Task<FontSubsetResult> SubsetAsync(FontSubsetRequest request, ToolCallContext context,
         IProgress<JobProgress>? progress = null, CancellationToken cancellationToken = default) => PortBoundary.Guard(async () =>
     {
         var work = context.Workspace.WorkDirectory;
-        var i = subtitleIndex;
+        var i = context.SubtitleIndex != 0 ? context.SubtitleIndex : subtitleIndex;
         var warnings = diagnostics ?? [];
-        var sourceMetadataCache = metadataCache ?? new();
+        var sourceMetadataCache = metadataCache ?? Metadata.GetOrCreateValue(context.Workspace);
         var tools = catalog ?? new ToolCatalog();
         var afs = await ToolCatalog.Require(tools, ToolCapability.SubsetFonts, context.Tools, cancellationToken).ConfigureAwait(false);
         var backend = await ToolCatalog.Require(tools, ToolCapability.FontSubsetBackend, context.Tools, cancellationToken).ConfigureAwait(false);
@@ -70,7 +72,16 @@ public sealed class AfsSubsetter(IMuxToolRunner? runner = null, IToolCatalog? ca
             intrinsicProofs[needed.Token] = new AssGlyphValidator.IntrinsicFaceProof(
                 needed.OriginalName, sourceFont, metadataXml);
         }
-        AssGlyphValidator.Validate(usage, xmlFiles, warnings, intrinsicProofs);
+        var counts = warnings.ToDictionary(item => (item.Code, item.Message), item => item.Occurrences);
+        try { AssGlyphValidator.Validate(usage, xmlFiles, warnings, intrinsicProofs); }
+        finally
+        {
+            foreach (var item in warnings)
+            {
+                var additional = item.Occurrences - counts.GetValueOrDefault((item.Code, item.Message));
+                if (additional > 0) context.DiagnosticProgress?.Report(item with { Occurrences = additional });
+            }
+        }
         return new FontSubsetResult(new(fixedAss), generated.Select(path => new WorkFile(path)).ToEquatableArray(), new(warnings));
     });
 

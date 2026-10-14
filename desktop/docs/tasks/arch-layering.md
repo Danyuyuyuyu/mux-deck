@@ -97,8 +97,13 @@
 
 ### 3c 单任务用例（大，高风险）
 
+- **用户已批准的 3c/3d 调整**（本次先改计划再实施）：
+  1. 新用例不持有可变配置，工具与目录配置通过 MuxJobSpec.Tools 随任务快照传入。SingleMuxService.UpdateWorkspace 作为旧入口外壳保留到 4a，仅影响下一次任务；“删除 UpdateWorkspace”的完成标准移到 4a。
+  2. 3c、3d 分别形成本地提交，均不推送；3d 完成后执行完整真实对照，等用户确认后才一起 pull --rebase、推送并核对 CI。
+  3. 真实基准起点使用 3b 前重跑记录 dbe9f56，取代 3f42228；完整电影入口为 --warning-synthetic-bold-real <task.log>。逐项对照另在 e005923 独立工作树与新代码上以同机、同输入、同工具运行，方法见下方 3d。
+
 - `SingleMuxService.RunAsync`（迁移前约 260 行）改写为 `RunSingleMuxUseCase`：检查输入 → 探测源 → 子集化 → 生成封装计划 → 封装临时成品 → 成品校验 → 不覆盖落位，阶段间用 record 传递。
-- 工具与工作目录配置随任务快照传入，删除 `UpdateWorkspace`。
+- 工具与工作目录配置通过 MuxJobSpec.Tools 随任务快照传入；新用例不持有可变配置，旧 UpdateWorkspace 外壳按用户批准保留到 4a。
 - QC 输出结构化 `CheckResult`；失败输出 `JobFailure`（含阶段与错误码）。
 - Application 测试：假端口覆盖各阶段失败、取消、清理、目标已存在与落位期间新出现目标。
 
@@ -106,11 +111,13 @@
 
 `SingleMuxService` 只保留旧模型转换并调用新用例；Desktop 与 Smoke 不改。
 
-3c/3d 合并前真实工具链对照：
+3c/3d 本地验证与真实逐项对照（**用户已批准**）：
 
-- 运行 `--integration`、`--media-drop-real`、`--ui-integration`、`--warning-real` 与完整电影重放，与基线 `3f42228` 的报告对照。
-- 对照项：逐轨元数据（类型、编码、语言、名称、default/forced）、附件身份与 SHA-256、ASS 提取全文、音频 fullraw 哈希、检查项与告警。
-- 不比较成品 MKV 文件哈希：mkvmerge 每次写入的日期与 UID 不同。
+- 先跑 locked restore、Release 0 警告 / 0 错误、dotnet test 全部通过及 13 个受控套件；3c、3d 各自本地提交，均不推送。
+- 3d 完成后跑六项仅本地真实套件：--integration（121）、--media-drop-real（37）、--ui-integration（39）、--warning-synthetic-bold-real artifacts/runs/20261009-115919-18aeaf51f58d43e5a4b935b9ce8b8f5b/task.log（9，SyntheticBoldExpected=true）、--component-install-all-real（15，需联网）、--component-uninstall-real <固定发布包缓存目录>（17）。计数对照 dbe9f56 的重跑基准，不再用 3f42228；--warning-real 的 8 项仅保留历史补充记录。
+- 在 e005923 独立工作树与新代码上，以同一台机器、相同输入与工具，各重跑 integration、media-drop-real、ui-integration 和完整电影。逐成品提取并比较轨道类型/编码/语言/名称/default/forced、附件身份与 SHA-256、ASS 全文、音频 fullraw 哈希、检查项与告警。
+- 不比较整个 MKV 文件哈希（日期与 UID 每次变化）。同一输入的逐项报告记录“一致 / 差异”，路径写入实施结果；对照脚本提交至 desktop/scripts/，不进解决方案或 CI。
+- 任一差异立即停止报告，不改测试或基准凑数。两个本地提交、全部计数和逐套件结论交用户确认后，才一起 pull --rebase、推送并确认 Desktop CI。
 
 ### 3e 操作协调与组件（中）
 
@@ -122,6 +129,7 @@
 
 ### 4a 集中装配（中）
 
+- **用户已批准**：此步删除 SingleMuxService.UpdateWorkspace 外壳；3c/3d 新用例已只消费 MuxJobSpec.Tools 快照，4a 替换旧装配后不再需要可变入口。
 - 新增 `Composition/AppComposition.cs` 创建对象图，`Program` 只调用它；移除静态 `App.Workspace`、`App.Storage`。
 - `EnvironmentViewModel` 等改为构造函数注入，不再创建默认依赖。
 - `StorageSettingsStore` 移入 Infrastructure；界面偏好 `UserPreferencesStore` 留在 Desktop。
@@ -206,10 +214,10 @@
 | **2c** | 诊断分类、`CheckTracks`、ASS 归一与全文比较、ASS 解析迁入 Domain 并有单元测试，含 Dialogue 文本/时序/Style/字体/顺序/末尾空格变化的拒绝反例；`--warning-policy` 57/57；`diagnostics.md` 白名单未变 |
 | **3a** | 端口接口全部位于 Application，名称表达业务能力；无通用仓储、事件总线、中介者或万能任务接口；Application 不引用 Infrastructure 的架构测试保持通过 |
 | **3b** | 每个适配有 Infrastructure 集成测试：参数以列表传递、stdout/stderr 分流、退出码、取消；`ProcessRunner`/`WindowsProcessJob` 原有进程树用例保留通过；工具调用代码搬迁后，本地 `--integration`、`--media-drop-real` 等于基准 |
-| **3c** | 七个阶段各有 Application 假端口测试，覆盖成功、本阶段失败（`JobFailure.Stage` 与 `Code` 正确）、取消、临时目录无残留、目标已存在、落位期间新出现目标；`UpdateWorkspace` 删除，并有“运行中修改配置不影响已提交任务”的测试；全部“仅本地”真实套件等于基准，且[3c/3d 对照项](#3d-旧入口小)逐项一致，对照报告路径写入结果表；**推送前经用户确认** |
-| **3d** | `SingleMuxService` 只含旧模型转换与对用例的调用；Desktop 与 Smoke 零改动；全部受控与真实套件等于基准 |
+| **3c** | 七个阶段各有 Application 假端口测试，覆盖成功、本阶段失败（`JobFailure.Stage` 与 `Code` 正确）、取消、临时目录无残留、目标已存在、落位期间新出现目标；新用例无可变配置，并有“运行中修改配置不影响已提交任务”的测试；旧 UpdateWorkspace 按用户批准留到 4a；3c 只本地提交，3d 后执行全部仅本地真实套件与[逐项对照](#3d-旧入口小)，报告写入结果表；**两笔一起推送前经用户确认** |
+| **3d** | SingleMuxService 只含旧模型转换与用例调用（用户批准 UpdateWorkspace 外壳留到 4a）；Desktop 与 Smoke 零改动；全部受控与六项真实套件等于 dbe9f56 基准；e005923 与新代码四项逐产物对照一致；只本地提交，报告与两个哈希交用户确认后一起推送 |
 | **3e** | `ComponentOperations.Gate` 删除，所有互斥经 `IOperationCoordinator`；协调器测试覆盖同类/异类互斥矩阵、异常与取消后的租约释放、`ShutdownAsync` 等待全部租约；组件与环境相关套件等于基准；本地 `--component-uninstall-real` 17/17 |
-| **4a** | `App.Workspace`、`App.Storage` 删除；新增架构测试：ViewModels/Views 不引用 Infrastructure，装配只在 `Program`/`Composition/`；`--root` 便携模式与默认存储路径行为不变（有测试或记录手动验证）；全部 UI 套件等于基准 |
+| **4a** | 用户已批准从 3c 移入的 UpdateWorkspace 外壳删除；App.Workspace、App.Storage 删除；新增架构测试：ViewModels/Views 不引用 Infrastructure，装配只在 `Program`/`Composition/`；`--root` 便携模式与默认存储路径行为不变（有测试或记录手动验证）；全部 UI 套件等于基准 |
 | **4b** | `MuxDraft` 测试覆盖：同值赋值不增修订号、一次接纳批次只增一次、准备→提交、运行中锁定拒绝、`ToSpec()` 快照与后续修改隔离；ViewModel 中不再有 SC/TC 默认规则等业务代码；UI、接纳、工作台、输入反馈、自动导入套件等于基准；1040×760 与 1280×900 截图与基线逐张对照无差异（差异须逐项说明）；本地 `--ui-integration` 等于基准；**推送前经用户确认** |
 | **4c** | `SingleMuxViewModel` 只做组合与过渡转发；六个区域 ViewModel 的绑定均为编译绑定且构建通过；可访问名称不变；全部 UI 套件等于基准 |
 | **4d** | 结果详情直接展示结构化检查项、诊断与失败阶段，代码中不再对检查文本做字符串匹配；`MainWindow` 关闭只等待 `IOperationCoordinator.ShutdownAsync()`；关闭等待相关用例通过；两尺寸截图检查 |
@@ -226,7 +234,7 @@
 | [2c · `90fea6b`](https://github.com/Danyuyuyuyu/mux-deck/commit/90fea6b02e421105cd3c7bdb45c69c4c69d1df8e) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38400687784) | restore 10/10；Release 0 警告 / 0 错误；test 427/427；受控 13/13、656/656；warning-policy 57/57 | DiagnosticPolicy、OutputQcRules、AssDocument 已落位；新增 Domain 76、架构 3；原 348 保留，白名单未变。 |
 | [3a · `da0f334`](https://github.com/Danyuyuyuyu/mux-deck/commit/da0f3342f2b50bccfdcf31f19212ee3bb63e9f91) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38406784353) | locked restore 10/10；Release 0 警告 / 0 错误；test 485/485；受控 13/13、656/656；warning-policy 57/57 | 九个 Application 业务端口；Domain 统一 MediaTrackInfo，删除重复 TrackQcFacts；新增 29，原 456 全部保留；详见 3a 实施与验证。 |
 | [3b · `a2b76d9`](https://github.com/Danyuyuyuyu/mux-deck/commit/a2b76d9588646265bfab68d0521928c8f881f94c) + [修正 · `d99781b`](https://github.com/Danyuyuyuyu/mux-deck/commit/d99781b5cb44ac4c2279d90225dd6412ba7d92b7) | 已完成，已推送，[修正 Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38494664905) | locked restore 11/11；Release 0 警告 / 0 错误；test 613/613；受控 13/13、656/656；真实 integration 121/121、media-drop-real 37/37 | 依用户批准保留 Desktop 直接依赖；Core → Infrastructure 过渡；初始新增 47，本次新增 12，原 601 保留。 |
-| 3c | 未开始 | | |
+| 3c | 本地实现及通用验证通过；未推送 | restore 11/11；Release 0/0；test 675/675；受控 13/13、656/656 | 真实对照待 3d，经用户确认后一起推送。 |
 | 3d | 未开始 | | |
 | 3e | 未开始 | | |
 | 4a | 未开始 | | |
@@ -734,3 +742,17 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 ## 发现的旧缺陷
 
 （已修复：修正 A；提交 c636e91，Desktop CI 38383347658 已通过。以下保留发现背景。）`Desktop/App.axaml.cs` 将未限定的 `Application` 用作 Avalonia 基类；当目标程序集首次包含 `MuxDeck.Application` 命名空间的业务类型时，编译器会优先解析同名命名空间并报 CS0118。首个反例因此未计为架构护栏验收，改用独立禁止命名空间后两条护栏均确认失败。1b 只定义 `MuxDeck.Contracts`，没有触发该冲突；该缺陷已由修正 A 的 c636e91 修复，并经临时同名类型与完整 CI 验证。
+
+### 3c 本地验证（2026-10-14）
+
+用户批准调整：新用例仅持有端口，配置通过 MuxJobSpec.Tools 的任务快照传入；旧 UpdateWorkspace 外壳留至 4a。本步与 3d 分别本地提交，完整真实对照后等用户确认再一起推送。依据已接受 ADR-0001，未修改 ADR。
+
+输入为不可变规格，输出为结构化检查、诊断和实际阶段失败；取消独立返回，成功/失败/取消/异常等待工作区异步释放。不覆盖发布是提交点。新增四个业务端口均有 Infrastructure 实现，不使用通用文件系统接口。
+
+实际命令（desktop/）：
+- `dotnet restore MuxDeck.sln --locked-mode`：11/11。
+- `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false`：0 警告 / 0 错误。
+- `dotnet test MuxDeck.sln --no-build -c Release`：675/675，失败/跳过 0；Domain 298 / Application 80 / Core 40 / Architecture 198 / Infrastructure 59。原 613 保留，仅新增 62（集中码 24、用例假端口 27、端口文件事实 7、端口 XML 4）。
+- `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release [-- <入口>]`：无参数 28、--warning-policy 57、--single-mux-round1 89、--single-mux-ui-round1 176、--workbench-ui 38、--input-feedback 24、--media-drop 25、--environment-ui 23、--components 31、--component-install-ui 37、--component-install-all 41、--component-uninstall 26、--component-uninstall-ui 61；13/13 套件、656/656，与 dbe9f56 基准一致。
+
+证据：`artifacts/arch-corrections/3c/`。新补测试后再跑严格构建与全部单元测试。Desktop、Smoke、现有行为测试零改动；端口 XML 测试只新增参数。真实对照待 3d，不标已验收；未推送、未运行 CI。

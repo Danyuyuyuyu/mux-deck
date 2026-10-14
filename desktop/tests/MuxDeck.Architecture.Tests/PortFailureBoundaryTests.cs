@@ -90,6 +90,10 @@ public sealed class PortFailureBoundaryTests
     [InlineData("ITaskWorkspace")]
     [InlineData("IToolCatalog")]
     [InlineData("IClock")]
+    [InlineData("IMuxInputReader")]
+    [InlineData("IMuxEvidenceReader")]
+    [InlineData("IMediaReferenceBuilder")]
+    [InlineData("IToolReadiness")]
     public void Each_port_and_declared_member_documents_failure_and_cancellation(string name)
     {
         var type = typeof(IMediaProber).Assembly.GetType("MuxDeck.Application.Ports." + name)!;

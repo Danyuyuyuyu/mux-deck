@@ -2,26 +2,33 @@ namespace MuxDeck.Domain;
 
 public static class OutputQcRules
 {
-    // 按原顺序产生已通过的检查；后续拒绝时旧结果仍保留之前的检查项。
+    // 旧 API 是纯兼容转换；新用例直接消费结构化报告，两者共享唯一规则。
     public static OutputQcResult CheckTracks(MediaQcFacts source, MediaQcFacts output,
         EquatableArray<SubtitleQcFacts> subtitleInputs, EquatableArray<AudioQcFacts> audioInputs,
         EquatableArray<MediaQcFacts> audioSources)
     {
-        var checks = new List<string>();
-        try { ValidateTracks(source, output, subtitleInputs, audioInputs, audioSources, checks); }
-        catch (MediaRuleException ex) { return new(new(checks), ex.Message); }
-        return new(new(checks), null);
+        var result = CheckFacts(source, output, subtitleInputs, audioInputs, audioSources);
+        return new(result.Checks.Select(LegacyTrackQcText.Check).ToEquatableArray(),
+            result.Failure is null ? null : LegacyTrackQcText.Failure(result.Failure));
+    }
+    public static TrackQcReport CheckFacts(MediaQcFacts source, MediaQcFacts output,
+        EquatableArray<SubtitleQcFacts> subtitleInputs, EquatableArray<AudioQcFacts> audioInputs,
+        EquatableArray<MediaQcFacts> audioSources)
+    {
+        var checks = new List<TrackQcCheck>();
+        var failure = ValidateTracks(source, output, subtitleInputs, audioInputs, audioSources, checks);
+        return new(new(checks), failure);
     }
 
-    private static void ValidateTracks(MediaQcFacts source, MediaQcFacts output,
+    private static TrackQcFailure? ValidateTracks(MediaQcFacts source, MediaQcFacts output,
         EquatableArray<SubtitleQcFacts> subtitleInputs, EquatableArray<AudioQcFacts> audioInputs,
-        EquatableArray<MediaQcFacts> audioSources, List<string> checks)
+        EquatableArray<MediaQcFacts> audioSources, List<TrackQcCheck> checks)
     {
         foreach (var (kind, type) in new[] { (TrackKind.Video, "video"), (TrackKind.Audio, "audio") })
         {
             var before = source.Tracks.Where(x => x.Kind == kind).ToArray();
             var after = output.Tracks.Where(x => x.Kind == kind).ToArray();
-            if (before.Length + (kind == TrackKind.Audio ? audioInputs.Count : 0) != after.Length) throw new MediaRuleException($"{type} 轨数量与请求不同。");
+            if (before.Length + (kind == TrackKind.Audio ? audioInputs.Count : 0) != after.Length) return new(TrackQcFailureKind.SourceCount, kind);
             for (var i = 0; i < before.Length; i++)
                 // MP4 等容器不提供 Matroska codec_id/旗标；已知源字段严格比较，允许输出补齐缺失字段。
                 if (before[i].Codec != after[i].Codec || (before[i].CodecId is not null && before[i].CodecId != after[i].CodecId) ||
@@ -32,8 +39,8 @@ public static class OutputQcRules
                     (before[i].LanguageIetf is not null && !string.Equals(before[i].LanguageIetf?.Value, after[i].LanguageIetf?.Value, StringComparison.OrdinalIgnoreCase)) ||
                     (before[i].HasDefaultFlag && before[i].Flags.IsDefault != after[i].Flags.IsDefault) ||
                     (before[i].HasForcedFlag && before[i].Flags.IsForced != after[i].Flags.IsForced))
-                    throw new MediaRuleException($"{type} 轨 {i + 1} 的编码、媒体属性或轨道元数据与源文件不同。");
-            checks.Add($"保留 {before.Length} 条 {type} 轨：编码、尺寸/声道/采样率和轨道元数据一致");
+                    return new(TrackQcFailureKind.SourceMetadata, kind, i + 1);
+            checks.Add(new(TrackQcCheckKind.Retained, kind, 0, before.Length, null));
         }
         // 只有所有 A/V 输入声明时长时才能预测总时长；不能拿字幕尾时间或未知 MP4 时长代替源证据。
         long? expectedDuration = source.DurationNanoseconds;
@@ -42,23 +49,23 @@ public static class OutputQcRules
                 ? new[] { source.DurationNanoseconds.Value }.Concat(audioSources.Select(p => p.DurationNanoseconds!.Value)).Max() : null;
         if (expectedDuration is { } duration && output.DurationNanoseconds is { } outputDuration &&
             Math.Abs((double)duration - outputDuration) > Math.Max(1_000_000_000, duration * 0.01))
-            throw new MediaRuleException("成品时长与源文件不符。");
+            return new(TrackQcFailureKind.Duration);
         var subtitles = output.Tracks.Where(x => x.Kind == TrackKind.Subtitle).ToArray();
-        if (subtitles.Length != subtitleInputs.Count) throw new MediaRuleException("新增字幕轨数量不符。");
+        if (subtitles.Length != subtitleInputs.Count) return new(TrackQcFailureKind.SubtitleCount);
         for (var i = 0; i < subtitles.Length; i++)
         {
             var actual = subtitles[i];
             var expected = subtitleInputs[i];
             if (actual.CodecId != (expected.IsAss ? "S_TEXT/ASS" : "S_TEXT/UTF8") || actual.Name != expected.Name ||
                 !LanguageRules.Matches(actual.Language.Value, actual.LanguageIetf?.Value, expected.Language) || actual.Flags.IsDefault != expected.IsDefault || actual.Flags.IsForced != expected.IsForced)
-                throw new MediaRuleException($"新增字幕轨 {i + 1} 的 ASS 类型、名称、语言、default 或 forced 旗标不符。");
-            checks.Add($"新增字幕 {i + 1}（轨 ID {actual.Id.Value}）：{actual.Name} / {actual.LanguageIetf?.Value ?? actual.Language.Value} / default={actual.Flags.IsDefault} / forced={actual.Flags.IsForced}");
+                return new(TrackQcFailureKind.SubtitleMetadata, TrackKind.Subtitle, i + 1);
+            checks.Add(new(TrackQcCheckKind.Subtitle, TrackKind.Subtitle, i + 1, 1, actual));
         }
-        CheckExternalAudio(source, output, audioInputs, audioSources, checks);
+        return CheckExternalAudio(source, output, audioInputs, audioSources, checks);
     }
 
-    private static void CheckExternalAudio(MediaQcFacts source, MediaQcFacts output,
-        EquatableArray<AudioQcFacts> audioInputs, EquatableArray<MediaQcFacts> audioSources, List<string> checks)
+    private static TrackQcFailure? CheckExternalAudio(MediaQcFacts source, MediaQcFacts output,
+        EquatableArray<AudioQcFacts> audioInputs, EquatableArray<MediaQcFacts> audioSources, List<TrackQcCheck> checks)
     {
         var added = output.Tracks.Where(t => t.Kind == TrackKind.Audio).Skip(source.Tracks.Count(t => t.Kind == TrackKind.Audio)).ToArray();
         for (var i = 0; i < audioInputs.Count; i++)
@@ -68,9 +75,10 @@ public static class OutputQcRules
                 (before.AudioChannels is not null && before.AudioChannels != actual.AudioChannels) ||
                 (before.AudioSamplingFrequency is not null && before.AudioSamplingFrequency != actual.AudioSamplingFrequency) ||
                 actual.Name != input.Name || !LanguageRules.Matches(actual.Language.Value, actual.LanguageIetf?.Value, input.Language) || actual.Flags.IsDefault != input.IsDefault || actual.Flags.IsForced != input.IsForced)
-                throw new MediaRuleException($"外加音频 {i + 1} 编码、音频属性或元数据不符。");
-            checks.Add($"外加音频 {i + 1}（轨 ID {actual.Id.Value}）：编码、声道、采样率、名称、语言与旗标一致");
+                return new(TrackQcFailureKind.AudioMetadata, TrackKind.Audio, i + 1);
+            checks.Add(new(TrackQcCheckKind.AddedAudio, TrackKind.Audio, i + 1, 1, actual));
         }
+        return null;
     }
 
     // 只统一运输层换行；Dialogue 内容、顺序及边缘空格都是正文，不能被丢弃。

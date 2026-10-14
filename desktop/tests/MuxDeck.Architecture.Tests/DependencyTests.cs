@@ -90,7 +90,9 @@ public sealed class NamespaceDependencyTests
             typeof(MuxDeck.Application.Ports.IMuxer), typeof(MuxDeck.Application.Ports.IMediaExtractor),
             typeof(MuxDeck.Application.Ports.IFontInspector), typeof(MuxDeck.Application.Ports.IArtifactPublisher),
             typeof(MuxDeck.Application.Ports.ITaskWorkspaceFactory), typeof(MuxDeck.Application.Ports.IToolCatalog),
-            typeof(MuxDeck.Application.Ports.IClock), typeof(MuxDeck.Application.Ports.ITaskWorkspace)
+            typeof(MuxDeck.Application.Ports.IClock), typeof(MuxDeck.Application.Ports.ITaskWorkspace),
+            typeof(MuxDeck.Application.Ports.IMuxInputReader), typeof(MuxDeck.Application.Ports.IMuxEvidenceReader),
+            typeof(MuxDeck.Application.Ports.IMediaReferenceBuilder), typeof(MuxDeck.Application.Ports.IToolReadiness)
         };
         var implementations = Assembly.Load("MuxDeck.Infrastructure").GetTypes();
         foreach (var port in ports)
