@@ -28,6 +28,7 @@ public sealed class ToolFailureContractTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("UNKNOWN_CODE")]
+    [InlineData("MUX_TRACK_QC_FAILED")]
     [InlineData("MUX_TOOL_EXIT_FAILED ")]
     public void Unregistered_failure_codes_are_rejected(string? code)
     {

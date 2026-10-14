@@ -150,7 +150,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 #### 2c 诊断、QC 与 ASS 解析已迁入 Domain
 
 - `DiagnosticPolicy.cs` 维护唯一 AFS 物理行分类实现，ANSI、精确颜色白名单、未知级别/诊断与原 code/message 保持不变。Infrastructure `AfsDiagnosticClassifier` 只转接数据形状；有界分块重组、流复核和 warning 合并由同层收集器完成。
-- `OutputQcRules.cs` 负责保留源 A/V 的已知元数据、新增字幕/音频规格、真实音轨 ID 及已声明 A/V 时长比较；输入为 `OutputQcFacts.cs` 的不可变事实。结果保留按原顺序通过的检查项及失败文案，旧边界先追加检查项，再抛原数据异常。
+- `OutputQcRules.cs` 负责保留源 A/V 的已知元数据、新增字幕/音频规格、真实音轨 ID 及已声明 A/V 时长比较；输入为 `OutputQcFacts.cs` 的不可变事实。CheckFacts 返回 TrackQcReport，保留按原顺序通过的检查事实和失败种类/轨道类型/序号；Domain 不生成旧检查文案，文案仅由 Core 转换层生成。
 - 字幕全文比较也由 `OutputQcRules` 负责，只归一 CRLF/LF；同工具 transport 参考生成、提取和文件读取仍在旧边界。Dialogue 文本、时序、Style、字体、事件顺序与末尾空格不能丢弃或放宽。
 - `AssDocument.cs` 负责必要节、样式、字体/粗斜体覆盖、绘图忽略、Unicode 码点与 AFS mapping 解析，返回不可变使用/映射集合；动画字体切换、未知样式、非标准字重等原拒绝保持不变。UTF-8/BOM 文件读取、ttx 读取及字体候选/字形/固有粗体证明已随 3b 迁入 Infrastructure，纯规则仍由 Domain 维护。
 - Domain 的解析拒绝使用无 IO 依赖的 `MediaRuleException`，旧边界转换为原 `InvalidDataException` 文案；不把文件、进程、时间、有副作用的 Environment 成员或具体工具类型带入 Domain。原 `diagnostics.md` 白名单未修改。
@@ -298,3 +298,6 @@ QC 返回 `TrackQcReport` 的结构化事实，经 `QC_SUBSET_FONTS`、`QC_TRACK
 后续预设、配置和队列等模块按上文分层加入；模块对外暴露所需用例与契约，内部可变状态由自身维护。新增生产项目、拆分 Contracts 或改变依赖方向须先新增或修订 ADR。
 
 改变项目依赖、契约、单任务接口或状态归属时，在同一改动中更新本文、架构测试与对应行为验证。SDK 与包版本直接查项目配置；更改依赖时一起维护锁文件。
+
+
+3c 小修已删除仅由测试使用的 CheckTracks、Domain 的 LegacyTrackQcText 和无人调用的 TrackQcFailed 旧码。所有相关测试改为 CheckFacts 的种类、轨道类型、序号、数量和完整轨道字段断言，正式用例/转换路径保持；已移除旧码新增拒绝验证，原有效码案例迁移为拒绝案例，总数保持 717。

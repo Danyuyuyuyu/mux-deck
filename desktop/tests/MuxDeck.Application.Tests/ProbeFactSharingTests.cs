@@ -19,6 +19,9 @@ public sealed class ProbeFactSharingTests
         var qc = new MediaQcFacts(first.Tracks, first.DurationNanoseconds);
         Assert.Equal(first.Tracks, qc.Tracks);
         Assert.Equal(typeof(MediaQcFacts).Assembly, typeof(MediaTrackInfo).Assembly);
-        Assert.Null(OutputQcRules.CheckTracks(qc, new(second.Tracks, null), [], [], []).Error);
+        var result = OutputQcRules.CheckFacts(qc, new(second.Tracks, null), [], [], []);
+        Assert.Null(result.Failure);
+        Assert.Equal(new[] { new TrackQcCheck(TrackQcCheckKind.Retained, TrackKind.Video, 0, 1, null),
+            new TrackQcCheck(TrackQcCheckKind.Retained, TrackKind.Audio, 0, 0, null) }, result.Checks.ToArray());
     }
 }

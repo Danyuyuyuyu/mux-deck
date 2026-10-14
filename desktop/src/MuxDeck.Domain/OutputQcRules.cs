@@ -2,15 +2,6 @@ namespace MuxDeck.Domain;
 
 public static class OutputQcRules
 {
-    // 旧 API 是纯兼容转换；新用例直接消费结构化报告，两者共享唯一规则。
-    public static OutputQcResult CheckTracks(MediaQcFacts source, MediaQcFacts output,
-        EquatableArray<SubtitleQcFacts> subtitleInputs, EquatableArray<AudioQcFacts> audioInputs,
-        EquatableArray<MediaQcFacts> audioSources)
-    {
-        var result = CheckFacts(source, output, subtitleInputs, audioInputs, audioSources);
-        return new(result.Checks.Select(LegacyTrackQcText.Check).ToEquatableArray(),
-            result.Failure is null ? null : LegacyTrackQcText.Failure(result.Failure));
-    }
     public static TrackQcReport CheckFacts(MediaQcFacts source, MediaQcFacts output,
         EquatableArray<SubtitleQcFacts> subtitleInputs, EquatableArray<AudioQcFacts> audioInputs,
         EquatableArray<MediaQcFacts> audioSources)

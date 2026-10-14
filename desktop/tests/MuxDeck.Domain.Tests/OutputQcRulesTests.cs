@@ -10,8 +10,8 @@ public sealed class OutputQcRulesTests
             type, type == "video" ? "AVC" : "AAC", "codec", new("eng"), new("en"), "源轨",
             new(true, false), "1920x1080", 2, 48000, true, true);
     private static MediaQcFacts Media(params MediaTrackInfo[] tracks) => new(new(tracks), 100_000_000_000);
-    private static OutputQcResult Check(MediaQcFacts source, MediaQcFacts output) =>
-        OutputQcRules.CheckTracks(source, output, [], [], []);
+    private static TrackQcReport Check(MediaQcFacts source, MediaQcFacts output) =>
+        OutputQcRules.CheckFacts(source, output, [], [], []);
 
     // 对应 Smoke 成品源 A/V 保留与 MP4 未声明字段可由输出补齐。
     [Fact]
@@ -19,8 +19,9 @@ public sealed class OutputQcRulesTests
     {
         var track = Track();
         var checks = Check(Media(track), Media(track with { Id = new(9), LanguageIetf = new("EN") }));
-        Assert.Collection(checks.Checks, item => Assert.Contains("保留 1 条 video", item),
-            item => Assert.Contains("保留 0 条 audio", item));
+        Assert.Null(checks.Failure);
+        Assert.Collection(checks.Checks, item => AssertRetained(item, TrackKind.Video, 1),
+            item => AssertRetained(item, TrackKind.Audio, 0));
     }
 
     [Theory]
@@ -50,7 +51,9 @@ public sealed class OutputQcRulesTests
             "default" => before with { Flags = before.Flags with { IsDefault = false } },
             _ => before with { Flags = before.Flags with { IsForced = true } }
         };
-        Assert.Contains("源文件不同", Check(Media(before), Media(actual)).Error!);
+        var result = Check(Media(before), Media(actual));
+        Assert.Equal(new TrackQcFailure(TrackQcFailureKind.SourceMetadata, TrackKind.Video, 1), result.Failure);
+        Assert.Empty(result.Checks);
     }
 
     [Fact]
@@ -58,8 +61,13 @@ public sealed class OutputQcRulesTests
     {
         var source = Track() with { CodecId = null, PixelDimensions = null, AudioChannels = null,
             AudioSamplingFrequency = null, LanguageIetf = null, HasDefaultFlag = false, HasForcedFlag = false };
-        Assert.Null(Check(Media(source), Media(Track() with { Flags = new(false, true) })).Error);
-        Assert.NotNull(Check(Media(source), Media()).Error);
+        var accepted = Check(Media(source), Media(Track() with { Flags = new(false, true) }));
+        Assert.Null(accepted.Failure);
+        Assert.Collection(accepted.Checks, item => AssertRetained(item, TrackKind.Video, 1),
+            item => AssertRetained(item, TrackKind.Audio, 0));
+        var rejected = Check(Media(source), Media());
+        Assert.Equal(new TrackQcFailure(TrackQcFailureKind.SourceCount, TrackKind.Video), rejected.Failure);
+        Assert.Empty(rejected.Checks);
     }
 
     // 对应真实多轨时长与未知 MP4 不用字幕尾时间补时长；纯事实测试不启动工具。
@@ -71,8 +79,11 @@ public sealed class OutputQcRulesTests
     public void Duration_keeps_the_existing_one_second_or_one_percent_tolerance(long duration, bool expected)
     {
         var output = Media(Track()) with { DurationNanoseconds = duration };
-        if (expected) Assert.Null(Check(Media(Track()), output).Error);
-        else Assert.Contains("时长", Check(Media(Track()), output).Error!);
+        var result = Check(Media(Track()), output);
+        if (expected) Assert.Null(result.Failure);
+        else Assert.Equal(new TrackQcFailure(TrackQcFailureKind.Duration), result.Failure);
+        Assert.Collection(result.Checks, item => AssertRetained(item, TrackKind.Video, 1),
+            item => AssertRetained(item, TrackKind.Audio, 0));
     }
 
     [Fact]
@@ -82,20 +93,28 @@ public sealed class OutputQcRulesTests
         var audio = Track("audio", 9);
         var output = Media(Track(), audio) with { DurationNanoseconds = 200_000_000_000 };
         var inputs = new EquatableArray<AudioQcFacts>([new(9, audio.Name, audio.Language.Value, audio.Flags.IsDefault, audio.Flags.IsForced)]);
-        Assert.Null(OutputQcRules.CheckTracks(source, output, [], inputs,
-            [Media(audio) with { DurationNanoseconds = null }]).Error);
-        Assert.Null(OutputQcRules.CheckTracks(source, output, [], inputs,
-            [Media(audio) with { DurationNanoseconds = 200_000_000_000 }]).Error);
+        foreach (var duration in new long?[] { null, 200_000_000_000 })
+        {
+            var result = OutputQcRules.CheckFacts(source, output, [], inputs,
+                [Media(audio) with { DurationNanoseconds = duration }]);
+            Assert.Null(result.Failure);
+            Assert.Collection(result.Checks, item => AssertRetained(item, TrackKind.Video, 1),
+                item => AssertRetained(item, TrackKind.Audio, 0),
+                item => Assert.Equal(new TrackQcCheck(TrackQcCheckKind.AddedAudio, TrackKind.Audio, 1, 1,
+                    new(new(9), TrackKind.Audio, "audio", "AAC", "codec", new("eng"), new("en"), "源轨",
+                        new(true, false), "1920x1080", 2, 48000, true, true)), item));
+        }
     }
 
     // 对应 --warning-policy QC 拒绝仍保留此前已通过的检查，不能以重构丢失失败证据。
     [Fact]
     public void Later_failure_keeps_preceding_checks()
     {
-        var result = OutputQcRules.CheckTracks(Media(Track()),
+        var result = OutputQcRules.CheckFacts(Media(Track()),
             Media(Track()) with { DurationNanoseconds = 200_000_000_000 }, [], [], []);
-        Assert.Contains("时长", result.Error!);
-        Assert.Collection(result.Checks, item => Assert.Contains("video", item), item => Assert.Contains("audio", item));
+        Assert.Equal(new TrackQcFailure(TrackQcFailureKind.Duration), result.Failure);
+        Assert.Collection(result.Checks, item => AssertRetained(item, TrackKind.Video, 1),
+            item => AssertRetained(item, TrackKind.Audio, 0));
     }
 
     // 对应 --warning-policy 新增字幕 QC 与单/双/TC-only 的元数据检查。
@@ -121,9 +140,23 @@ public sealed class OutputQcRulesTests
             _ => subtitle
         };
         var actual = field == "count" ? Media(Track()) : Media(Track(), subtitle);
-        var results = OutputQcRules.CheckTracks(Media(Track()), actual, [new(true, "SC", "zh-Hans", true, false)], [], []);
-        if (expected) { Assert.Null(results.Error); Assert.Contains(results.Checks, item => item.Contains("新增字幕 1", StringComparison.Ordinal)); }
-        else Assert.NotNull(results.Error);
+        var results = OutputQcRules.CheckFacts(Media(Track()), actual, [new(true, "SC", "zh-Hans", true, false)], [], []);
+        if (expected)
+        {
+            Assert.Null(results.Failure);
+            Assert.Collection(results.Checks, item => AssertRetained(item, TrackKind.Video, 1),
+                item => AssertRetained(item, TrackKind.Audio, 0),
+                item => Assert.Equal(new TrackQcCheck(TrackQcCheckKind.Subtitle, TrackKind.Subtitle, 1, 1,
+                    new(new(8), TrackKind.Subtitle, "subtitles", "AAC", "S_TEXT/ASS", new("chi"), new("zh-Hans"), "SC",
+                        new(true, false), "1920x1080", 2, 48000, true, true)), item));
+        }
+        else
+        {
+            Assert.Equal(field == "count" ? new TrackQcFailure(TrackQcFailureKind.SubtitleCount) :
+                new TrackQcFailure(TrackQcFailureKind.SubtitleMetadata, TrackKind.Subtitle, 1), results.Failure);
+            Assert.Collection(results.Checks, item => AssertRetained(item, TrackKind.Video, 1),
+                item => AssertRetained(item, TrackKind.Audio, 0));
+        }
     }
 
     // 对应 --media-drop-real 的新增音轨元数据及真实 Track ID 选择；这里复用探测事实。
@@ -151,11 +184,27 @@ public sealed class OutputQcRulesTests
             "forced" => actual with { Flags = actual.Flags with { IsForced = true } },
             _ => actual
         };
-        var results = OutputQcRules.CheckTracks(Media(Track()), Media(Track(), actual), [],
+        var results = OutputQcRules.CheckFacts(Media(Track()), Media(Track(), actual), [],
             [new(9, "评论", "eng", true, false)], [Media(Track("audio", 2) with { Codec = "unselected" }, before)]);
-        if (expected) { Assert.Null(results.Error); Assert.Contains(results.Checks, item => item.Contains("外加音频 1", StringComparison.Ordinal)); }
-        else Assert.NotNull(results.Error);
+        if (expected)
+        {
+            Assert.Null(results.Failure);
+            Assert.Collection(results.Checks, item => AssertRetained(item, TrackKind.Video, 1),
+                item => AssertRetained(item, TrackKind.Audio, 0),
+                item => Assert.Equal(new TrackQcCheck(TrackQcCheckKind.AddedAudio, TrackKind.Audio, 1, 1,
+                    new(new(22), TrackKind.Audio, "audio", "AAC", "codec", new("eng"), new("en"), "评论",
+                        new(true, false), "1920x1080", 2, 48000, true, true)), item));
+        }
+        else
+        {
+            Assert.Equal(new TrackQcFailure(TrackQcFailureKind.AudioMetadata, TrackKind.Audio, 1), results.Failure);
+            Assert.Collection(results.Checks, item => AssertRetained(item, TrackKind.Video, 1),
+                item => AssertRetained(item, TrackKind.Audio, 0));
+        }
     }
+
+    private static void AssertRetained(TrackQcCheck check, TrackKind kind, int count) =>
+        Assert.Equal(new TrackQcCheck(TrackQcCheckKind.Retained, kind, 0, count, null), check);
 
     // 对应 --warning-policy 的同工具 transport 全文参考；不能放宽 Dialogue 任一字段。
     [Theory]

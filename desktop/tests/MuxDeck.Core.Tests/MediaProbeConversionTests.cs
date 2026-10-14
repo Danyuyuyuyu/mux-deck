@@ -70,6 +70,9 @@ public sealed class MediaProbeConversionTests
         Assert.Equal(123L, attachment.Size);
         // 同一转换结果可直接交给纯 QC，无另一套轨道事实或再次解释语言/旗标。
         var qc = new MediaQcFacts(converted.Tracks, converted.DurationNanoseconds);
-        Assert.Null(OutputQcRules.CheckTracks(qc, qc, [], [], []).Error);
+        var result = OutputQcRules.CheckFacts(qc, qc, [], [], []);
+        Assert.Null(result.Failure);
+        Assert.Equal(new[] { new TrackQcCheck(TrackQcCheckKind.Retained, TrackKind.Video, 0, 1, null),
+            new TrackQcCheck(TrackQcCheckKind.Retained, TrackKind.Audio, 0, 1, null) }, result.Checks.ToArray());
     }
 }

@@ -238,8 +238,8 @@
 | [2c · `90fea6b`](https://github.com/Danyuyuyuyu/mux-deck/commit/90fea6b02e421105cd3c7bdb45c69c4c69d1df8e) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38400687784) | restore 10/10；Release 0 警告 / 0 错误；test 427/427；受控 13/13、656/656；warning-policy 57/57 | DiagnosticPolicy、OutputQcRules、AssDocument 已落位；新增 Domain 76、架构 3；原 348 保留，白名单未变。 |
 | [3a · `da0f334`](https://github.com/Danyuyuyuyu/mux-deck/commit/da0f3342f2b50bccfdcf31f19212ee3bb63e9f91) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38406784353) | locked restore 10/10；Release 0 警告 / 0 错误；test 485/485；受控 13/13、656/656；warning-policy 57/57 | 九个 Application 业务端口；Domain 统一 MediaTrackInfo，删除重复 TrackQcFacts；新增 29，原 456 全部保留；详见 3a 实施与验证。 |
 | [3b · `a2b76d9`](https://github.com/Danyuyuyuyu/mux-deck/commit/a2b76d9588646265bfab68d0521928c8f881f94c) + [修正 · `d99781b`](https://github.com/Danyuyuyuyu/mux-deck/commit/d99781b5cb44ac4c2279d90225dd6412ba7d92b7) | 已完成，已推送，[修正 Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38494664905) | locked restore 11/11；Release 0 警告 / 0 错误；test 613/613；受控 13/13、656/656；真实 integration 121/121、media-drop-real 37/37 | 依用户批准保留 Desktop 直接依赖；Core → Infrastructure 过渡；初始新增 47，本次新增 12，原 601 保留。 |
-| 3c · 7c9a477 + 结构化结果修正 | 完整验收通过，仅发布审查分支；主分支待用户确认 | 初验 test 675/675；本次 restore 11/11、Release 0/0、test 717/717；受控 656/656；真实 238/238 | 本次新增 41，原 676 保留；15/15 对照一致；见结构化结果修正实际验证。 |
-| 3d | 完整验收通过，仅发布 review/3c-3d；主分支待用户确认 | 初验 test 676/676；结构化修正 test 717/717；restore 11/11；Release 0/0；受控 656/656；真实 238/238；对照 15/15；脚本反例 22/22 | 旧/旧来源复核及新规则 10/10；所有 15 项一致，原始报告保留；见工具不确定性授权记录。 |
+| [3c · 7c9a477](https://github.com/Danyuyuyuyu/mux-deck/commit/7c9a477410768aa1758551116193fac19e8172de) + [修正 · a3dbea9](https://github.com/Danyuyuyuyu/mux-deck/commit/a3dbea92f867a739aae4490e249ace1a493300d3) | 用户已确认，保留三提交推送主分支；[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38530034209)，head_sha=a3dbea9 | 初验 675；结构化修正 test 717/717；restore 11/11、Release 0/0；受控 656/656；真实 238/238 | 原 676 保留，新增 41；[15/15、150/150 对照报告](../../artifacts/arch-corrections/3c-structured-final/summary-all15.json)；远端审查分支已删除。 |
+| [3d · 0f1927b](https://github.com/Danyuyuyuyu/mux-deck/commit/0f1927b5b374eee9198ff9c22e3e047c27dad448) | 用户已确认并推送主分支；[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38530034209)，head_sha=a3dbea9 | 初验 676；结构化修正 test 717/717；restore 11/11、Release 0/0；受控 656/656；真实 238/238；脚本反例 22/22 | [15 项逐项对照报告](../../artifacts/arch-corrections/3c-structured-final/summary-all15.json)全部一致；旧/旧来源复核 10/10，原始报告保留。 |
 | 3e | 未开始 | | |
 | 4a | 未开始 | | |
 | 4b | 未开始 | | |
@@ -994,3 +994,43 @@ restore 11 个项目成功；Release 0 警告 / 0 错误；test 717/717、失败
 | movie | complete | [一致](../../artifacts/arch-corrections/3c-structured-movie-retry/movie-complete/comparison.json) |
 
 [15 项总报告](../../artifacts/arch-corrections/3c-structured-final/summary-all15.json)。脚本反例命令 `python -X utf8 ./scripts/Test-AfsEvidence.py --source artifacts/arch-corrections/3d-afs-proof/raw-comparison.json -v`，22/22、失败/跳过 0，[输出](../../artifacts/arch-corrections/3c-structured-final/comparison-counter-tests.txt)。审查分支 Desktop CI 的实际结果见交付回报；主分支推送继续等待用户确认。
+
+
+### 3c/3d 用户确认后的主分支推送
+
+用户已确认：`git switch v2/avalonia-rewrite` → `git merge --ff-only review/3c-3d` → `git pull --rebase origin v2/avalonia-rewrite` → `git push origin HEAD:refs/heads/v2/avalonia-rewrite`。此次拉取时远端为 5ba3146，rebase 无需改写；按顺序保留 7c9a477、0f1927b、a3dbea9 三个提交，未压缩。[主分支 Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38530034209) completed/success，head_sha 为 a3dbea92f867a739aae4490e249ace1a493300d3，与远端完全一致；随后执行 `git push origin --delete review/3c-3d`，远端分支已删除。已补录上方 3c/3d 结果表，既有计数与报告路径不变。
+
+
+### 3c 移除 Domain 旧检查文案实际验证
+
+单独提交 `refactor(desktop): [3c] 移除 Domain 旧检查文案`：所有 CheckTracks 调用方都在测试中，已改为 CheckFacts。原有成功、关键字段篡改、传统/IETF 语言、未知类型、时长容差和失败前检查保留案例不变；断言由文案子串/非空，改为精确的检查/失败种类、轨道类型、序号、数量、完整轨道字段和顺序。删除 CheckTracks、LegacyTrackQcText、无人调用的 ErrorCodes.TrackQcFailed。旧文案仅保留 Core 转换层；CheckFacts 及其后全部正式规则正文与 a3dbea9 逐字一致，Application、Infrastructure、Core 转换、Desktop 和 Smoke 流程未改。
+
+已删除旧码的原有效码数据案例改为 `MUX_TRACK_QC_FAILED` 必须拒绝的案例，未删除测试方法，总数保持 717。Domain 298、Application 103、Core 54、Architecture 198、Infrastructure 64；失败/跳过 0。
+
+实际验证（desktop 工作目录）：
+```powershell
+dotnet restore MuxDeck.sln --locked-mode
+dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false
+dotnet test MuxDeck.sln --no-build -c Release
+```
+restore 11 个项目成功，Release 0 警告 / 0 错误，test 717/717。[构建](../../artifacts/arch-corrections/3c-domain-text-validation/build.txt)、[全量测试](../../artifacts/arch-corrections/3c-domain-text-validation/tests.txt)。
+
+受控入口均为 `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release`，有参数时追加 `-- <参数>`：
+
+| 参数 | 通过/总计 |
+|---|---|
+| 无参数 | 28/28 |
+| --warning-policy | 57/57 |
+| --single-mux-round1 | 89/89 |
+| --single-mux-ui-round1 | 176/176 |
+| --workbench-ui | 38/38 |
+| --input-feedback | 24/24 |
+| --media-drop | 25/25 |
+| --environment-ui | 23/23 |
+| --components | 31/31 |
+| --component-install-ui | 37/37 |
+| --component-install-all | 41/41 |
+| --component-uninstall | 26/26 |
+| --component-uninstall-ui | 61/61 |
+
+13/13 套件、656/656，全部等于基准，输出保留在 `artifacts/arch-corrections/3c-domain-text-validation/`。按用户指定，正式代码路径未改，本次不重跑真实套件；沿用此前真实 238/238、逐成品 15/15 一致的报告，不将历史真实计数记录为本次执行。推送后的 Desktop CI 结果见交付回报；3e 未开始。
