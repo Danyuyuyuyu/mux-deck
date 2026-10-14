@@ -197,7 +197,7 @@ Core 的全局 Gate 仅覆盖安装与卸载（含 AssfontsInstaller 兼容入�
 
 Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionChecks.cs`、`ComponentInstallationUiChecks.cs`、`ComponentUninstallUiChecks.cs` 改用契约配置和 Infrastructure 组件接口；`ComponentUninstallChecks.cs` 的并发互斥场景改为同一协调器与 `ManageComponentsUseCase`；`EnvironmentUiChecks.cs` 的契约检查夹具保留既有 Parts 显示；`AutomaticMediaDropChecks.cs`、`Phase1Integration.cs`、`Program.cs`、`WarningPolicyChecks.cs` 只把工具定位参数改为配置快照。断言、预期文案和状态序列未改。原 Core 的 `ComponentManagementTests.cs`、`ToolLocatorSourceTests.cs` 移到 `Infrastructure.IntegrationTests`，测试总数仍保留原有 786 项。
 
-本地验证结果：locked restore 11/11；Release 构建 0 警告 / 0 错误；全量单元测试 786/786（Core 57、Application 161、Domain 298、Architecture 198、Infrastructure 72）；受控套件 13/13、656/656；组件检测 31/31、环境 UI 23/23、安装 UI 37/37、卸载 UI 61/61、存储与 `--root` 隔离 5/5；固定缓存真实卸载循环 17/17。以 `72b76de` 的 Smoke 源文件提取文案比较，环境 UI 16/16、安装 UI 35/35、卸载 UI 47/47 相同。此步没有改变探测命令行或参数，因此未运行额外真实探测基准；真实卸载是本步要求的唯一真实工具链验证。
+本地验证结果：locked restore 11/11；Release 构建 0 警告 / 0 错误；全量单元测试 786/786（Core 57、Application 161、Domain 298、Architecture 198、Infrastructure 72）；受控套件 13/13、656/656；组件检测 31/31、环境 UI 23/23、安装 UI 37/37、卸载 UI 61/61、存储与 `--root` 隔离 5/5；固定缓存真实卸载循环 17/17。以 `72b76de` 的 Smoke 源文件提取文案比较，环境 UI 16/16、安装 UI 35/35、卸载 UI 47/47 相同（该 16/35/47 出自未入库脚本、统计口径已失效；现统一以 `desktop/tools/compare-smoke-text.py` 为准，见下方 4a-2 返工记录）。此步没有改变探测命令行或参数，因此未运行额外真实探测基准；真实卸载是本步要求的唯一真实工具链验证。
 
 #### 4a-2 调查报告
 
@@ -219,7 +219,9 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 
 新增单元测试 11 个：租约语义 1（Application）、`IsInside` 边界 5 与 `StoragePaths.ForRoot` 规范化 1（Infrastructure）、Purpose/Source 字符串到枚举 1（Infrastructure）、Purpose/Source 枚举到中文 1、装配共享协调器 1、`..` 规范化等价 1（Architecture）、故意违反 Composition 规则的架构反例 1（Architecture）。原 786 全部保留。
 
-本地验证：locked restore 11/11；Release 0 警告 / 0 错误；`dotnet test` 797/797（Core 57、Application 162、Domain 298、Architecture 202、Infrastructure 78）；受控 13/13、657/657（卸载 UI 由 61 增至 62，来自新增兄弟目录用例）；组件 31/31、环境 UI 23/23、安装 UI 37/37、卸载 UI 62/62；存储与 `--root` 隔离 5/5；固定缓存真实卸载 17/17。以 `72b76de` 三个 Smoke 源文件逐条提取含中文的字面量核对：环境 24/24、安装 36/36、卸载 45/45 全部原样保留，卸载文件仅新增 1 条授权用例文案。
+本地验证：locked restore 11/11；Release 0 警告 / 0 错误；`dotnet test` 797/797（Core 57、Application 162、Domain 298、Architecture 202、Infrastructure 78）；受控 13/13、657/657（卸载 UI 由 61 增至 62，来自新增兄弟目录用例）；组件 31/31、环境 UI 23/23、安装 UI 37/37、卸载 UI 62/62；存储与 `--root` 隔离 5/5；固定缓存真实卸载 17/17。
+
+文案比较统一改用入库脚本 `desktop/tools/compare-smoke-text.py`（统计口径：文件内含至少一个中文字符 U+4E00–U+9FFF 的双引号字面量，按出现顺序去重；用法见脚本头部）。`72b76de → 3f46630`：环境 24/24、安装 36/36、卸载 45/45，缺失 0、新增 0；`72b76de → cacc0c5`：环境 24/24、安装 36/36、卸载 45/46，缺失 0、新增 1。卸载的 45 条即 72b76de 卸载 UI 套件的全部中文字面量，逐条保留；新增的授权用例文案“同前缀兄弟目录中的工具不提供目录卸载候选”单独列出。此前记录的“环境 16/16、安装 35/35、卸载 47/47”出自未入库脚本，口径已失效，以本脚本结果为准。
 
 ### 4b 草稿会话 `MuxDraft`（大，高风险）
 
@@ -317,7 +319,7 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 | PR | 状态 | 验证 | 备注 |
 |---|---|---|---|
 | [4a-1 · `e87cb18`](https://github.com/Danyuyuyuyu/mux-deck/commit/e87cb18a0152222669fa47c8b754c52e2bef71af) | 已完成并推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38549905783) | locked restore 11/11；Release 0 警告 / 0 错误；test 786/786（原 777 保留，新增 9）；架构 198/198；受控 13/13、656/656，UI 全套通过；存储装配隔离检查 5/5 | AppComposition、构造注入、不可变配置与 IProbeMedia、存储索引迁入 Infrastructure；Smoke 仅装配，17 个源文件经精确替换比对；详见下方 4a-1 实施与实际验证和[后续调查报告](arch-layering-4a-investigation.md)。 |
-| [4a-2 · `review/4a-2`](https://github.com/Danyuyuyuyu/mux-deck/tree/review/4a-2) | 已完成，待审查；该分支未触发 Desktop CI | locked restore 11/11；Release 0 警告 / 0 错误；test 797/797（原 786 全部保留，新增 11）；受控 13/13、657/657；组件 31/31；环境 UI 23/23；安装 UI 37/37；卸载 UI 62/62；存储与 `--root` 隔离 5/5；固定缓存真实卸载 17/17；与 `72b76de` 文案逐条核对无缺失 | 组件边界迁入 Infrastructure、契约枚举与同步目录查询、单一协调器和 Desktop 引用护栏；另含 4a-2 返工（IsInside 经装配注入 VM、目录查询租约语义、契约去默认实现、路径工厂、`EnvironmentViewModel` 多行格式还原）；详见上方 4a-2 实施、调查报告与返工记录；提交哈希待提交后回填。 |
+| [4a-2 · `review/4a-2`](https://github.com/Danyuyuyuyu/mux-deck/tree/review/4a-2) | 已完成，待审查；该分支未触发 Desktop CI | locked restore 11/11；Release 0 警告 / 0 错误；test 797/797（原 786 全部保留，新增 11）；受控 13/13、657/657；组件 31/31；环境 UI 23/23；安装 UI 37/37；卸载 UI 62/62；存储与 `--root` 隔离 5/5；固定缓存真实卸载 17/17；`desktop/tools/compare-smoke-text.py` 对照 `72b76de`：环境 24/24、安装 36/36、卸载 45/46，缺失 0 | 组件边界迁入 Infrastructure、契约枚举与同步目录查询、单一协调器和 Desktop 引用护栏；另含 4a-2 返工（IsInside 经装配注入 VM、目录查询租约语义、契约去默认实现、路径工厂、`EnvironmentViewModel` 多行格式还原）；详见上方 4a-2 实施、调查报告与返工记录；提交哈希待提交后回填。 |
 | [1a · PR #3](https://github.com/Danyuyuyuyu/mux-deck/pull/3) | 已合并（`c4f932e`） | 锁定 restore：9/9 项目；Release build：0 警告 / 0 错误；dotnet test：32/32（架构规则 27 + 扫描反例 5），失败/跳过 0；Smoke：28/28 | 三个空生产项目、三个 xUnit 测试项目、过渡引用、NetArchTest 护栏、CI test 步骤与全部新增项目锁文件；按已接受 ADR-0001 实施，未移动代码、定义契约或修改行为。Domain/Application 业务测试 0；未重放真实工具链或原生 UI。 |
 | [1b · `aa85458`](https://github.com/Danyuyuyuyu/mux-deck/commit/aa85458a3caf7b11e76ae5f7d60317d3c862ffe8) | 已完成，已推送，Desktop CI 通过 | restore 10/10；Release 0 警告 / 0 错误；dotnet test 71/71（转换 26、Domain 8、架构 37）；受控 13/13 套件、656/656；契约两条故意违反均被拒绝 | 公共不可变契约、四个 Domain 值类型与 Core 兼容转换；旧调用方零改动；详见下方命令与计数。未重放真实工具链或原生 UI。 |
 | [2a · `34c4c18`](https://github.com/Danyuyuyuyu/mux-deck/commit/34c4c1827169270c715a955fe027a0bd6622509d) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38390147903) | locked restore 10/10；Release 0 警告 / 0 错误；dotnet test 208/208；受控 13/13、656/656 | TrackPolicy、LanguageRules、OutputNaming 已迁入 Domain；新增 Domain 69、架构 3，原 136 全部保留；详见 2a 实际验证。 |
@@ -1163,6 +1165,7 @@ restore 11 个项目成功，Release 0 警告 / 0 错误，test 717/717。[构�
 - **第 5 步**：`AssfontsInstaller` 未使用。
 - **4b/4c**：`SingleMuxViewModel` 通过 `service.Prober` / `service.Tools` 取依赖，应改为构造函数注入。
 - **4a-2**：`ConfigureTools` 去掉了原 `UpdateWorkspace` 对空工作区的校验；后续构造注入收口时补回等价边界校验。
+- **第 5 步**：Desktop 的行为测试暂时放在 `MuxDeck.Architecture.Tests`（仓库没有 Desktop 测试项目，且为不改动受控 Smoke 计数）；第 5 步评估是否新建 Desktop 测试项目并把这些用例迁过去。
 
 ### 4a-1 实施与实际验证（2026-10-14）
 
