@@ -23,15 +23,7 @@ public sealed class ToolLocator(Workspace workspace)
 
     private ToolStatus Find(string name, string purpose, string relative, string executable)
     {
-        var bundled = Path.Combine(workspace.ToolsDirectory, relative.Replace('/', Path.DirectorySeparatorChar));
-        var path = File.Exists(bundled) ? bundled : FindOnPath(executable);
-        var source = File.Exists(bundled) ? "Mux Deck" : path is not null ? "PATH" : "未找到";
-        if (path is null && OperatingSystem.IsWindows() && name.StartsWith("mkv", StringComparison.Ordinal))
-        {
-            var installed = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                "MKVToolNix", executable + ".exe");
-            if (File.Exists(installed)) { path = installed; source = "系统"; }
-        }
+        var path = ToolPathLookup.Find(workspace.ToolsDirectory, relative, executable, out var source);
         return new ToolStatus(name, purpose, path) { Source = source };
     }
 

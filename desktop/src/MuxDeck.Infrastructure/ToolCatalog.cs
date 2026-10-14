@@ -25,7 +25,7 @@ public sealed class ToolCatalog : IToolCatalog
             };
             var path = relative.Length > 0 ? ToolPathLookup.Find(tools.ToolsDirectory, relative, executable) :
                 FontToolsLocator.Find(tools) is { } directory ? Path.Combine(directory, ToolPathLookup.Executable(executable)) : null;
-            if (path is null) throw new ToolFailureException(ErrorCodes.ToolExitFailed, "找不到工具：" + executable);
+            if (path is null) throw new ToolFailureException(ErrorCodes.ToolNotFound, "找不到工具：" + executable);
             return new ToolDescriptor(capability, path);
         }).ToEquatableArray());
     });

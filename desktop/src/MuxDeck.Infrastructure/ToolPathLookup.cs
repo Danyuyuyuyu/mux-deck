@@ -3,17 +3,24 @@ namespace MuxDeck.Infrastructure;
 public static class ToolPathLookup
 {
     public static string Executable(string name) => name + (OperatingSystem.IsWindows() ? ".exe" : "");
-    public static string? Find(string tools, string relative, string executable)
+    public static string? Find(string tools, string relative, string executable) =>
+        Find(tools, relative, executable, out _);
+
+    // 定位与来源同时返回，旧显示入口不再重复查询 PATH 或系统安装目录。
+    public static string? Find(string tools, string relative, string executable, out string source)
     {
         var bundled = Path.Combine(tools, relative.Replace('/', Path.DirectorySeparatorChar));
-        var path = File.Exists(bundled) ? bundled : FindOnPath(executable);
+        var bundledExists = File.Exists(bundled);
+        var path = bundledExists ? bundled : FindOnPath(executable);
+        source = bundledExists ? "Mux Deck" : path is not null ? "PATH" : "未找到";
         if (path is null && OperatingSystem.IsWindows() && executable.StartsWith("mkv", StringComparison.Ordinal))
         {
             var installed = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "MKVToolNix", executable + ".exe");
-            if (File.Exists(installed)) path = installed;
+            if (File.Exists(installed)) { path = installed; source = "系统"; }
         }
         return path;
     }
+
     public static string? FindOnPath(string executable)
     {
         var file = executable + (OperatingSystem.IsWindows() ? ".exe" : "");

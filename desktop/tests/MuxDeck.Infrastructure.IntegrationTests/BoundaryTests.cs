@@ -218,7 +218,8 @@ public sealed class CatalogTests
         await using var fixture = await TestWorkspace.Create();
         var failure = await Assert.ThrowsAsync<ToolFailureException>(() => new ToolCatalog().ResolveAsync(
             [ToolCapability.InspectFonts], fixture.Context.Tools with { FontToolsDirectoryOverride = Path.Combine(fixture.Root, "missing") }, TestContext.Current.CancellationToken));
-        Assert.Equal(ErrorCodes.ToolExitFailed, failure.Code);
+        Assert.Equal("MUX_TOOL_NOT_FOUND", failure.Code);
+        Assert.Equal("找不到工具：ttx", failure.Message);
         Assert.Contains("ttx", failure.Message);
     }
 

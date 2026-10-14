@@ -18,7 +18,14 @@ public sealed class ToolExecutor(IMuxToolRunner? runner = null)
         CancellationToken token, TimeSpan timeout, bool json = false, bool rejectDiagnostics = false,
         List<Diagnostic>? warnings = null) =>
         RunAsync(executable, args, context.Workspace.WorkDirectory,
-            message => context.Workspace.WriteLogAsync(message).GetAwaiter().GetResult(), token, timeout, json, rejectDiagnostics, warnings);
+            message => WriteLogSafely(context.Workspace, message), token, timeout, json, rejectDiagnostics, warnings);
+    // 日志只提供诊断证据；磁盘或已释放句柄不能改变工具退出、诊断与取消结果。
+    private static void WriteLogSafely(ITaskWorkspace workspace, string message)
+    {
+        try { workspace.WriteLogAsync(message).GetAwaiter().GetResult(); }
+        catch (Exception ex) when (ex is ToolFailureException or IOException or ObjectDisposedException) { }
+    }
+
     private async Task<ProcessResult> RunCoreAsync(string executable, IReadOnlyList<string> args,
         string? work, Action<string>? log, CancellationToken token, TimeSpan timeout,
         bool json = false, bool rejectDiagnostics = false, List<Diagnostic>? warnings = null)
@@ -50,7 +57,7 @@ public sealed class ToolExecutor(IMuxToolRunner? runner = null)
         catch (OperationCanceledException) when (!token.IsCancellationRequested)
         {
             var ex = new TimeoutException($"工具 {Path.GetFileName(executable)} 超时（{timeout}）。");
-            throw PortBoundary.Failure(ErrorCodes.ToolExitFailed, ex);
+            throw PortBoundary.Failure(ErrorCodes.ToolTimeout, ex);
         }
     }
 

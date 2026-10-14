@@ -702,6 +702,35 @@ Domain 新增 `EquatableArray<T>`，只读包装 ImmutableArray、default 在读
 
 真实工具版本：MKVToolNix 100.0 / FFmpeg 8.1.1 / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10，与重构前基准相同。[integration 报告](../../artifacts/phase1/20261013-155956-4ebf5982d07a422cbf9eab2f789006ac/report.json)与[media-drop-real 报告](../../artifacts/automatic-drop/real-bd1ab50607484ac6b38d508b9401c2ad/report.json)保留在本机，分别 121/121、37/37，失败均为 0。按已接受的 ADR-0001 和本节明确授权的三项调整实施，不修改 ADR。实现提交 [a2b76d9](https://github.com/Danyuyuyuyu/mux-deck/commit/a2b76d9588646265bfab68d0521928c8f881f94c) 已在本地全部验证后 pull --rebase 并推送；[Desktop CI](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38427342392) 完成 success，head_sha 与实现提交一致，全部必需检查通过。2026-10-14（Asia/Shanghai）补录本节与结果表，3b 已完成；本步到此结束，后续 3c/4a 尚未实施。
 
+#### 3b 修正：适配修正
+
+输入：ddf6987 / a2b76d9 已完成 3b，用户要求独立提交本修正。输出：ToolCallContext 工具日志采用旧 TaskLog 的尽力写入行为；集中新增 MUX_TOOL_TIMEOUT / MUX_TOOL_NOT_FOUND，分别用于超时和工具缺失，Message 保持；Core ToolLocator.Find 复用 ToolPathLookup.Find，来源显示不变；ToSpec(Workspace) 复用 Workspace 隐式转换。失败行为：仅跳过日志写入失败，工具退出、输出解析、Fatal 与真实取消继续按端口约定传播。验收边界为用户指定的工具调用与定位端口、旧 Core 显示与转换入口；补公开端口回归，保留所有现有用例，错误码预期仅同步本次明确要求的精确值，其余断言不放宽。完整本地受控 13 套件和真实 integration 121/121、media-drop-real 37/37 与基准一致后，pull --rebase、推送并确认 CI。按已接受 ADR-0001 实施，不修改 ADR，不开始 3c。
+
+实际验证（2026-10-14，Asia/Shanghai；命令在 desktop/ 执行）：601 → 613，原 601 用例保留，新增 12（Infrastructure 日志失败及 Fatal 保留 7、Core 来源显示 3、Application 新码构造白名单 2）。既有超时与工具缺失用例仅把泛化错误码同步为本次明确要求的精确值，新增完整 Message 相等断言，原 InnerException / message 内容断言保留；未删除、跳过或放宽任何现有用例。架构 194 不变，Smoke 与 ADR 无修改。受控 13/13、656/656，两项真实对照严格相等。TDD 证据：日志 7 项先失败后通过，超时 1 项和工具缺失 1 项分别先失败后通过；来源与旧转换在收敛前后均通过。日志位于 `artifacts/arch-corrections/3b-adapter-fix/`。
+
+| 实际命令 | 结果 |
+|---|---|
+| `dotnet restore MuxDeck.sln --locked-mode` | 11/11 |
+| `dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false` | 0 警告 / 0 错误 |
+| `dotnet test MuxDeck.sln --no-build -c Release` | 613/613（Domain 298、Application 29、Core 40、Architecture 194、Infrastructure 52）；失败/跳过 0 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release` | 28/28 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-policy` | 57/57 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-round1` | 89/89 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --single-mux-ui-round1` | 176/176 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --workbench-ui` | 38/38 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --input-feedback` | 24/24 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop` | 25/25 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --environment-ui` | 23/23 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --components` | 31/31 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-ui` | 37/37 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all` | 41/41 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall` | 26/26 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-ui` | 61/61 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --integration` | 121/121 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop-real` | 37/37 |
+
+真实 [integration 报告](../../artifacts/phase1/20261014-011113-5f2f6effc5eb4bf2a3b3ecf0a8aaf7a8/report.json)与 [media-drop-real 报告](../../artifacts/automatic-drop/real-4b4aeedca72f4f21bcfce2bd3c730341/report.json)分别 121/121、37/37，失败 0；工具版本继续为 MKVToolNix 100.0、FFmpeg 8.1.1、AFS 2.1.1、fontTools 4.61.1、Python 3.12.10。实现独立提交使用指定标题，推送后核对对应 SHA 的 Desktop CI，并补录链接。
+
 ## 发现的旧缺陷
 
 （已修复：修正 A；提交 c636e91，Desktop CI 38383347658 已通过。以下保留发现背景。）`Desktop/App.axaml.cs` 将未限定的 `Application` 用作 Avalonia 基类；当目标程序集首次包含 `MuxDeck.Application` 命名空间的业务类型时，编译器会优先解析同名命名空间并报 CS0118。首个反例因此未计为架构护栏验收，改用独立禁止命名空间后两条护栏均确认失败。1b 只定义 `MuxDeck.Contracts`，没有触发该冲突；该缺陷已由修正 A 的 c636e91 修复，并经临时同名类型与完整 CI 验证。

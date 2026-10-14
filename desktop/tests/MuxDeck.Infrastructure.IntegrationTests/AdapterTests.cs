@@ -156,7 +156,8 @@ public sealed class AdapterTests
         await using var fixture = await TestWorkspace.Create();
         var failure = await Assert.ThrowsAsync<ToolFailureException>(() => new ToolExecutor(new ChildToolRunner("wait")).RunAsync(
             "mkvmerge.exe", ["-J", fixture.Input], fixture.Workspace.WorkDirectory, null, TestContext.Current.CancellationToken, TimeSpan.FromMilliseconds(500)));
-        Assert.Equal(ErrorCodes.ToolExitFailed, failure.Code);
+        Assert.Equal("MUX_TOOL_TIMEOUT", failure.Code);
+        Assert.Equal("工具 mkvmerge.exe 超时（00:00:00.5000000）。", failure.Message);
         Assert.IsType<TimeoutException>(failure.InnerException);
     }
 

@@ -34,8 +34,8 @@ public static class LegacyMuxContractConverter
     public static MuxJobSpec ToSpec(MuxRequest request, Workspace workspace)
     {
         ArgumentNullException.ThrowIfNull(workspace);
-        return ToSpec(request, new ToolConfiguration(workspace.ToolsDirectory, workspace.TaskLogsDirectory,
-            workspace.TaskCacheDirectory, workspace.FontToolsDirectoryOverride));
+        ToolConfiguration tools = workspace;
+        return ToSpec(request, tools);
     }
 
     public static MuxJobSpec ToSpec(MuxRequest request, ToolConfiguration tools)
