@@ -102,7 +102,7 @@ public sealed class PortFailureBoundaryTests
             item.Declaration.Contains("public interface " + name, StringComparison.Ordinal) &&
             Regex.IsMatch(item.Declaration, @"\b" + name + @"\b")).Document.Elements("exception"));
         foreach (var method in type.GetMethods().Where(method => !method.IsSpecialName))
-            AssertFailureDocumentation(Assert.Single(documents, item =>
+            AssertFailureDocumentation(type, Assert.Single(documents, item =>
                 Regex.IsMatch(item.Declaration, @"\b" + method.Name + @"\s*\(")).Document);
         foreach (var property in type.GetProperties())
             Assert.Empty(Assert.Single(documents, item =>
@@ -123,13 +123,30 @@ public sealed class PortFailureBoundaryTests
         type.HasElementType && ContainsFinalArtifact(type.GetElementType()!) ||
         type.IsGenericType && type.GetGenericArguments().Any(ContainsFinalArtifact);
 
-    private static void AssertFailureDocumentation(XElement document)
+    private static void AssertFailureDocumentation(Type port, XElement document)
     {
         var failure = Assert.Single(document.Elements("exception"),
             item => item.Attribute("cref")?.Value == nameof(ToolFailureException));
-        Assert.Contains("工具退出码异常", failure.Value);
-        Assert.Contains("输出解析失败", failure.Value);
-        Assert.Contains("Fatal", failure.Value);
+        if (port == typeof(IMuxInputReader) || port == typeof(IMuxEvidenceReader) ||
+            port == typeof(IArtifactPublisher) || port == typeof(ITaskWorkspaceFactory) || port == typeof(ITaskWorkspace))
+        {
+            Assert.Contains("读写失败", failure.Value);
+            Assert.Contains("ErrorCodes.WorkspaceIoFailed", failure.Value);
+            Assert.Contains("原始原因", failure.Value);
+            Assert.DoesNotContain("工具退出码", failure.Value);
+        }
+        else if (port == typeof(IToolCatalog))
+        {
+            Assert.Contains("无法定位", failure.Value);
+            Assert.Contains("ErrorCodes.ToolNotFound", failure.Value);
+            Assert.Contains("原始原因", failure.Value);
+        }
+        else
+        {
+            Assert.Contains("工具退出码异常", failure.Value);
+            Assert.Contains("输出解析失败", failure.Value);
+            Assert.Contains("Fatal", failure.Value);
+        }
         var cancelled = Assert.Single(document.Elements("exception"),
             item => item.Attribute("cref")?.Value == nameof(OperationCanceledException));
         Assert.Contains("取消", cancelled.Value);

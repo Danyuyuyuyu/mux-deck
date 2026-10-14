@@ -72,16 +72,7 @@ public sealed class AfsSubsetter(IMuxToolRunner? runner = null, IToolCatalog? ca
             intrinsicProofs[needed.Token] = new AssGlyphValidator.IntrinsicFaceProof(
                 needed.OriginalName, sourceFont, metadataXml);
         }
-        var counts = warnings.ToDictionary(item => (item.Code, item.Message), item => item.Occurrences);
-        try { AssGlyphValidator.Validate(usage, xmlFiles, warnings, intrinsicProofs); }
-        finally
-        {
-            foreach (var item in warnings)
-            {
-                var additional = item.Occurrences - counts.GetValueOrDefault((item.Code, item.Message));
-                if (additional > 0) context.DiagnosticProgress?.Report(item with { Occurrences = additional });
-            }
-        }
+        AssGlyphValidator.Validate(usage, xmlFiles, warnings, intrinsicProofs, context.DiagnosticProgress);
         return new FontSubsetResult(new(fixedAss), generated.Select(path => new WorkFile(path)).ToEquatableArray(), new(warnings));
     });
 

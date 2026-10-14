@@ -238,8 +238,8 @@
 | [2c · `90fea6b`](https://github.com/Danyuyuyuyu/mux-deck/commit/90fea6b02e421105cd3c7bdb45c69c4c69d1df8e) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38400687784) | restore 10/10；Release 0 警告 / 0 错误；test 427/427；受控 13/13、656/656；warning-policy 57/57 | DiagnosticPolicy、OutputQcRules、AssDocument 已落位；新增 Domain 76、架构 3；原 348 保留，白名单未变。 |
 | [3a · `da0f334`](https://github.com/Danyuyuyuyu/mux-deck/commit/da0f3342f2b50bccfdcf31f19212ee3bb63e9f91) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38406784353) | locked restore 10/10；Release 0 警告 / 0 错误；test 485/485；受控 13/13、656/656；warning-policy 57/57 | 九个 Application 业务端口；Domain 统一 MediaTrackInfo，删除重复 TrackQcFacts；新增 29，原 456 全部保留；详见 3a 实施与验证。 |
 | [3b · `a2b76d9`](https://github.com/Danyuyuyuyu/mux-deck/commit/a2b76d9588646265bfab68d0521928c8f881f94c) + [修正 · `d99781b`](https://github.com/Danyuyuyuyu/mux-deck/commit/d99781b5cb44ac4c2279d90225dd6412ba7d92b7) | 已完成，已推送，[修正 Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38494664905) | locked restore 11/11；Release 0 警告 / 0 错误；test 613/613；受控 13/13、656/656；真实 integration 121/121、media-drop-real 37/37 | 依用户批准保留 Desktop 直接依赖；Core → Infrastructure 过渡；初始新增 47，本次新增 12，原 601 保留。 |
-| 3c · 7c9a477 | 完整验收通过，仅发布审查分支；主分支待用户确认 | restore 11/11；Release 0/0；test 675/675；受控 13/13、656/656 | 与 3d 共计 15/15 对照一致；见工具不确定性授权记录。 |
-| 3d | 完整验收通过，仅发布 review/3c-3d；主分支待用户确认 | restore 11/11；Release 0/0；test 676/676；受控 656/656；真实 238/238；对照 15/15；脚本反例 22/22 | 旧/旧来源复核及新规则 10/10；所有 15 项一致，原始报告保留；见工具不确定性授权记录。 |
+| 3c · 7c9a477 + 结构化结果修正 | 完整验收通过，仅发布审查分支；主分支待用户确认 | 初验 test 675/675；本次 restore 11/11、Release 0/0、test 717/717；受控 656/656；真实 238/238 | 本次新增 41，原 676 保留；15/15 对照一致；见结构化结果修正实际验证。 |
+| 3d | 完整验收通过，仅发布 review/3c-3d；主分支待用户确认 | 初验 test 676/676；结构化修正 test 717/717；restore 11/11；Release 0/0；受控 656/656；真实 238/238；对照 15/15；脚本反例 22/22 | 旧/旧来源复核及新规则 10/10；所有 15 项一致，原始报告保留；见工具不确定性授权记录。 |
 | 3e | 未开始 | | |
 | 4a | 未开始 | | |
 | 4b | 未开始 | | |
@@ -910,3 +910,87 @@ python -X utf8 ./scripts/Test-AfsEvidence.py --source artifacts/arch-corrections
 [15 项总摘要](../../artifacts/arch-corrections/3d-afs-proof/summary-all15.json)。首轮完整电影的旧入口在 NoOverwritePublisher.CopyToAsync 遇到 I/O 设备错误，源输入哈希保持，未生成可比较成品；[首次失败结果](../../artifacts/arch-corrections/3d-afs-approved-paired/movie-complete/baseline-result.json)和 task.log 保留。只在新目录重复电影输入，旧、新入口均成功，随后全部十组比较一致；其他 14 项未重跑或覆盖。电影重试的实际命令与前述命令相同，仅 CaseManifest 为 `artifacts/arch-corrections/3d-afs-proof/movie-retry-cases.json`、EvidenceDirectory 为 `artifacts/arch-corrections/3d-afs-approved-movie-retry`。
 
 全部验收通过后，把本次脚本与文档并入尚未推送的 3d 提交，继续保持 3c / 3d 两个提交；仅发布 [review/3c-3d](https://github.com/Danyuyuyuyu/mux-deck/tree/review/3c-3d) 供审查，不向 v2/avalonia-rewrite 推送、不 pull --rebase。主分支仍等用户确认；确认后按已批准顺序 pull --rebase、推送主分支、确认 Desktop CI、删除临时分支。
+
+
+### 3c 结构化结果修正遗留问题
+
+用户指定：ToolCallContext.SubtitleIndex 和端口上的 index 参数本次保持原样，第 5 步统一处理索引的业务表达与过渡兼容；不在本次修正中更改它们的数值、含义或调用行为。
+
+
+### 3c 结构化结果修正实际验证（2026-10-14）
+
+按已接受 ADR-0001 及用户本次要求，追加 `refactor(desktop): [3c] 结构化结果修正`，仅发布 review/3c-3d 供审查，主分支等待用户确认。
+
+- CheckResult / JobFailure / JobProgress 用强类型字段表达序号、数量、轨道 ID、名称、传统/IETF 语言、旗标、SHA-256、失败路径和诊断列表，不再编码 JSON 事实；删除 ReadTrackCheck 与转换层全部 JsonSerializer.Deserialize。每类轨道 QC 检查和拒绝使用独立码。
+- 用例自己的输入、计划和 QC 拒绝使用内部 MuxRuleFailureException，结果 Message=null；端口失败保留原 Code / Message / Detail。IToolReadiness 的字体后端缺失使用 MUX_FONT_BACKEND_NOT_FOUND，旧文案由此码选择，不匹配工具名称后缀。
+- 用例诊断只合并 DiagnosticProgress 回调，返回诊断仅为直接端口调用者的快照；字体提示在产生处报告，删去事后倒扣/补偿。测试证明失败前提示保留且回调/快照不会重复累计。文件端口 XML 写明实际文件/字幕结构失败，XML 检查同步区分文件与工具边界；依赖、不可变数据、唯一失败类型和取消断言保持。
+- 原 676 项保留，新增 41：Application 用例 14 + 集中错误码 9，Core 转换 13，Infrastructure 就绪检查 5。历史公开 TrackQcFailed 常量及原验证仍保留，新用例只生成各类独立码。Desktop、Smoke、诊断白名单、基准、对照脚本与 ADR 均无改动。SubtitleIndex / index 遗留处理见上一节，第 5 步执行。
+
+实际命令（工作目录 desktop）：
+```powershell
+dotnet restore MuxDeck.sln --locked-mode
+dotnet build MuxDeck.sln --no-restore -c Release -m:1 -nr:false -p:UseSharedCompilation=false
+dotnet test MuxDeck.sln --no-build -c Release
+```
+restore 11 个项目成功；Release 0 警告 / 0 错误；test 717/717、失败/跳过 0（Domain 298、Application 103、Core 54、Architecture 198、Infrastructure 64）。[通用验证输出](../../artifacts/arch-corrections/3c-structured-release/tests.txt)、[计数摘要](../../artifacts/arch-corrections/3c-structured-final/validation-summary.json)。最后仅校准文件端口 XML 的实际异常描述，补跑 `dotnet test tests/MuxDeck.Architecture.Tests --no-build -c Release --verbosity quiet`，198/198；随后再次执行上述严格 Release 构建与全量测试，仍为 0 警告 / 0 错误、717/717，见 [最终构建](../../artifacts/arch-corrections/3c-structured-final/build-final.txt)、[最终全量测试](../../artifacts/arch-corrections/3c-structured-final/tests-final.txt)。
+
+受控实际命令使用 `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release`，有参数时在末尾加 `-- <参数>`：
+
+| 参数 | 通过/总计 |
+|---|---|
+| 无参数 | 28/28 |
+| `--warning-policy` | 57/57 |
+| `--single-mux-round1` | 89/89 |
+| `--single-mux-ui-round1` | 176/176 |
+| `--workbench-ui` | 38/38 |
+| `--input-feedback` | 24/24 |
+| `--media-drop` | 25/25 |
+| `--environment-ui` | 23/23 |
+| `--components` | 31/31 |
+| `--component-install-ui` | 37/37 |
+| `--component-install-all` | 41/41 |
+| `--component-uninstall` | 26/26 |
+| `--component-uninstall-ui` | 61/61 |
+
+13/13 套件、656/656，全部等于基准；各输出位于 `artifacts/arch-corrections/3c-structured-release/`。
+
+六项真实实际命令：
+
+| 命令 | 通过/总计 |
+|---|---|
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --integration` | 121/121 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop-real` | 37/37 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --ui-integration E:\Video\mux-deck\desktop\artifacts\phase1\20261014-062839-8b4de1376c264f21ae2eab006662d653 artifacts/arch-corrections/3c-structured-final/ui.png` | 39/39 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --warning-synthetic-bold-real artifacts/runs/20261009-115919-18aeaf51f58d43e5a4b935b9ce8b8f5b/task.log` | 9/9 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-install-all-real` | 15/15 |
+| `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --component-uninstall-real artifacts/arch-corrections/real-baseline/packages` | 17/17 |
+
+真实合计 238/238、失败 0，电影 SyntheticBoldExpected=true；工具 MKVToolNix 100.0、FFmpeg 8.1.1-full_build、AFS 2.1.1、fontTools 4.61.1、Python 3.12.10，[实际版本](../../artifacts/arch-corrections/3c-structured-final/tool-versions.json)。安装包 MKV 101.0 / FFmpeg 8.1.1-essentials / AFS 2.1.1；卸载固定缓存 `artifacts/arch-corrections/real-baseline/packages`。各计数记录为 `artifacts/arch-corrections/real-baseline/3c-structured-final-*-summary.json`；[安装报告](../../artifacts/arch-corrections/3c-structured-final/component-install-all-real-report.json)、[卸载报告](../../artifacts/arch-corrections/3c-structured-final/component-uninstall-real-report.json)。
+
+新旧对照实际命令：
+```powershell
+./scripts/Run-ArchComparison.ps1 -BaselineRoot 'C:/Users/ZhenXun/.codex/worktrees/arch-3c3d-baseline/mux-deck' -CurrentRoot 'E:/Video/mux-deck' -CaseManifest 'artifacts/arch-corrections/3d-resume/comparison-cases.json' -EvidenceDirectory 'artifacts/arch-corrections/3c-structured-paired' -Mkvmerge 'C:/Program Files/MKVToolNix/mkvmerge.exe' -Mkvextract 'C:/Program Files/MKVToolNix/mkvextract.exe'
+```
+14 项已完整通过；电影首轮旧入口成功，但执行会话中断，新入口没有结果/对照报告，任务日志停在封装写入阶段。原输出和日志保留，不将中断认定为差异；只在新目录以相同脚本、输入与工具重跑电影。重跑命令参数仅将 CaseManifest 换为 `artifacts/arch-corrections/3c-structured-final/movie-retry-cases.json`、EvidenceDirectory 换为 `artifacts/arch-corrections/3c-structured-movie-retry`。未更改脚本或基准。
+
+最终 15/15 项、150/150 组一致；沿用已批准的 AFS 不确定性处理，其余轨道、音频 fullraw、检查项、告警、进度、输入与工具仍严格比较，不比较整个 MKV 哈希。
+
+| 套件 | 成品输入 | 结果 |
+|---|---|---|
+| integration | single-sc | [一致](../../artifacts/arch-corrections/3c-structured-paired/integration-single-sc/comparison.json) |
+| integration | dual-sc-tc | [一致](../../artifacts/arch-corrections/3c-structured-paired/integration-dual-sc-tc/comparison.json) |
+| integration | tc-only | [一致](../../artifacts/arch-corrections/3c-structured-paired/integration-tc-only/comparison.json) |
+| integration | mp4-to-mkv | [一致](../../artifacts/arch-corrections/3c-structured-paired/integration-mp4-to-mkv/comparison.json) |
+| integration | cancel-at-completed | [一致](../../artifacts/arch-corrections/3c-structured-paired/integration-cancel-at-completed/comparison.json) |
+| media-drop-real | srt-only | [一致](../../artifacts/arch-corrections/3c-structured-paired/media-drop-real-srt-only/comparison.json) |
+| media-drop-real | audio-only | [一致](../../artifacts/arch-corrections/3c-structured-paired/media-drop-real-audio-only/comparison.json) |
+| media-drop-real | multi-audio | [一致](../../artifacts/arch-corrections/3c-structured-paired/media-drop-real-multi-audio/comparison.json) |
+| media-drop-real | multi-srt | [一致](../../artifacts/arch-corrections/3c-structured-paired/media-drop-real-multi-srt/comparison.json) |
+| media-drop-real | multi-ass | [一致](../../artifacts/arch-corrections/3c-structured-paired/media-drop-real-multi-ass/comparison.json) |
+| media-drop-real | mixed | [一致](../../artifacts/arch-corrections/3c-structured-paired/media-drop-real-mixed/comparison.json) |
+| ui-integration | single-ass | [一致](../../artifacts/arch-corrections/3c-structured-paired/ui-integration-single-ass/comparison.json) |
+| ui-integration | sc-tc | [一致](../../artifacts/arch-corrections/3c-structured-paired/ui-integration-sc-tc/comparison.json) |
+| ui-integration | tc-only | [一致](../../artifacts/arch-corrections/3c-structured-paired/ui-integration-tc-only/comparison.json) |
+| movie | complete | [一致](../../artifacts/arch-corrections/3c-structured-movie-retry/movie-complete/comparison.json) |
+
+[15 项总报告](../../artifacts/arch-corrections/3c-structured-final/summary-all15.json)。脚本反例命令 `python -X utf8 ./scripts/Test-AfsEvidence.py --source artifacts/arch-corrections/3d-afs-proof/raw-comparison.json -v`，22/22、失败/跳过 0，[输出](../../artifacts/arch-corrections/3c-structured-final/comparison-counter-tests.txt)。审查分支 Desktop CI 的实际结果见交付回报；主分支推送继续等待用户确认。

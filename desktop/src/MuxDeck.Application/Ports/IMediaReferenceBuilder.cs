@@ -4,7 +4,7 @@ using MuxDeck.Application.Ports.Failures;
 
 namespace MuxDeck.Application.Ports;
 
-/// <summary>单任务业务边界 IMediaReferenceBuilder。</summary>
+/// <summary>生成同工具往返的字幕容器和选定音轨参考容器，供全文与 fullraw 校验。</summary>
 public interface IMediaReferenceBuilder
 {
     /// <summary>使用同工具建立字幕 transport 参考容器。</summary>

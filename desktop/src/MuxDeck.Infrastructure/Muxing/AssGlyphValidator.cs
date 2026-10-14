@@ -31,7 +31,8 @@ public static partial class AssGlyphValidator
     }
 
     public static void Validate(Dictionary<FontFace, HashSet<int>> usage, IReadOnlyList<string> xmlFiles,
-        List<Diagnostic>? warnings = null, IReadOnlyDictionary<string, IntrinsicFaceProof>? intrinsicProofs = null)
+        List<Diagnostic>? warnings = null, IReadOnlyDictionary<string, IntrinsicFaceProof>? intrinsicProofs = null,
+        IProgress<Diagnostic>? diagnosticProgress = null)
     {
         var fonts = new Dictionary<FontFace, HashSet<int>>();
         var candidates = ReadCandidates(xmlFiles);
@@ -81,11 +82,11 @@ public static partial class AssGlyphValidator
             if (synthetic is not null && warnings is not null)
             {
                 var message = $"字体“{synthetic.SourceName}”需要播放器合成粗体；其所用字形已核验。";
-                AddWarning(warnings, "FONT_SYNTHETIC_BOLD", message);
+                AddWarning(warnings, "FONT_SYNTHETIC_BOLD", message, diagnosticProgress);
             }
             if (intrinsic is not null && warnings is not null)
                 AddWarning(warnings, "FONT_INTRINSIC_WEIGHT",
-                    $"字体“{Path.GetFileName(intrinsic.SourceFontPath)}”已明确指定固有粗体字重；保留其原有字形，未额外合成粗体。");
+                    $"字体“{Path.GetFileName(intrinsic.SourceFontPath)}”已明确指定固有粗体字重；保留其原有字形，未额外合成粗体。", diagnosticProgress);
         }
     }
 
@@ -171,11 +172,13 @@ public static partial class AssGlyphValidator
         .Replace(" ", ""), 2);
     private static int? ReadWeight(XDocument xml) => int.TryParse(xml.Descendants("usWeightClass")
         .SingleOrDefault()?.Attribute("value")?.Value, out var weight) ? weight : null;
-    private static void AddWarning(List<Diagnostic> warnings, string code, string message)
+    private static void AddWarning(List<Diagnostic> warnings, string code, string message, IProgress<Diagnostic>? diagnosticProgress)
     {
         var index = warnings.FindIndex(warning => warning.Code == code && warning.Message == message);
         if (index < 0) warnings.Add(new Diagnostic(code, DiagnosticSeverity.Warning, message, 1));
         else warnings[index] = warnings[index] with { Occurrences = checked(warnings[index].Occurrences + 1) };
+        // 在产生提示时报告一次新增量；后续字形失败不丢提示，也无需事后倒扣计数。
+        diagnosticProgress?.Report(new(code, DiagnosticSeverity.Warning, message));
     }
 
     // libass 兼容旧字体的 1–9 字重编码；其余使用 OpenType 数值。

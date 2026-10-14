@@ -23,7 +23,7 @@ public sealed class ContractValueEqualityTests
     public void Separately_created_results_with_identical_content_are_equal()
     {
         MuxJobResult Create() => new(MuxJobStatus.Failed, [],
-            [new("check", CheckStatus.NotEvaluated, null, null, "原文")],
+            [new("check", CheckStatus.NotEvaluated) { LegacyText = "原文" }],
             [new("warning", DiagnosticSeverity.Warning, "消息", 2)],
             new("failure", JobStage.Unknown, "原因"), new("log"));
         var first = Create();

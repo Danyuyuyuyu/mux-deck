@@ -62,9 +62,11 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 - 只依赖 `System.*` 与 `MuxDeck.Domain`。`TrackKind`、`LanguageTag`、`TrackFlags` 等值类型归 Domain，由契约引用。
 - 只含不可变 record、枚举和用例接口（错误码常量允许 static class）；不含读写文件、调用服务或依赖当前时间的逻辑。
 - 类型全部 `public`，不以 `InternalsVisibleTo` 访问内部成员，不暴露 Application 内部类型（如任务临时目录）。
-- 结果结构化：成败用枚举表达；检查项为 `CheckResult(Code, Status, Subject, Expected, Actual)`；失败为 `JobFailure(Code, Stage, Message, Detail)`。界面不解析文案或日志判断成败。
+- 结果结构化：成败用枚举表达；检查项由 `CheckResult(Code, Status)` 及强类型事实字段表达；失败由 `JobFailure(Code, Stage, Message, Detail)` 及失败对象字段表达。界面不解析文案或日志判断成败。
 - 工具诊断码以[工具诊断分类](diagnostics.md)为唯一来源；任务错误码集中定义在 `Contracts/ErrorCodes.cs`。
 - 任务阶段 `JobStage` 只含单任务阶段；组件检测、安装、卸载使用组件契约自己的阶段。
+- CheckResult 直接携带 Sequence、Count、TrackId、Name、Language / LanguageIetf、TrackFlags 与 ExpectedHash / ActualHash；JobFailure 以 Sequence / Path 表达失败对象，Detail 仅保留原始原因，禁止用 JSON 字符串编码事实。JobProgress 的 Sequence / Total 表达子集化序号/总数，Diagnostics 为 EquatableArray<Diagnostic>，不保留 JSON Detail。旧结果向新契约转换的无法重建事实的原文只存 LegacyText。
+- 每种轨道 QC 检查使用独立的 QC_RETAINED_VIDEO、QC_RETAINED_AUDIO、QC_SUBTITLE_TRACK、QC_ADDED_AUDIO_TRACK；对应失败码为 MUX_VIDEO_COUNT_MISMATCH、MUX_AUDIO_COUNT_MISMATCH、MUX_VIDEO_METADATA_MISMATCH、MUX_AUDIO_METADATA_MISMATCH、MUX_DURATION_MISMATCH、MUX_SUBTITLE_COUNT_MISMATCH、MUX_SUBTITLE_METADATA_MISMATCH、MUX_ADDED_AUDIO_METADATA_MISMATCH。用例自己的输入、计划与 QC 拒绝由 Application 内部 MuxRuleFailureException 表达，输出 JobFailure.Message=null；端口失败保留 ToolFailureException 原始 Code / Message / Detail。
 - 改变契约属于接口变更，在同一改动中更新调用方、本节与契约相关测试。
 
 目标契约与迁移前对应：
@@ -85,9 +87,9 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 - 输入契约 `InputItem.Kind` 直接使用 Domain 的 `InputLocationKind`（LocalFile / LocalDirectory / NonLocal / Unknown）；不在 Contracts 中重复定义输入位置枚举。Desktop 的旧候选类型暂由边界映射，随草稿迁移处理。
 - Domain 已定义 `TrackKind`、`LanguageTag`、`TrackFlags`、`TrackId`。语言值保留原字符串（含空值和传统/IETF 标签），1b 不引入规范化或匹配规则。
 - `Contracts/` 已定义单任务规格/结果/进度、媒体探测、导入计划、组件操作及协调器接口。集合统一使用 Domain 的 `EquatableArray<T>`（只读包装 ImmutableArray，按元素比较相等与哈希，default 视为空），仅保存数据；导入会话由调用方提供 ID 与修订号，不暴露 ViewModel 或 Application 内部对象。组件阶段独立于 `JobStage`，协调器目前只有契约，没有实现。
-- `MuxJobSpec.Tools` 显式携带工具、日志、缓存及独立 fonttools 后端配置；Core 的 `Muxing/LegacyMuxContractConverter.cs` 提供 `ToSpec(MuxRequest, Workspace/ToolConfiguration)`、`ToLegacyRequest(MuxJobSpec)` 与 `ToResult(MuxResult)`。旧请求与结果入口尚未接入这些转换，保持原行为；3a 新增 ToTrackInfo / ToProbeResult 纯转换，旧 QC 边界已调用 ToTrackInfo。
+- `MuxJobSpec.Tools` 显式携带工具、日志、缓存及独立 fonttools 后端配置；Core 的 `Muxing/LegacyMuxContractConverter.cs` 提供 `ToSpec(MuxRequest, Workspace/ToolConfiguration)`、`ToLegacyRequest(MuxJobSpec)` 与 `ToResult(MuxResult)`。3d 的旧 SingleMuxService 已通过转换调用新用例；ToResult 仍用于显式转换历史旧结果，保持原字段含义。3a 新增 ToTrackInfo / ToProbeResult 纯转换，旧 QC 边界已调用 ToTrackInfo。
 - 旧请求的字幕与音频各自保留顺序，新规格先列字幕、再列音频；空输出名与 null 分别原样往返。旧模型无法表达的源轨选择、跨类型交错顺序、字幕来源轨号或无来源轨号的音频，转换回旧请求时明确拒绝，不丢弃字段。
-- 旧检查文本使用唯一过渡码 `ErrorCodes.LegacyCheck`（`MUX_LEGACY_CHECK`），原文完整保存在 `CheckResult.Actual`，状态为 `NotEvaluated`，不根据文案判定成败；旧失败码为 `MUX_LEGACY_FAILURE`，取消码为 `MUX_CANCELLED`。旧结果未记录失败阶段，暂为 `JobStage.Unknown`。上述过渡检查/失败映射在第 3 步替换为真实结构化信息。
+- 旧检查文本使用唯一过渡码 `ErrorCodes.LegacyCheck`（`MUX_LEGACY_CHECK`），原文完整保存在 `CheckResult.LegacyText`，状态为 `NotEvaluated`，不根据文案判定成败；旧失败码为 `MUX_LEGACY_FAILURE`，取消码为 `MUX_CANCELLED`。旧结果未记录失败阶段，暂为 `JobStage.Unknown`。旧入口调用新用例时使用真实阶段与结构化信息；上述过渡映射仅用于显式 ToResult 历史转换。
 - 旧 warnings 的 code、message、出现次数及顺序原样转换；成品、日志路径及 nullable 失败消息保留。工具诊断白名单仍只由 `diagnostics.md` 维护。契约的 public、归属、依赖、不可变数据与无友元程序集规则由架构测试检查；除 string 外公开集合只能是 EquatableArray<T>，拒绝其他集合及可写 setter，static 常量类豁免数据形状检查；依赖与可见性两条护栏已通过本地故意违反确认。
 
 ## 职责与落位
@@ -110,8 +112,10 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 
 - 只在真实外部边界建立端口：外部工具、进程、文件落位、下载、持久化、时间与 ID。名称表达业务能力（如 `IFontSubsetter`），不建通用仓储、事件总线、中介者或万能任务接口。
 - 端口接口定义在 Application，实现位于 Infrastructure，测试替身位于测试项目。
-- Application/Ports/Failures 的 ToolFailureException(Code, Message, Detail) 是端口统一失败类型：工具退出码异常、输出解析失败或出现 Fatal 级诊断都抛该类型；取消抛 OperationCanceledException。XML 失败与取消约定只写在执行外部工具或文件操作的方法上；接口类型与只读属性不重复声明。当前失败码集中在 Contracts.ErrorCodes（MUX_TOOL_TIMEOUT、MUX_TOOL_NOT_FOUND、MUX_TOOL_EXIT_FAILED、MUX_TOOL_OUTPUT_INVALID、MUX_TOOL_FATAL_DIAGNOSTIC、MUX_TARGET_ALREADY_EXISTS、MUX_WORKSPACE_IO_FAILED），构造拒绝未知码，并支持保留 InnerException；不另立诊断白名单，Detail 保留原始原因。
+- Application/Ports/Failures 的 ToolFailureException(Code, Message, Detail) 是端口统一失败类型：工具退出码异常、输出解析失败或出现 Fatal 级诊断都抛该类型；取消抛 OperationCanceledException。XML 失败与取消约定只写在执行外部工具或文件操作的方法上，纯文件方法明确描述路径规范化、复制、目录创建或读写失败（MUX_WORKSPACE_IO_FAILED），不声称调用工具；接口类型与只读属性不重复声明。当前失败码集中在 Contracts.ErrorCodes（MUX_TOOL_TIMEOUT、MUX_TOOL_NOT_FOUND、MUX_TOOL_EXIT_FAILED、MUX_TOOL_OUTPUT_INVALID、MUX_TOOL_FATAL_DIAGNOSTIC、MUX_TARGET_ALREADY_EXISTS、MUX_WORKSPACE_IO_FAILED），构造拒绝未知码，并支持保留 InnerException；不另立诊断白名单，Detail 保留原始原因。
 - ToolCallContext 工具调用中的命令与 stdout/stderr 日志采用尽力写入：日志写入失败跳过，不改变工具结果，也不跳过 Fatal 分类；直接调用 ITaskWorkspace.WriteLogAsync 仍按文件端口约定抛失败，实际工具取消仍传播 OperationCanceledException。超时使用 MUX_TOOL_TIMEOUT，ToolCatalog 定位缺失使用 MUX_TOOL_NOT_FOUND，Message 保留原文案。
+- IMuxInputReader 收集输入/目标文件事实与字幕原文；IMuxEvidenceReader 管理 SRT 副本和提取证据，读取大小、全文和 SHA-256；IMediaReferenceBuilder 建立同工具往返参考。IToolReadiness 对缺少 pyftsubset 或 ttx 能力使用 MUX_FONT_BACKEND_NOT_FOUND，转换层按此码选择旧文案，不匹配消息末尾。
+- 用例诊断仅从 ToolCallContext.DiagnosticProgress 合并；端口在诊断产生时报告新增次数，即使之后失败也保留。FontSubsetResult / MediaMuxResult 中的 Diagnostics 是直接端口调用者的快照，用例不重复合并它们；字形提示在产生处报告，不做事后计数倒扣。实时与最终工具流复核仍由收集器去重，诊断白名单不变。
 - 中间文件使用 Application/Ports 的 WorkFile(Path)：修正字幕、子集字体、提取目标与临时封装产物都不使用 OutputArtifact。IArtifactPublisher 接受 WorkFile，只有不覆盖发布成功才返回 Contracts.OutputArtifact，作为交给界面的最终成品。失败异常按 Exception 专门检查，所有端口数据继续为不可变 record/EquatableArray；既有 Contracts 与 Ports 数据护栏保持不变。
 - `IMuxToolRunner` 已随 3b 迁入 Infrastructure；Core 过渡引用与原有 Smoke 注入仍需 public 可见性，后续入口迁移完成后成为 Infrastructure 内部依赖。`--warning-policy` 等依赖它的回归改为替换工具端口后再收紧其可见性。
 

@@ -131,13 +131,13 @@ public sealed class LegacyMuxContractConverterTests
             "task.log", text) { Warnings = warnings };
         var converted = LegacyMuxContractConverter.ToResult(result);
         Assert.Equal(status, converted.Status);
-        Assert.Equal(text, converted.Checks.Select(check => check.Actual));
+        Assert.Equal(text, converted.Checks.Select(check => check.LegacyText));
         Assert.All(converted.Checks, check =>
         {
             Assert.Equal(ErrorCodes.LegacyCheck, check.Code);
             Assert.Equal(CheckStatus.NotEvaluated, check.Status);
-            Assert.Null(check.Subject);
-            Assert.Null(check.Expected);
+            Assert.Null(check.Sequence);
+            Assert.Null(check.ExpectedHash);
         });
         Assert.Equal(warnings.Select(w => (w.Code, w.Message, w.Occurrences)),
             converted.Diagnostics.Select(d => (d.Code, d.Message, d.Occurrences)));
@@ -177,7 +177,7 @@ public sealed class LegacyMuxContractConverterTests
             { Warnings = warnings });
         checks.Clear();
         warnings.Clear();
-        Assert.Equal("检查原文  ", Assert.Single(converted.Checks).Actual);
+        Assert.Equal("检查原文  ", Assert.Single(converted.Checks).LegacyText);
         Assert.Equal(2, Assert.Single(converted.Diagnostics).Occurrences);
     }
 

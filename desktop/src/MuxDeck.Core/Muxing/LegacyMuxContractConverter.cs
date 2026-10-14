@@ -102,8 +102,7 @@ public static class LegacyMuxContractConverter
                 JobStage.Unknown, result.Error);
         return new MuxJobResult(status,
             result.OutputPath is { } output ? [new OutputArtifact(output)] : [],
-            result.Checks.Select(text => new CheckResult(ErrorCodes.LegacyCheck, CheckStatus.NotEvaluated,
-                null, null, text)).ToEquatableArray(),
+            result.Checks.Select(text => new CheckResult(ErrorCodes.LegacyCheck, CheckStatus.NotEvaluated) { LegacyText = text }).ToEquatableArray(),
             result.Warnings.Select(warning => new Diagnostic(warning.Code, DiagnosticSeverity.Warning,
                 warning.Message, warning.Occurrences)).ToEquatableArray(),
             failure, result.LogPath is { } log ? new LogRef(log) : null);
@@ -131,13 +130,11 @@ public static class LegacyMuxContractConverter
     {
         if (value.StepCode == "SUBSET_ITEM")
         {
-            var counts = System.Text.Json.JsonSerializer.Deserialize<int[]>(value.Detail!)!;
-            return new(MuxStage.Subsetting, $"子集化字幕 {counts[0]}/{counts[1]}");
+            return new(MuxStage.Subsetting, $"子集化字幕 {value.Sequence}/{value.Total}");
         }
         if (value.StepCode == "SUBSET_DIAGNOSTICS")
         {
-            var warnings = System.Text.Json.JsonSerializer.Deserialize<Diagnostic[]>(value.Detail!)!;
-            return new(MuxStage.Subsetting, "子集化注意提示：" + string.Join("；", warnings.Select(w => $"{w.Message}（累计 {w.Occurrences} 次）")));
+            return new(MuxStage.Subsetting, "子集化注意提示：" + string.Join("；", value.Diagnostics.Select(w => $"{w.Message}（累计 {w.Occurrences} 次）")));
         }
         return value.Stage switch
         {
@@ -161,71 +158,56 @@ public static class LegacyMuxContractConverter
 
     private static string LegacyCheck(CheckResult check) => check.Code switch
     {
-        MuxCheckCodes.SubsetFonts => $"字幕 {check.Subject}：修正 ASS 与 {check.Actual} 个子集字体的引用、字形完整性通过",
-        MuxCheckCodes.Tracks => LegacyTrackQcText.Check(ReadTrackCheck(check.Actual!)),
-        MuxCheckCodes.Attachments => $"源字幕和附件已移除；{check.Actual} 个子集字体附件提取与 SHA-256 校验通过",
+        MuxCheckCodes.SubsetFonts => $"字幕 {check.Sequence}：修正 ASS 与 {check.Count} 个子集字体的引用、字形完整性通过",
+        MuxCheckCodes.RetainedVideo => $"保留 {check.Count} 条 video 轨：编码、尺寸/声道/采样率和轨道元数据一致",
+        MuxCheckCodes.RetainedAudio => $"保留 {check.Count} 条 audio 轨：编码、尺寸/声道/采样率和轨道元数据一致",
+        MuxCheckCodes.SubtitleTrack => $"新增字幕 {check.Sequence}（轨 ID {check.TrackId?.Value}）：{check.Name} / {(check.LanguageIetf ?? check.Language)?.Value} / default={check.Flags?.IsDefault} / forced={check.Flags?.IsForced}",
+        MuxCheckCodes.AddedAudioTrack => $"外加音频 {check.Sequence}（轨 ID {check.TrackId?.Value}）：编码、声道、采样率、名称、语言与旗标一致",
+        MuxCheckCodes.Attachments => $"源字幕和附件已移除；{check.Count} 个子集字体附件提取与 SHA-256 校验通过",
         MuxCheckCodes.Readable => "MKV 可探测，新增字幕提取后与同工具往返参考全文一致",
-        MuxCheckCodes.AudioPayload => $"外加音频 {check.Subject} 原始数据及 CodecPrivate SHA-256 一致",
-        _ => check.Actual ?? ""
+        MuxCheckCodes.AudioPayload => $"外加音频 {check.Sequence} 原始数据及 CodecPrivate SHA-256 一致",
+        _ => check.LegacyText ?? ""
     };
-
-    private static TrackQcCheck ReadTrackCheck(string json)
-    {
-        using var document = System.Text.Json.JsonDocument.Parse(json);
-        var root = document.RootElement;
-        var check = System.Text.Json.JsonSerializer.Deserialize<TrackQcCheck>(json)!;
-        if (check.Track is null) return check;
-        var track = root.GetProperty("Track");
-        return check with { Track = check.Track with {
-            Language = new(track.GetProperty("Language").GetProperty("Value").GetString()!),
-            LanguageIetf = track.GetProperty("LanguageIetf").ValueKind == System.Text.Json.JsonValueKind.Null ? null :
-                new LanguageTag(track.GetProperty("LanguageIetf").GetProperty("Value").GetString()!)
-        } };
-    }
 
     private static string LegacyFailure(JobFailure failure)
     {
         if (failure.Code == ErrorCodes.Cancelled) return "任务已取消";
-        if (!string.IsNullOrEmpty(failure.Message))
-        {
-            if (failure.Code == ErrorCodes.ToolNotFound && (failure.Message.EndsWith("pyftsubset", StringComparison.Ordinal) ||
-                failure.Message.EndsWith("ttx", StringComparison.Ordinal)))
-                return "找不到同目录的 pyftsubset 与 ttx，AFS 需要可运行的 fontTools 后端。";
-            return failure.Message;
-        }
-        string Text() => System.Text.Json.JsonSerializer.Deserialize<string>(failure.Detail!)!;
-        int Index() => System.Text.Json.JsonSerializer.Deserialize<int>(failure.Detail!);
+        if (failure.Code == ErrorCodes.FontBackendNotFound)
+            return "找不到同目录的 pyftsubset 与 ttx，AFS 需要可运行的 fontTools 后端。";
+        if (!string.IsNullOrEmpty(failure.Message)) return failure.Message;
         return failure.Code switch
         {
             ErrorCodes.InputEmpty => "至少需要一条启用的外加字幕或音频。",
             ErrorCodes.VideoMissing => "视频不存在",
-            ErrorCodes.FontsDirectoryMissing => "字体目录不存在：" + Text(),
+            ErrorCodes.FontsDirectoryMissing => "字体目录不存在：" + failure.Path,
             ErrorCodes.OutputDirectoryInvalid => "请使用与源视频不同的独立输出目录。",
             ErrorCodes.OutputNameInvalid => "输出文件名必须是有效的 MKV 文件名，不能包含目录。",
             ErrorCodes.OutputOverwritesSource => "输出不能覆盖源视频。",
-            ErrorCodes.SubtitleInputInvalid => "字幕必须是存在的 ASS/SRT 文件：" + Text(),
+            ErrorCodes.SubtitleInputInvalid => "字幕必须是存在的 ASS/SRT 文件：" + failure.Path,
             ErrorCodes.SubtitleLanguageInvalid => "字幕语言必须使用有效的语言代码或 BCP 47 标签。",
             ErrorCodes.SubtitleNameInvalid => "字幕轨名称无效。",
             ErrorCodes.AudioInputInvalid => "音频路径或 Track ID 无效。",
             ErrorCodes.AudioMetadataInvalid => "音频名称或语言无效。",
             ErrorCodes.SourceVideoMissing => "源文件没有视频轨。",
-            ErrorCodes.SourceAudioMissing => "外加音频 Track ID 不存在：" + Text(),
-            ErrorCodes.TargetAlreadyExists => "目标已存在，拒绝覆盖：" + Text(),
-            ErrorCodes.TrackQcFailed => LegacyTrackQcText.Failure(System.Text.Json.JsonSerializer.Deserialize<TrackQcFailure>(failure.Detail!)!),
+            ErrorCodes.SourceAudioMissing => "外加音频 Track ID 不存在：" + failure.Path,
+            ErrorCodes.TargetAlreadyExists => "目标已存在，拒绝覆盖：" + failure.Path,
+            ErrorCodes.VideoCountMismatch => "video 轨数量与请求不同。",
+            ErrorCodes.AudioCountMismatch => "audio 轨数量与请求不同。",
+            ErrorCodes.VideoMetadataMismatch => $"video 轨 {failure.Sequence} 的编码、媒体属性或轨道元数据与源文件不同。",
+            ErrorCodes.AudioMetadataMismatch => $"audio 轨 {failure.Sequence} 的编码、媒体属性或轨道元数据与源文件不同。",
+            ErrorCodes.DurationMismatch => "成品时长与源文件不符。",
+            ErrorCodes.SubtitleCountMismatch => "新增字幕轨数量不符。",
+            ErrorCodes.SubtitleMetadataMismatch => $"新增字幕轨 {failure.Sequence} 的 ASS 类型、名称、语言、default 或 forced 旗标不符。",
+            ErrorCodes.AddedAudioMetadataMismatch => $"外加音频 {failure.Sequence} 编码、音频属性或元数据不符。",
             ErrorCodes.AttachmentCountInvalid => "成品字体附件数量不符。",
-            ErrorCodes.AttachmentMetadataInvalid => $"字体附件 {Index()} 的身份、类型或大小不符。",
-            ErrorCodes.SubtitleReferenceInvalid => $"新增字幕 {Index()} 未产出有效 ASS 校验参考字幕。",
-            ErrorCodes.SubtitleTextMismatch => $"新增字幕 {Index()} 提取后内容与同工具字幕参考不符。",
-            ErrorCodes.AttachmentPayloadMismatch => $"字体附件 {Index()} 提取后校验不一致。",
-            ErrorCodes.AudioPayloadMismatch => $"外加音频 {Index()} 数据与参考不符。",
-            ErrorCodes.SubtitleTextInvalid => SrtFailure(failure.Detail!),
+            ErrorCodes.AttachmentMetadataInvalid => $"字体附件 {failure.Sequence} 的身份、类型或大小不符。",
+            ErrorCodes.SubtitleReferenceInvalid => $"新增字幕 {failure.Sequence} 未产出有效 ASS 校验参考字幕。",
+            ErrorCodes.SubtitleTextMismatch => $"新增字幕 {failure.Sequence} 提取后内容与同工具字幕参考不符。",
+            ErrorCodes.AttachmentPayloadMismatch => $"字体附件 {failure.Sequence} 提取后校验不一致。",
+            ErrorCodes.AudioPayloadMismatch => $"外加音频 {failure.Sequence} 数据与参考不符。",
+            ErrorCodes.SubtitleTextInvalid => failure.Detail ?? "SRT 没有有效时间轴：" + failure.Path,
             _ => failure.Code
         };
-    }
-    private static string SrtFailure(string detail)
-    {
-        using var document = System.Text.Json.JsonDocument.Parse(detail);
-        return "SRT 没有有效时间轴：" + document.RootElement.GetProperty("Path").GetString();
     }
 
     // 仅复制旧请求的路径投影；业务校验由用例完成，旧日志不从新规格反向解析。

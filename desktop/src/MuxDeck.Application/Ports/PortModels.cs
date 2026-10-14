@@ -7,6 +7,7 @@ namespace MuxDeck.Application.Ports;
 public sealed record ToolCallContext(ToolConfiguration Tools, ITaskWorkspace Workspace)
 {
     public int SubtitleIndex { get; init; }
+    // 有订阅者时逐次报告新增诊断，失败前也必须报告；用例只消费此路径，不再合并返回快照。
     public IProgress<Diagnostic>? DiagnosticProgress { get; init; }
 }
 public sealed record FontSubsetRequest(ExternalTrackSpec Subtitle, FontSpec Fonts);

@@ -46,7 +46,6 @@ public sealed partial class RunSingleMuxUseCase(
             Phase(JobStage.Muxing);
             var result = await muxer.MuxAsync(planned.Request, context, cancellationToken: cancellationToken).ConfigureAwait(false);
             var muxed = new Muxed(planned, result.Artifact);
-            foreach (var item in result.Diagnostics) MergeDiagnostic(item);
             Phase(JobStage.Checking);
             var @checked = await CheckAsync(muxed, checks, cancellationToken).ConfigureAwait(false);
             Phase(JobStage.Publishing);
@@ -60,6 +59,11 @@ public sealed partial class RunSingleMuxUseCase(
         {
             return new(MuxJobStatus.Cancelled, [], new(checks), new(diagnostics),
                 new(ErrorCodes.Cancelled, stage, null), workspace?.Log);
+        }
+        catch (MuxRuleFailureException ex)
+        {
+            return new(MuxJobStatus.Failed, [], new(checks), new(diagnostics),
+                new(ex.Code, stage, null, ex.Detail) { Path = ex.Path, Sequence = ex.Sequence }, workspace?.Log);
         }
         catch (ToolFailureException ex)
         {
@@ -125,9 +129,9 @@ public sealed partial class RunSingleMuxUseCase(
                 try
                 {
                     if (IsAss(normalized)) AssDocument.ReadUsage(facts.SubtitleText!);
-                    else Require(SrtTimeline().IsMatch(facts.SubtitleText!), ErrorCodes.SubtitleTextInvalid, new { Path = normalized.Path, Kind = "srt" });
+                    else Require(SrtTimeline().IsMatch(facts.SubtitleText!), ErrorCodes.SubtitleTextInvalid, normalized.Path);
                 }
-                catch (MediaRuleException ex) { throw new ToolFailureException(ErrorCodes.SubtitleTextInvalid, ex.Message); }
+                catch (MediaRuleException ex) { throw new MuxRuleFailureException(ErrorCodes.SubtitleTextInvalid, normalized.Path, detail: ex.Message); }
                 Require(ValidLanguage(normalized.Language.Value), ErrorCodes.SubtitleLanguageInvalid);
                 Require(normalized.Name is not null && !normalized.Name.Contains('\0'), ErrorCodes.SubtitleNameInvalid);
             }
@@ -179,25 +183,17 @@ public sealed partial class RunSingleMuxUseCase(
                 tracks.Add(subtitles[i] with { Path = copied.Path });
                 continue;
             }
-            SafeReport(progress, new(JobStage.Subsetting, "SUBSET_ITEM", null, "") { Detail = JsonSerializer.Serialize(new[] { i + 1, subtitles.Length }) });
+            SafeReport(progress, new(JobStage.Subsetting, "SUBSET_ITEM", null, null) { Sequence = i + 1, Total = subtitles.Length });
             token.ThrowIfCancellationRequested();
-            var before = diagnostics.ToDictionary(item => (item.Code, item.Message), item => item.Occurrences);
             var result = await subsetter.SubsetAsync(new(subtitles[i], probed.Input.Spec.Fonts), probed.Input.Context with { SubtitleIndex = i },
                 cancellationToken: token).ConfigureAwait(false);
-            foreach (var item in result.Diagnostics)
-            {
-                var index = diagnostics.FindIndex(existing => existing.Code == item.Code && existing.Message == item.Message);
-                var expected = before.GetValueOrDefault((item.Code, item.Message)) + item.Occurrences;
-                if (index < 0) diagnostics.Add(item);
-                else if (diagnostics[index].Occurrences < expected) diagnostics[index] = item with { Occurrences = expected };
-            }
-            checks.Add(new(MuxCheckCodes.SubsetFonts, CheckStatus.Passed, (i + 1).ToString(), null, result.Fonts.Length.ToString()));
+            checks.Add(new(MuxCheckCodes.SubsetFonts, CheckStatus.Passed) { Sequence = i + 1, Count = result.Fonts.Length });
             tracks.Add(subtitles[i] with { Path = result.CorrectedSubtitle.Path });
             fonts.AddRange(result.Fonts);
         }
         if (diagnostics.Count > 0)
         {
-            SafeReport(progress, new(JobStage.Subsetting, "SUBSET_DIAGNOSTICS", null, "") { Detail = JsonSerializer.Serialize(diagnostics) });
+            SafeReport(progress, new(JobStage.Subsetting, "SUBSET_DIAGNOSTICS", null, null) { Diagnostics = new(diagnostics) });
             token.ThrowIfCancellationRequested();
         }
         tracks.AddRange(probed.Input.Spec.ExternalTracks.Where(track => track.Kind == TrackKind.Audio));
@@ -224,8 +220,9 @@ public sealed partial class RunSingleMuxUseCase(
             subtitles.Select(track => new SubtitleQcFacts(IsAss(track), track.Name, track.Language.Value, track.Flags.IsDefault, track.Flags.IsForced)).ToEquatableArray(),
             audios.Select(track => new AudioQcFacts(track.SourceTrackId!.Value.Value, track.Name, track.Language.Value, track.Flags.IsDefault, track.Flags.IsForced)).ToEquatableArray(),
             probed.AudioSources.Select(source => new MediaQcFacts(source.Tracks, source.DurationNanoseconds)).ToEquatableArray());
-        checks.AddRange(qc.Checks.Select(check => new CheckResult(MuxCheckCodes.Tracks, CheckStatus.Passed, null, null, JsonSerializer.Serialize(check))));
-        Require(qc.Failure is null, ErrorCodes.TrackQcFailed, qc.Failure);
+        checks.AddRange(qc.Checks.Select(TrackCheck));
+        if (qc.Failure is { } failure)
+            throw new MuxRuleFailureException(TrackFailureCode(failure), sequence: failure.Index);
         Require(output.Attachments.Length == subsetted.Fonts.Length, ErrorCodes.AttachmentCountInvalid);
         var identities = new List<MuxAttachmentEvidence>();
         for (var i = 0; i < subsetted.Fonts.Length; i++)
@@ -233,7 +230,7 @@ public sealed partial class RunSingleMuxUseCase(
             var font = subsetted.Fonts[i]; var actual = output.Attachments[i];
             var expected = await evidence.ReadAttachmentAsync(font, token).ConfigureAwait(false);
             Require(actual.FileName == AttachmentName(font, i) && actual.Size == expected.Length &&
-                actual.ContentType is "font/ttf" or "font/otf", ErrorCodes.AttachmentMetadataInvalid, i + 1);
+                actual.ContentType is "font/ttf" or "font/otf", ErrorCodes.AttachmentMetadataInvalid, sequence: i + 1);
             identities.Add(expected);
         }
         var extracted = await evidence.PrepareExtractionAsync(context, token).ConfigureAwait(false);
@@ -247,19 +244,19 @@ public sealed partial class RunSingleMuxUseCase(
             var textFile = new WorkFile(Path.Combine(extracted, $"reference-{i}" + Path.GetExtension(corrected.Path)));
             await extractor.ExtractTracksAsync(reference.Path, [new(new(0), textFile, TrackExtractionFormat.ContainerDefault)], context, token).ConfigureAwait(false);
             var before = await evidence.ReadSubtitleAsync(textFile, token).ConfigureAwait(false);
-            Require(before.Exists && before.Length > 0, ErrorCodes.SubtitleReferenceInvalid, i + 1);
+            Require(before.Exists && before.Length > 0, ErrorCodes.SubtitleReferenceInvalid, sequence: i + 1);
             var actual = await evidence.ReadSubtitleAsync(new(Path.Combine(extracted, $"subtitle-{i}" + Path.GetExtension(corrected.Path))), token).ConfigureAwait(false);
-            Require(OutputQcRules.SubtitleContentEquals(before.Text!, actual.Text!), ErrorCodes.SubtitleTextMismatch, i + 1);
+            Require(OutputQcRules.SubtitleContentEquals(before.Text!, actual.Text!), ErrorCodes.SubtitleTextMismatch, sequence: i + 1);
         }
         await extractor.ExtractAttachmentsAsync(muxed.Artifact.Path, subsetted.Fonts.Select((font, i) => new AttachmentExtraction(
             output.Attachments[i].Id, new(Path.Combine(extracted, AttachmentName(font, i))))).ToEquatableArray(), context, token).ConfigureAwait(false);
         for (var i = 0; i < subsetted.Fonts.Length; i++)
         {
             var actual = await evidence.ReadAttachmentAsync(new(Path.Combine(extracted, AttachmentName(subsetted.Fonts[i], i))), token).ConfigureAwait(false);
-            Require(identities[i].Sha256 == actual.Sha256, ErrorCodes.AttachmentPayloadMismatch, i + 1);
+            Require(identities[i].Sha256 == actual.Sha256, ErrorCodes.AttachmentPayloadMismatch, sequence: i + 1);
         }
-        checks.Add(new(MuxCheckCodes.Attachments, CheckStatus.Passed, null, null, subsetted.Fonts.Length.ToString()));
-        checks.Add(new(MuxCheckCodes.Readable, CheckStatus.Passed, null, null, null));
+        checks.Add(new(MuxCheckCodes.Attachments, CheckStatus.Passed) { Count = subsetted.Fonts.Length });
+        checks.Add(new(MuxCheckCodes.Readable, CheckStatus.Passed));
         for (var i = 0; i < audios.Length; i++)
         {
             var reference = await references.BuildAudioReferenceAsync(audios[i], i, context, token).ConfigureAwait(false);
@@ -272,8 +269,8 @@ public sealed partial class RunSingleMuxUseCase(
             await extractor.ExtractTracksAsync(muxed.Artifact.Path, [new(actualTrack.Id, afterRaw, TrackExtractionFormat.FullRaw)], context, token).ConfigureAwait(false);
             var beforeHash = await evidence.ReadAudioPayloadAsync(beforeRaw, token).ConfigureAwait(false);
             var afterHash = await evidence.ReadAudioPayloadAsync(afterRaw, token).ConfigureAwait(false);
-            Require(beforeHash == afterHash, ErrorCodes.AudioPayloadMismatch, i + 1);
-            checks.Add(new(MuxCheckCodes.AudioPayload, CheckStatus.Passed, (i + 1).ToString(), beforeHash, afterHash));
+            Require(beforeHash == afterHash, ErrorCodes.AudioPayloadMismatch, sequence: i + 1);
+            checks.Add(new(MuxCheckCodes.AudioPayload, CheckStatus.Passed) { Sequence = i + 1, TrackId = actualTrack.Id, ExpectedHash = beforeHash, ActualHash = afterHash });
         }
         return new(muxed);
     }
@@ -281,8 +278,35 @@ public sealed partial class RunSingleMuxUseCase(
     private static bool IsAss(ExternalTrackSpec track) => track.Kind == TrackKind.Subtitle && InputRules.IsAssExtension(Path.GetExtension(track.Path));
     private static string AttachmentName(WorkFile font, int index) => $"{index + 1:D3}-{Path.GetFileName(font.Path)}";
     private static bool ValidLanguage(string value) => !string.IsNullOrWhiteSpace(value) && LanguagePattern().IsMatch(value);
-    private static void Require(bool valid, string code, object? detail = null)
-    { if (!valid) throw new ToolFailureException(code, "", detail is null ? null : JsonSerializer.Serialize(detail)); }
+    private static CheckResult TrackCheck(TrackQcCheck check) => new(check.Kind switch
+    {
+        TrackQcCheckKind.Retained when check.TrackKind == TrackKind.Video => MuxCheckCodes.RetainedVideo,
+        TrackQcCheckKind.Retained => MuxCheckCodes.RetainedAudio,
+        TrackQcCheckKind.Subtitle => MuxCheckCodes.SubtitleTrack,
+        TrackQcCheckKind.AddedAudio => MuxCheckCodes.AddedAudioTrack,
+        _ => throw new ArgumentOutOfRangeException(nameof(check))
+    }, CheckStatus.Passed)
+    {
+        Sequence = check.Index, Count = check.Count, TrackId = check.Track?.Id,
+        Name = check.Track?.Name, Language = check.Track?.Language, LanguageIetf = check.Track?.LanguageIetf,
+        Flags = check.Track?.Flags
+    };
+
+    private static string TrackFailureCode(TrackQcFailure failure) => failure.Kind switch
+    {
+        TrackQcFailureKind.SourceCount when failure.TrackKind == TrackKind.Video => ErrorCodes.VideoCountMismatch,
+        TrackQcFailureKind.SourceCount => ErrorCodes.AudioCountMismatch,
+        TrackQcFailureKind.SourceMetadata when failure.TrackKind == TrackKind.Video => ErrorCodes.VideoMetadataMismatch,
+        TrackQcFailureKind.SourceMetadata => ErrorCodes.AudioMetadataMismatch,
+        TrackQcFailureKind.Duration => ErrorCodes.DurationMismatch,
+        TrackQcFailureKind.SubtitleCount => ErrorCodes.SubtitleCountMismatch,
+        TrackQcFailureKind.SubtitleMetadata => ErrorCodes.SubtitleMetadataMismatch,
+        TrackQcFailureKind.AudioMetadata => ErrorCodes.AddedAudioMetadataMismatch,
+        _ => throw new ArgumentOutOfRangeException(nameof(failure))
+    };
+
+    private static void Require(bool valid, string code, string? path = null, int? sequence = null)
+    { if (!valid) throw new MuxRuleFailureException(code, path, sequence); }
     private static void SafeReport(IProgress<JobProgress>? progress, JobProgress value) { try { progress?.Report(value); } catch (Exception) { } }
     private static async Task LogSafely(ITaskWorkspace workspace, string text) { try { await workspace.WriteLogAsync(text).ConfigureAwait(false); } catch (ToolFailureException) { } }
     [GeneratedRegex(@"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$")] private static partial Regex LanguagePattern();

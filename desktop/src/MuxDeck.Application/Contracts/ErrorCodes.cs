@@ -28,7 +28,17 @@ public static class ErrorCodes
     public const string SourceVideoMissing = "MUX_SOURCE_VIDEO_MISSING";
     public const string SourceAudioMissing = "MUX_SOURCE_AUDIO_MISSING";
     public const string PlanInvalid = "MUX_PLAN_INVALID";
+    // 保留旧公开码及其原有验证；新用例的轨道 QC 只生成下方各类独立码。
     public const string TrackQcFailed = "MUX_TRACK_QC_FAILED";
+    public const string VideoCountMismatch = "MUX_VIDEO_COUNT_MISMATCH";
+    public const string AudioCountMismatch = "MUX_AUDIO_COUNT_MISMATCH";
+    public const string VideoMetadataMismatch = "MUX_VIDEO_METADATA_MISMATCH";
+    public const string AudioMetadataMismatch = "MUX_AUDIO_METADATA_MISMATCH";
+    public const string DurationMismatch = "MUX_DURATION_MISMATCH";
+    public const string SubtitleCountMismatch = "MUX_SUBTITLE_COUNT_MISMATCH";
+    public const string SubtitleMetadataMismatch = "MUX_SUBTITLE_METADATA_MISMATCH";
+    public const string AddedAudioMetadataMismatch = "MUX_ADDED_AUDIO_METADATA_MISMATCH";
+    public const string FontBackendNotFound = "MUX_FONT_BACKEND_NOT_FOUND";
     public const string AttachmentCountInvalid = "MUX_ATTACHMENT_COUNT_INVALID";
     public const string AttachmentMetadataInvalid = "MUX_ATTACHMENT_METADATA_INVALID";
     public const string SubtitleReferenceInvalid = "MUX_SUBTITLE_REFERENCE_INVALID";
