@@ -1,4 +1,4 @@
-namespace MuxDeck.Core.Components;
+namespace MuxDeck.Infrastructure.Components;
 
 public static class ComponentDirectories
 {
@@ -6,9 +6,7 @@ public static class ComponentDirectories
 
     public static ComponentRemovalPlan CreatePlan(StoragePaths storage, string id, ComponentRemovalKind kind)
     {
-        MuxDeck.Contracts.IManageComponents manager = new ComponentManagement();
-        return ComponentManagement.Legacy(manager.PrepareUninstallAsync(id, (MuxDeck.Contracts.ComponentRemovalKind)kind,
-            ComponentManagement.Configuration(storage)).GetAwaiter().GetResult());
+        return CreatePlanCore(storage, id, kind);
     }
 
     internal static ComponentRemovalPlan CreatePlanCore(StoragePaths storage, string id, ComponentRemovalKind kind)

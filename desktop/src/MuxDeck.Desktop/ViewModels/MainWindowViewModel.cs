@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using MuxDeck.Core;
+using MuxDeck.Contracts;
 
 namespace MuxDeck.Desktop.ViewModels;
 
@@ -8,7 +9,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private int selectedPage;
     private string log = "桌面工作区已就绪。选择视频或检查本机工具环境。";
 
-    public MainWindowViewModel(Workspace workspace, StoragePaths storage, EnvironmentViewModel environment,
+    public MainWindowViewModel(Workspace workspace, EnvironmentStorage storage, EnvironmentViewModel environment,
         SingleMuxViewModel single)
     {
         WorkspaceRoot = workspace.Root;
@@ -31,7 +32,7 @@ public sealed class MainWindowViewModel : ObservableObject
             Storage = next;
             Raise(nameof(Storage));
             if (!Single.IsRunning)
-                Single.ConfigureTools(workspace with { ToolsDirectoryOverride = next.ToolsDirectory, StorageOverride = next });
+                Single.ConfigureTools(new ToolConfiguration(next.ToolsDirectory, next.LogsDirectory, next.CacheDirectory, workspace.FontToolsDirectoryOverride));
         };
         ShowSingleCommand = new(() => SelectedPage = 0);
         ShowBatchCommand = new(() => SelectedPage = 1);
@@ -41,7 +42,7 @@ public sealed class MainWindowViewModel : ObservableObject
     }
 
     public string WorkspaceRoot { get; }
-    public StoragePaths Storage { get; private set; }
+    public EnvironmentStorage Storage { get; private set; }
     public EnvironmentViewModel Environment { get; }
     public SingleMuxViewModel Single { get; }
     public int SelectedPage
@@ -74,7 +75,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public string Log { get => log; private set => Set(ref log, value); }
     public string EnvironmentSummary => $"{Environment.CoreSummary} · {Environment.ExtensionSummary}";
     // 保留旧测试和任务摘要使用的工具集合；正式页面使用 Environment 的组件分组。
-    public ObservableCollection<ToolStatus> Tools => Environment.Tools;
+    public ObservableCollection<EnvironmentToolStatus> Tools => Environment.Tools;
     public RelayCommand ShowSingleCommand { get; }
     public RelayCommand ShowBatchCommand { get; }
     public RelayCommand ShowSubtitleCommand { get; }

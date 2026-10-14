@@ -1,7 +1,7 @@
-using MuxDeck.Core;
+using MuxDeck.Infrastructure;
 using Xunit;
 
-namespace MuxDeck.Core.Tests;
+namespace MuxDeck.Infrastructure.IntegrationTests;
 
 // PATH 是进程级状态；该集合不与本测试进程的其他集合并行。
 [CollectionDefinition("Tool locator environment", DisableParallelization = true)]
@@ -33,7 +33,7 @@ public sealed class ToolLocatorSourceTests
                 Directory.CreateDirectory(Path.GetDirectoryName(bundled)!);
                 File.WriteAllText(bundled, "bundled");
             }
-            var status = new ToolLocator(new(root) { ToolsDirectoryOverride = tools }).Inspect()
+            var status = new ToolLocator(new MuxDeck.Contracts.ComponentConfiguration(root, tools, Path.Combine(root, "logs"), Path.Combine(root, "cache"))).Inspect()
                 .Single(tool => tool.Name == "AssFontSubset");
             Assert.Equal(expectedSource, status.Source);
             Assert.Equal(location == "bundle" ? bundled : location == "path" ? onPath : null, status.Path);

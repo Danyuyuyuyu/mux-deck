@@ -1,8 +1,9 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using MuxDeck.Contracts;
 
-namespace MuxDeck.Core.Components;
+namespace MuxDeck.Infrastructure.Components;
 
 public sealed record ManagedFontToolsPackages(ComponentPackage Python, ComponentPackage FontTools, ComponentPackage Launchers);
 
@@ -19,24 +20,20 @@ public sealed class ComponentInstaller(HttpClient? httpClient = null, IComponent
     public async Task<ComponentInstallResult> InstallAsync(string id, StoragePaths storage, IProgress<ComponentInstallProgress> progress, CancellationToken cancellationToken)
     {
         if (!ComponentCatalog.SupportsInstall(id) || !catalog.ContainsKey(id)) throw new NotSupportedException("此组件当前不支持自动安装。");
-        MuxDeck.Contracts.IManageComponents manager = new ComponentManagement(null, this, null, null, true, null);
-        var result = await manager.InstallAsync(id, ComponentManagement.Configuration(storage),
-            new LegacyInstallProgress(progress), cancellationToken).ConfigureAwait(false);
-        ComponentManagement.RequireSuccess(result, cancellationToken);
-        return new(result.Directory!, result.Log!.Path);
+        return await InstallImplementationAsync(id, storage, progress, cancellationToken).ConfigureAwait(false);
     }
     private sealed class LegacyInstallProgress(IProgress<ComponentInstallProgress> progress) : IProgress<MuxDeck.Contracts.ComponentProgress>
     {
         public void Report(MuxDeck.Contracts.ComponentProgress value) => progress.Report(new(Enum.Parse<ComponentInstallPhase>(value.Phase.ToString()), value.Message, value.Bytes, value.TotalBytes));
     }
 
-    internal async Task<ComponentInstallResult> InstallCoreAsync(string id, StoragePaths storage, IProgress<ComponentInstallProgress> progress, CancellationToken cancellationToken)
+    private async Task<ComponentInstallResult> InstallImplementationAsync(string id, StoragePaths storage, IProgress<ComponentInstallProgress> progress, CancellationToken cancellationToken)
     {
         if (!ComponentCatalog.SupportsInstall(id) || !catalog.TryGetValue(id, out var release)) throw new NotSupportedException("此组件当前不支持自动安装。");
         var runId = Guid.NewGuid().ToString("N");
         var cache = Path.Combine(storage.CacheDirectory, "component-install-" + runId);
         var stage = Path.Combine(storage.ToolsDirectory, ".muxdeck-" + id + "-" + runId);
-        var currentWorkspace = new Workspace(storage.ToolsDirectory) { ToolsDirectoryOverride = storage.ToolsDirectory };
+        var currentWorkspace = new ComponentConfiguration(storage.AppDataRoot, storage.ToolsDirectory, storage.LogsDirectory, storage.CacheDirectory);
         var dependenciesOnly = id == "afs" && new ToolLocator(currentWorkspace).Inspect().Any(p => p.Name == "AssFontSubset" && p.Path is not null);
         var folder = dependenciesOnly ? "fonttools" : release.Directory;
         var target = Path.Combine(storage.ToolsDirectory, folder);
@@ -103,12 +100,10 @@ public sealed class ComponentInstaller(HttpClient? httpClient = null, IComponent
             Report(ComponentInstallPhase.Verifying, "验证组件和必要依赖");
             // 显式指定暂存后端，避免用户已有 Python 掩盖候选环境的问题。
             var stagedWorkspace = dependenciesOnly ? currentWorkspace with { FontToolsDirectoryOverride = backend }
-                : new Workspace(stage) { ToolsDirectoryOverride = stage, FontToolsDirectoryOverride = backend };
+                : new ComponentConfiguration(stage, stage, storage.LogsDirectory, storage.CacheDirectory, backend);
             var component = ComponentCatalog.All.Single(c => c.Id == id);
             // 候选验证属于已有安装租约，关闭期间仍允许它收尾。
-            var inspection = await (checker is ComponentVerifier concrete
-                ? concrete.VerifyCoreAsync(component, stagedWorkspace, cancellationToken)
-                : checker.VerifyAsync(component, stagedWorkspace, cancellationToken)).ConfigureAwait(false);
+            var inspection = await checker.VerifyAsync(component, stagedWorkspace, cancellationToken).ConfigureAwait(false);
             if (inspection.State != ComponentState.Available) throw new IOException(inspection.Reason ?? "组件启动验证失败。");
             cancellationToken.ThrowIfCancellationRequested();
             Directory.Move(candidate, target);

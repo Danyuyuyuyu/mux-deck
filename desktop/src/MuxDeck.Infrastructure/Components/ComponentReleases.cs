@@ -1,4 +1,4 @@
-namespace MuxDeck.Core.Components;
+namespace MuxDeck.Infrastructure.Components;
 
 public sealed record ComponentRelease(string Directory, string Version, ComponentPackage Package, string ArchiveRoot, string[] RequiredFiles, string? ReportedVersion = null);
 

@@ -1,3 +1,4 @@
+using C = MuxDeck.Contracts;
 using MuxDeck.Infrastructure;
 using MuxDeck.Infrastructure.Muxing;
 using MuxDeck.Infrastructure.Components;
@@ -155,12 +156,12 @@ internal static class ComponentChecks
         public int Calls { get; private set; }
         public bool SawCandidate { get; private set; }
         public bool Fail { get; init; }
-        public Task<ComponentInspection> VerifyAsync(ComponentDefinition component, Workspace workspace, CancellationToken cancellationToken)
+        public Task<MuxDeck.Infrastructure.Components.ComponentInspection> VerifyAsync(ComponentDefinition component, C.ComponentConfiguration configuration, CancellationToken cancellationToken)
         {
             Calls++;
-            var path = Path.Combine(workspace.ToolsDirectory, "assfonts", "assfonts.exe");
-            SawCandidate = File.Exists(path) && workspace.ToolsDirectory.Contains(".muxdeck-assfonts-");
-            return Task.FromResult(new ComponentInspection(Fail ? ComponentState.Invalid : ComponentState.Available, [new("assfonts", "", path)], "0.7.3", Fail ? "启动失败" : null));
+            var path = Path.Combine(configuration.ToolsDirectory, "assfonts", "assfonts.exe");
+            SawCandidate = File.Exists(path) && configuration.ToolsDirectory.Contains(".muxdeck-assfonts-");
+            return Task.FromResult(new MuxDeck.Infrastructure.Components.ComponentInspection(Fail ? ComponentState.Invalid : ComponentState.Available, [new("assfonts", "", path)], "0.7.3", Fail ? "启动失败" : null));
         }
     }
     private sealed class ProbeRunner : IComponentProbeRunner

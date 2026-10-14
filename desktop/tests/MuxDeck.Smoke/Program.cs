@@ -36,7 +36,6 @@ if (args.FirstOrDefault() == "--long-line")
 if (args.FirstOrDefault() == "--tree-parent") return await RunTreeParent(exitAfterLaunch: false);
 if (args.FirstOrDefault() == "--tree-parent-exit") return await RunTreeParent(exitAfterLaunch: true);
 if (args.FirstOrDefault() == "--wait") { await Task.Delay(TimeSpan.FromSeconds(30)); return 0; }
-AppComposition.InitializeLegacyComponents();
 if (args.FirstOrDefault() == "--integration") return await Phase1Integration.RunAsync();
 if (args.FirstOrDefault() == "--single-mux-round1") return SingleMuxRound1Checks.Run();
 if (args.FirstOrDefault() == "--single-mux-ui-round1") return SingleMuxUiRound1Checks.Run();
@@ -119,14 +118,14 @@ using (var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(
     catch (OperationCanceledException) { Check(elapsed.Elapsed < TimeSpan.FromSeconds(10), "取消终止子进程"); }
 }
 
-Check(new ToolLocator(root).Inspect().Count == 6, "六项工具路径检测");
+Check(new ToolLocator(new MuxDeck.Contracts.ComponentConfiguration(root.Root, root.ToolsDirectory, root.TaskLogsDirectory, root.TaskCacheDirectory)).Inspect().Count == 6, "六项工具路径检测");
 var fixture = Path.Combine(smokeRun, "tool-locator-fixture");
 Directory.CreateDirectory(Path.Combine(fixture, "bin", "mkvtoolnix"));
 try
 {
     var bundled = Path.Combine(fixture, "bin", "mkvtoolnix", "mkvmerge.exe");
     File.WriteAllText(bundled, "fixture");
-    Check(new ToolLocator(new Workspace(fixture)).Inspect()[0].Path == bundled, "便携 bin 优先");
+    Check(new ToolLocator(new MuxDeck.Contracts.ComponentConfiguration(fixture, Path.Combine(fixture, "bin"), Path.Combine(fixture, "logs"), Path.Combine(fixture, "cache"))).Inspect()[0].Path == bundled, "便携 bin 优先");
 }
 finally { Directory.Delete(fixture, recursive: true); }
 

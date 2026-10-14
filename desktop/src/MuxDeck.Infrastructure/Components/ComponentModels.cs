@@ -1,7 +1,8 @@
+using MuxDeck.Contracts;
 using MuxDeck.Infrastructure;
 using System.Runtime.InteropServices;
 
-namespace MuxDeck.Core.Components;
+namespace MuxDeck.Infrastructure.Components;
 
 public enum ComponentState { Unknown, Found, Checking, Missing, Partial, Available, Invalid, DependencyMissing }
 public enum ComponentInstallPhase { Idle, Preparing, Downloading, Installing, Verifying, Completed, Failed, Cancelled }
@@ -9,6 +10,11 @@ public sealed record ComponentDefinition(string Id, string Name, string Descript
 public sealed record ComponentInspection(ComponentState State, IReadOnlyList<ToolStatus> Parts, string? Version = null, string? Reason = null);
 public sealed record ComponentInstallProgress(ComponentInstallPhase Phase, string Message, long Bytes = 0, long? TotalBytes = null);
 public sealed record ComponentInstallResult(string Directory, string LogPath);
+public sealed record ComponentPackage(string Url, string Sha256, long Size, long MaxExpandedBytes = 100 * 1024 * 1024);
+public sealed class ComponentInstallException(string message, string logPath, Exception? inner = null) : IOException(message, inner)
+{
+    public string LogPath { get; } = logPath;
+}
 
 public static class ComponentCatalog
 {
@@ -23,7 +29,7 @@ public static class ComponentCatalog
 
 public interface IComponentVerifier
 {
-    Task<ComponentInspection> VerifyAsync(ComponentDefinition component, Workspace workspace, CancellationToken cancellationToken);
+    Task<ComponentInspection> VerifyAsync(ComponentDefinition component, ComponentConfiguration configuration, CancellationToken cancellationToken);
 }
 
 public interface IComponentInstaller

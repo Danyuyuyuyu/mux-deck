@@ -1,5 +1,5 @@
-using MuxDeck.Infrastructure;
-namespace MuxDeck.Core;
+using MuxDeck.Contracts;
+namespace MuxDeck.Infrastructure;
 
 public sealed record ToolStatus(string Name, string Purpose, string? Path)
 {
@@ -9,7 +9,7 @@ public sealed record ToolStatus(string Name, string Purpose, string? Path)
     public string Source { get; init; } = "未找到";
 }
 
-public sealed class ToolLocator(Workspace workspace)
+public sealed class ToolLocator(ComponentConfiguration configuration)
 {
     public IReadOnlyList<ToolStatus> Inspect() =>
     [
@@ -23,7 +23,7 @@ public sealed class ToolLocator(Workspace workspace)
 
     private ToolStatus Find(string name, string purpose, string relative, string executable)
     {
-        var path = ToolPathLookup.Find(workspace.ToolsDirectory, relative, executable, out var source);
+        var path = ToolPathLookup.Find(configuration.ToolsDirectory, relative, executable, out var source);
         return new ToolStatus(name, purpose, path) { Source = source };
     }
 

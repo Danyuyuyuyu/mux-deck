@@ -1,5 +1,6 @@
 using MuxDeck.Contracts;
 using MuxDeck.Core;
+using MuxDeck.Infrastructure;
 using MuxDeck.Core.Muxing;
 using MuxDeck.Domain;
 using Xunit;

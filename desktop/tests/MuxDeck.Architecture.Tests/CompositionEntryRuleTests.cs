@@ -7,7 +7,7 @@ namespace MuxDeck.Architecture.Tests;
 public sealed class CompositionEntryRuleTests
 {
     [Theory]
-    [InlineData("MuxDeck.Desktop", "Program", "Program.cs", true)]
+    [InlineData("MuxDeck.Desktop", "Program", "Program.cs", false)]
     [InlineData("MuxDeck.Desktop.Composition", "Factory", "Composition/Factory.cs", true)]
     [InlineData("MuxDeck.Desktop.Composition.Nested", "Factory", "Composition/Nested/Factory.cs", true)]
     [InlineData("MuxDeck.Desktop", "Program", "Views/Program.cs", false)]
@@ -26,7 +26,7 @@ public sealed class CompositionEntryRuleTests
     [Fact]
     public void Missing_pdb_reports_a_clear_failure_instead_of_throwing()
     {
-        using var fixture = new SymbolFixture("MuxDeck.Desktop", "Program", "Program.cs", false);
+        using var fixture = new SymbolFixture("MuxDeck.Desktop.Composition", "Factory", "Composition/Factory.cs", false);
         var rule = new CompositionEntryRule(fixture.Root);
         Assert.False(rule.MeetsRule(fixture.Type));
         Assert.Contains("缺少 PDB", rule.FailureReason!);
@@ -35,7 +35,7 @@ public sealed class CompositionEntryRuleTests
     [Fact]
     public void Mapped_source_path_reports_a_clear_failure_instead_of_throwing()
     {
-        using var fixture = new SymbolFixture("MuxDeck.Desktop", "Program", "/_/src/MuxDeck.Desktop/Program.cs", true);
+        using var fixture = new SymbolFixture("MuxDeck.Desktop.Composition", "Factory", "/_/src/MuxDeck.Desktop/Composition/Factory.cs", true);
         var rule = new CompositionEntryRule(fixture.Root);
         Assert.False(rule.MeetsRule(fixture.Type));
         Assert.Contains("源码路径已映射为 /_/", rule.FailureReason!);

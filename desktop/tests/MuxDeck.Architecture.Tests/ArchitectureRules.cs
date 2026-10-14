@@ -42,9 +42,8 @@ internal sealed class CompositionEntryRule(string? root = null) : ICustomRule
     public bool MeetsRule(TypeDefinition type)
     {
         while (type.DeclaringType != null) type = type.DeclaringType;
-        if (!((type.Namespace == "MuxDeck.Desktop" && type.Name == "Program") ||
-              ArchitectureScope.InNamespace(type.Namespace, "MuxDeck.Desktop.Composition")))
-            return Reject(type, "Infrastructure 只能在 Program / Composition 使用。");
+        if (!ArchitectureScope.InNamespace(type.Namespace, "MuxDeck.Desktop.Composition"))
+            return Reject(type, "Infrastructure 只能在 MuxDeck.Desktop.Composition 使用。");
 
         try
         {

@@ -6,6 +6,14 @@ namespace MuxDeck.Application;
 /// <summary>组件检测、安装和卸载的租约生命周期；配置只来自每次调用的快照。</summary>
 public sealed class ManageComponentsUseCase(IManageComponents components, IOperationCoordinator coordinator) : IManageComponents
 {
+    public ComponentDirectoryQuery? QueryUninstallDirectory(string componentId, ComponentRemovalKind kind,
+        ComponentConfiguration configuration, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var state = coordinator.State;
+        if (state.IsShuttingDown || state.ActiveOperations.Any(kind => kind is OperationKind.ComponentInspection or OperationKind.ComponentInstall or OperationKind.ComponentUninstall)) return null;
+        return components.QueryUninstallDirectory(componentId, kind, configuration, cancellationToken);
+    }
     public async Task<EquatableArray<ComponentInspection>> InspectAsync(ComponentConfiguration configuration,
         CancellationToken cancellationToken = default)
     {

@@ -25,7 +25,7 @@ internal static class Phase1Integration
         var targetHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var probeSummaries = new List<object>();
         var runner = new ProcessRunner();
-        var tools = new ToolLocator(workspace).Inspect();
+        var tools = new ToolLocator(new MuxDeck.Contracts.ComponentConfiguration(workspace.Root, workspace.ToolsDirectory, workspace.TaskLogsDirectory, workspace.TaskCacheDirectory, workspace.FontToolsDirectoryOverride)).Inspect();
         string? Tool(string name) => tools.FirstOrDefault(t => t.Name == name)?.Path;
         var ffmpeg = Tool("ffmpeg");
         var mkvmerge = Tool("mkvmerge");

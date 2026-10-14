@@ -1,3 +1,5 @@
+using MuxDeck.Infrastructure;
+using C = MuxDeck.Contracts;
 using MuxDeck.Desktop.Composition;
 using Avalonia;
 using Avalonia.Controls;
@@ -5,7 +7,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using MuxDeck.Core;
-using MuxDeck.Core.Components;
+using MuxDeck.Infrastructure.Components;
 using MuxDeck.Desktop;
 using MuxDeck.Desktop.Preferences;
 using MuxDeck.Desktop.ViewModels;
@@ -138,13 +140,13 @@ internal static class ComponentInstallationUiChecks
         public bool Installed { get; set; }
         public HashSet<string> Missing { get; } = [];
         public bool DependencyMissing { get; set; }
-        public Task<ComponentInspection> VerifyAsync(ComponentDefinition component, Workspace workspace, CancellationToken cancellationToken)
+        public Task<MuxDeck.Infrastructure.Components.ComponentInspection> VerifyAsync(ComponentDefinition component, C.ComponentConfiguration configuration, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var missing = component.Id == "assfonts" && !Installed || Missing.Contains(component.Id);
             var dependencies = component.Id == "afs" && DependencyMissing;
-            return Task.FromResult(new ComponentInspection(missing ? ComponentState.Missing : dependencies ? ComponentState.DependencyMissing : ComponentState.Available,
-                component.ToolNames.Select(n => new ToolStatus(n, "", missing ? null : Path.Combine(workspace.ToolsDirectory, n + ".exe")) { Source = "Mux Deck" }).ToArray(),
+            return Task.FromResult(new MuxDeck.Infrastructure.Components.ComponentInspection(missing ? ComponentState.Missing : dependencies ? ComponentState.DependencyMissing : ComponentState.Available,
+                component.ToolNames.Select(n => new ToolStatus(n, "", missing ? null : Path.Combine(configuration.ToolsDirectory, n + ".exe")) { Source = "Mux Deck" }).ToArray(),
                 missing ? null : ComponentReleases.All[component.Id].Version, missing ? "未检测到可执行文件。" : dependencies ? "缺少 fonttools 后端。" : null));
         }
     }

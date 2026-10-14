@@ -6,7 +6,7 @@ using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using MuxDeck.Core;
-using MuxDeck.Core.Components;
+using MuxDeck.Infrastructure.Components;
 using MuxDeck.Desktop;
 using MuxDeck.Desktop.ViewModels;
 using MuxDeck.Desktop.Views;
@@ -40,7 +40,7 @@ internal static class EnvironmentUiChecks
                 var missing = new EnvironmentComponentViewModel("assfonts", "字体子集化备用后端", "扩展组件", [new("assfonts", "", null)]);
                 env.ExtensionComponents.Add(missing);
                 foreach (var row in env.CoreComponents.Concat(env.ExtensionComponents).Where(r => !r.IsMissing))
-                    row.ApplyInspection(new(ComponentState.Available, row.Parts.ToArray(), "1.0"));
+                    row.ApplyInspection(new MuxDeck.Contracts.ComponentInspection(row.Id, MuxDeck.Contracts.ComponentState.Available, [], "1.0"));
                 env.ToolsDirectoryInput = longPath;
                 env.WorkDirectoryInput = longPath;
                 var window = new MainWindow { DataContext = model };

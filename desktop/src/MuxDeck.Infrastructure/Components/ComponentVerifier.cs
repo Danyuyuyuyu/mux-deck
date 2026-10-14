@@ -1,22 +1,19 @@
-using MuxDeck.Infrastructure.Components;
 using MuxDeck.Infrastructure;
+using MuxDeck.Contracts;
 using System.Text.RegularExpressions;
 
-namespace MuxDeck.Core.Components;
+namespace MuxDeck.Infrastructure.Components;
 
-public sealed class ComponentVerifier(IComponentProbeRunner? probeRunner = null, Func<Workspace, string?>? fontToolsLocator = null) : IComponentVerifier
+public sealed class ComponentVerifier(IComponentProbeRunner? probeRunner = null, Func<ComponentConfiguration, string?>? fontToolsLocator = null) : IComponentVerifier
 {
     private readonly IComponentProbeRunner runner = probeRunner ?? new ComponentProbeRunner();
 
-    public async Task<ComponentInspection> VerifyAsync(ComponentDefinition component, Workspace workspace, CancellationToken cancellationToken)
-    {
-        MuxDeck.Contracts.IManageComponents manager = new ComponentManagement(this, null, null, null, true, component);
-        return ComponentManagement.Legacy(await manager.InspectAsync(component.Id, ComponentManagement.Configuration(workspace), cancellationToken).ConfigureAwait(false));
-    }
+    public Task<ComponentInspection> VerifyAsync(ComponentDefinition component, ComponentConfiguration configuration, CancellationToken cancellationToken) =>
+        VerifyImplementationAsync(component, configuration, cancellationToken);
 
-    internal async Task<ComponentInspection> VerifyCoreAsync(ComponentDefinition component, Workspace workspace, CancellationToken cancellationToken)
+    private async Task<ComponentInspection> VerifyImplementationAsync(ComponentDefinition component, ComponentConfiguration configuration, CancellationToken cancellationToken)
     {
-        var located = new ToolLocator(workspace).Inspect();
+        var located = new ToolLocator(configuration).Inspect();
         var parts = component.ToolNames.Select(name => located.Single(t => t.Name == name)).ToArray();
         if (parts.All(p => p.Path is null)) return new(ComponentState.Missing, parts, Reason: "未检测到可执行文件。");
         if (parts.Any(p => p.Path is null)) return new(ComponentState.Partial, parts, Reason: "缺少子工具：" + string.Join("、", parts.Where(p => p.Path is null).Select(p => p.Name)));
@@ -35,7 +32,7 @@ public sealed class ComponentVerifier(IComponentProbeRunner? probeRunner = null,
             }
             if (component.Id == "afs")
             {
-                var backend = (fontToolsLocator ?? (value => FontToolsLocator.Find(value)))(workspace);
+                var backend = (fontToolsLocator ?? (value => FontToolsLocator.Find(new ToolConfiguration(value.ToolsDirectory, value.LogsDirectory, value.CacheDirectory, value.FontToolsDirectoryOverride))))(configuration);
                 if (backend is null) return new(ComponentState.DependencyMissing, parts, version, "缺少 fonttools 后端：需要同目录且可运行的 pyftsubset 与 ttx。");
                 await ProbeAsync(Path.Combine(backend, Executable("pyftsubset")), ["--help"], cancellationToken).ConfigureAwait(false);
                 await ProbeAsync(Path.Combine(backend, Executable("ttx")), ["--version"], cancellationToken).ConfigureAwait(false);

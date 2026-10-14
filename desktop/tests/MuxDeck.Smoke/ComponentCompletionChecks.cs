@@ -1,3 +1,4 @@
+using C = MuxDeck.Contracts;
 using MuxDeck.Desktop.Composition;
 using MuxDeck.Infrastructure;
 using MuxDeck.Infrastructure.Muxing;
@@ -7,7 +8,6 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 using MuxDeck.Core;
-using MuxDeck.Core.Components;
 using MuxDeck.Core.Muxing;
 
 internal static class ComponentCompletionChecks
@@ -152,7 +152,7 @@ internal static class ComponentCompletionChecks
         var fonts = Path.Combine(root, "fonts"); Directory.CreateDirectory(fonts);
         File.Copy(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Fonts", "arial.ttf"), Path.Combine(fonts, "arial.ttf"));
         var video = Path.Combine(root, "source.mkv");
-        var ffmpeg = new ToolLocator(workspace).Inspect().Single(p => p.Name == "ffmpeg").Path!;
+        var ffmpeg = new ToolLocator(new MuxDeck.Contracts.ComponentConfiguration(workspace.Root, workspace.ToolsDirectory, workspace.TaskLogsDirectory, workspace.TaskCacheDirectory, workspace.FontToolsDirectoryOverride)).Inspect().Single(p => p.Name == "ffmpeg").Path!;
         var generated = await new ProcessRunner().RunAsync(new ProcessRequest(ffmpeg, ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=320x180:r=24:d=1", "-c:v", "libx264", "-pix_fmt", "yuv420p", video]));
         check(generated.ExitCode == 0 && File.Exists(video), "新安装 FFmpeg 生成真实隔离素材");
         var subtitle = Path.Combine(root, "test.ass");
@@ -191,12 +191,12 @@ internal static class ComponentCompletionChecks
     {
         public bool SawCandidate { get; private set; }
         public bool SawBackendOverride { get; private set; }
-        public Task<ComponentInspection> VerifyAsync(ComponentDefinition component, Workspace workspace, CancellationToken cancellationToken)
+        public Task<MuxDeck.Infrastructure.Components.ComponentInspection> VerifyAsync(ComponentDefinition component, C.ComponentConfiguration configuration, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            SawCandidate = workspace.ToolsDirectory.Contains(".muxdeck-");
-            if (component.Id == "afs") SawBackendOverride = workspace.FontToolsDirectoryOverride is { } path && File.Exists(Path.Combine(path, "ttx.exe"));
-            return Task.FromResult(new ComponentInspection(ComponentState.Available, [], "fixture"));
+            SawCandidate = configuration.ToolsDirectory.Contains(".muxdeck-");
+            if (component.Id == "afs") SawBackendOverride = configuration.FontToolsDirectoryOverride is { } path && File.Exists(Path.Combine(path, "ttx.exe"));
+            return Task.FromResult(new MuxDeck.Infrastructure.Components.ComponentInspection(ComponentState.Available, [], "fixture"));
         }
     }
 }

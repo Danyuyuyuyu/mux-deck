@@ -486,7 +486,7 @@ internal static class WarningPolicyChecks
 
         try
         {
-            var tools = new ToolLocator(workspace).Inspect();
+            var tools = new ToolLocator(new MuxDeck.Contracts.ComponentConfiguration(workspace.Root, workspace.ToolsDirectory, workspace.TaskLogsDirectory, workspace.TaskCacheDirectory, workspace.FontToolsDirectoryOverride)).Inspect();
             string? Tool(string name) => tools.FirstOrDefault(tool => tool.Name == name)?.Path;
             var missing = new[] { "ffmpeg", "mkvmerge", "mkvextract", "AssFontSubset" }.Where(name => Tool(name) is null).ToArray();
             if (missing.Length > 0)

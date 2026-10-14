@@ -118,7 +118,7 @@ internal static class AutomaticMediaDropChecks
     }
     private static void VerifyReal(Workspace workspace, string root, Action<bool, string> check)
     {
-        var tool = new ToolLocator(workspace).Inspect(); var ffmpeg = tool.Single(t => t.Name == "ffmpeg").Path ?? throw new FileNotFoundException("ffmpeg");
+        var tool = new ToolLocator(new MuxDeck.Contracts.ComponentConfiguration(workspace.Root, workspace.ToolsDirectory, workspace.TaskLogsDirectory, workspace.TaskCacheDirectory, workspace.FontToolsDirectoryOverride)).Inspect(); var ffmpeg = tool.Single(t => t.Name == "ffmpeg").Path ?? throw new FileNotFoundException("ffmpeg");
         var process = new ProcessRunner();
         void Run(string executable, IReadOnlyList<string> args) { var task = process.RunAsync(new ProcessRequest(executable, args)); Pump(task, 120); if (task.Result.ExitCode != 0) throw new InvalidOperationException(task.Result.StandardError); }
         var video = Path.Combine(root, "video.mp4"); var audio = Path.Combine(root, "extra.jpn.flac");

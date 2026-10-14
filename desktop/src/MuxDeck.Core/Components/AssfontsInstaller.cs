@@ -1,10 +1,7 @@
-namespace MuxDeck.Core.Components;
+using MuxDeck.Infrastructure;
+using MuxDeck.Infrastructure.Components;
 
-public sealed record ComponentPackage(string Url, string Sha256, long Size, long MaxExpandedBytes = 100 * 1024 * 1024);
-public sealed class ComponentInstallException(string message, string logPath, Exception? inner = null) : IOException(message, inner)
-{
-    public string LogPath { get; } = logPath;
-}
+namespace MuxDeck.Core.Components;
 
 // 兼容首轮安装入口，所有组件共用同一下载、暂存和并发守卫。
 public sealed class AssfontsInstaller(HttpClient? httpClient = null, IComponentVerifier? verifier = null, ComponentPackage? package = null) : IComponentInstaller

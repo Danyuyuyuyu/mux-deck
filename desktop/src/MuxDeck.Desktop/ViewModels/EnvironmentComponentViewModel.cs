@@ -1,45 +1,44 @@
 using System.Collections.ObjectModel;
-using MuxDeck.Core;
-using MuxDeck.Core.Components;
+using MuxDeck.Contracts;
 
 namespace MuxDeck.Desktop.ViewModels;
 
 public sealed class EnvironmentComponentViewModel : ObservableObject
 {
     private ComponentInspection inspection;
-    private ComponentInstallProgress install = new(ComponentInstallPhase.Idle, "");
+    private ComponentProgress install = new(ComponentPhase.Idle, "");
     private string error = "", logPath = "";
     private bool detailsOpen;
     private bool removing, removalError;
     private string removalMessage = "";
-    private ComponentRemovalPlan? componentPlan, dependencyPlan, confirmationPlan, lastRemovalPlan;
+    private ComponentUninstallPlan? componentPlan, dependencyPlan, confirmationPlan, lastRemovalPlan;
     private Func<bool> canOperate = () => false;
 
-    public EnvironmentComponentViewModel(string name, string description, string category, IReadOnlyList<ToolStatus> parts)
-        : this(ComponentCatalog.All.FirstOrDefault(c => c.Name == name) ?? new(name, name, description, category == "核心组件", parts.Select(p => p.Name).ToArray(), ""), parts) { }
+    public EnvironmentComponentViewModel(string name, string description, string category, IReadOnlyList<EnvironmentToolStatus> parts)
+        : this(new EnvironmentComponentDefinition(name, name, description, category == "核心组件", parts.Select(p => p.Name).ToArray(), ""), parts) { }
 
-    public EnvironmentComponentViewModel(ComponentDefinition definition, IReadOnlyList<ToolStatus> parts)
+    public EnvironmentComponentViewModel(EnvironmentComponentDefinition definition, IReadOnlyList<EnvironmentToolStatus> parts)
     {
         Definition = definition;
         Parts = new(parts);
-        inspection = new(parts.All(p => p.Path is null) ? ComponentState.Missing : ComponentState.Found, parts);
+        inspection = new(Id, parts.All(p => p.Path is null) ? ComponentState.Missing : ComponentState.Found, []);
         ToggleDetailsCommand = new(() => { detailsOpen = !detailsOpen; Notify(); });
         GuideCommand = new(() => { detailsOpen = !detailsOpen; Notify(); });
     }
 
-    public ComponentDefinition Definition { get; }
+    public EnvironmentComponentDefinition Definition { get; }
     public string Id => Definition.Id;
     public string Name => Definition.Name;
     public string Description => Definition.Description;
     public string Category => Definition.IsCore ? "核心组件" : "扩展组件";
-    public ObservableCollection<ToolStatus> Parts { get; }
+    public ObservableCollection<EnvironmentToolStatus> Parts { get; }
     public ComponentState State => inspection.State;
     public bool HasParts => Parts.Count > 1;
     public bool IsAvailable => State == ComponentState.Available;
     public bool IsPartiallyAvailable => State == ComponentState.Partial;
     public bool IsMissing => State == ComponentState.Missing;
-    public bool IsInstalling => install.Phase is ComponentInstallPhase.Preparing or ComponentInstallPhase.Downloading or ComponentInstallPhase.Installing or ComponentInstallPhase.Verifying;
-    public bool HasInstallError => install.Phase == ComponentInstallPhase.Failed;
+    public bool IsInstalling => install.Phase is ComponentPhase.Preparing or ComponentPhase.Downloading or ComponentPhase.Installing or ComponentPhase.Verifying;
+    public bool HasInstallError => install.Phase == ComponentPhase.Failed;
     public bool IsUninstalling => removing;
     public bool IsOperating => IsInstalling || IsUninstalling;
     public bool HasRemovalError => removalError;
@@ -50,9 +49,9 @@ public sealed class EnvironmentComponentViewModel : ObservableObject
     public bool IsNeutralStatus => !IsHealthy && !IsErrorStatus && !IsWarningStatus;
     public string StatusText => IsUninstalling ? "正在卸载" : HasRemovalError ? "卸载失败" : IsInstalling ? install.Phase switch
     {
-        ComponentInstallPhase.Preparing => "准备安装",
-        ComponentInstallPhase.Downloading => "下载中",
-        ComponentInstallPhase.Installing => "正在安装",
+        ComponentPhase.Preparing => "准备安装",
+        ComponentPhase.Downloading => "下载中",
+        ComponentPhase.Installing => "正在安装",
         _ => "验证中"
     } : HasInstallError ? "安装失败" : State switch
     {
@@ -69,16 +68,16 @@ public sealed class EnvironmentComponentViewModel : ObservableObject
     public string MissingText => inspection.Reason ?? (IsMissing ? "未检测到可执行文件。" : "");
     public bool HasReason => MissingText.Length > 0 && !IsOperating && !HasOperationError;
     public string PartsText => string.Join("   ·   ", Parts.Select(x => $"{x.Name} {(x.Path is not null ? "✓" : "—")}"));
-    public bool CanAutoInstall => ComponentCatalog.SupportsInstall(Id);
+    public bool CanAutoInstall => Id is "mkvtoolnix" or "afs" or "ffmpeg" or "assfonts";
     public bool ShowInstall => CanAutoInstall && (IsMissing || HasInstallError || Id == "afs" && State == ComponentState.DependencyMissing) && !IsOperating && !HasRemovalError && !IsConfirmingRemoval;
     public bool ShowGuide => !IsOperating && !HasRemovalError && !IsConfirmingRemoval && !ShowInstall && !IsAvailable && State != ComponentState.Checking;
     public bool ShowCancel => IsInstalling;
     public string InstallActionText => HasInstallError ? "重试" : Id == "afs" && State == ComponentState.DependencyMissing ? "安装依赖" : "安装";
     public bool CanChange => canOperate();
     public bool ShowProgress => IsOperating;
-    public bool ProgressIndeterminate => IsUninstalling || install.Phase != ComponentInstallPhase.Downloading || install.TotalBytes is null;
+    public bool ProgressIndeterminate => IsUninstalling || install.Phase != ComponentPhase.Downloading || install.TotalBytes is null;
     public double ProgressValue => install.TotalBytes is > 0 ? 100d * install.Bytes / install.TotalBytes.Value : 0;
-    public string ProgressText => IsUninstalling ? removalMessage : install.Phase == ComponentInstallPhase.Downloading
+    public string ProgressText => IsUninstalling ? removalMessage : install.Phase == ComponentPhase.Downloading
         ? $"{install.Message}  {install.Bytes / 1048576d:0.0} / {install.TotalBytes.GetValueOrDefault() / 1048576d:0.0} MB"
         : install.Message;
     public string ErrorSummary => error.Length <= 110 ? error : error[..110] + "…";
@@ -90,8 +89,8 @@ public sealed class EnvironmentComponentViewModel : ObservableObject
     public bool ShowManagementMenu => (CanRemoveComponent || CanRemoveDependencies) && !IsOperating && !IsConfirmingRemoval;
     public bool HasIndependentDependencies => dependencyPlan is not null;
     public string DependencySummary => "独立 fonttools 依赖 · 来源 Mux Deck";
-    public ComponentRemovalPlan? ConfirmationPlan => confirmationPlan;
-    public ComponentRemovalPlan? LastRemovalPlan => lastRemovalPlan;
+    public ComponentUninstallPlan? ConfirmationPlan => confirmationPlan;
+    public ComponentUninstallPlan? LastRemovalPlan => lastRemovalPlan;
     public bool IsConfirmingRemoval => confirmationPlan is not null;
     public string RemovalTitle => confirmationPlan?.Kind == ComponentRemovalKind.Dependencies ? "卸载独立依赖" : "卸载 " + Name;
     public string RemovalDirectory => confirmationPlan?.TargetDirectory ?? "";
@@ -122,35 +121,36 @@ public sealed class EnvironmentComponentViewModel : ObservableObject
         Notify();
     }
 
-    public void UpdateManagedDirectories(StoragePaths storage)
+    public void UpdateManagedDirectories(ComponentDirectoryQuery? main, ComponentDirectoryQuery? dependencies)
     {
         if (removalError && lastRemovalPlan is { } previous &&
-            (!string.Equals(previous.ToolsDirectory, Path.TrimEndingDirectorySeparator(Path.GetFullPath(storage.ToolsDirectory)), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) ||
-            !Directory.Exists(previous.TargetDirectory) && !File.Exists(previous.TargetDirectory)))
+            (main is null || !string.Equals(previous.TargetDirectory, main.TargetDirectory, StringComparison.OrdinalIgnoreCase)))
         {
             // 用户已清理目标或切换组件目录，旧卸载错误不能阻止当前目录的安装。
             removalError = false; lastRemovalPlan = null; error = ""; logPath = ""; detailsOpen = false;
         }
-        var main = ComponentDirectories.TryPlan(storage, Id, ComponentRemovalKind.Component);
-        componentPlan = main is not null && (Parts.All(p => p.Path is null) || Parts.Any(p => p.Path is { } path && ComponentDirectories.IsInside(main.TargetDirectory, path))) ? main : null;
-        dependencyPlan = Id == "afs" ? ComponentDirectories.TryPlan(storage, Id, ComponentRemovalKind.Dependencies) : null;
+        componentPlan = main is not null && (Parts.All(p => p.Path is null) || Parts.Any(p => p.Path is { } path &&
+            path.StartsWith(main.TargetDirectory, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
+            ? new ComponentUninstallPlan(main.ComponentId, main.Kind, main.ToolsDirectory, main.TargetDirectory) : null;
+        dependencyPlan = dependencies is null ? null : new ComponentUninstallPlan(dependencies.ComponentId, dependencies.Kind,
+            dependencies.ToolsDirectory, dependencies.TargetDirectory);
         Notify();
     }
-    public void ConfirmRemoval(ComponentRemovalPlan plan)
+    public void ConfirmRemoval(ComponentUninstallPlan plan)
     {
         confirmationPlan = plan; detailsOpen = false; Notify();
     }
     public void CancelRemovalConfirmation() { confirmationPlan = null; Notify(); }
-    public void BeginRemoval(ComponentRemovalPlan plan)
+    public void BeginRemoval(ComponentUninstallPlan plan)
     {
         lastRemovalPlan = plan; confirmationPlan = null; removing = true; removalError = false;
-        install = new(ComponentInstallPhase.Idle, ""); error = ""; logPath = ""; detailsOpen = false; removalMessage = "正在卸载"; Notify();
+        install = new(ComponentPhase.Idle, ""); error = ""; logPath = ""; detailsOpen = false; removalMessage = "正在卸载"; Notify();
     }
-    public void SetRemovalProgress(ComponentRemovalProgress value) { removalMessage = value.Message; Notify(); }
+    public void SetRemovalProgress(ComponentProgress value) { removalMessage = value.Message; Notify(); }
     public void CompleteRemoval() { removing = false; removalError = false; Notify(); }
     public void FailRemoval(string message, string? log = null)
     {
-        confirmationPlan = null; removing = false; removalError = true; install = new(ComponentInstallPhase.Idle, "");
+        confirmationPlan = null; removing = false; removalError = true; install = new(ComponentPhase.Idle, "");
         error = message; logPath = log ?? ""; Notify();
     }
 
@@ -165,21 +165,40 @@ public sealed class EnvironmentComponentViewModel : ObservableObject
     public void ApplyInspection(ComponentInspection value)
     {
         inspection = value;
-        Parts.Clear();
-        foreach (var part in value.Parts) Parts.Add(part);
+        if (!value.Parts.IsEmpty)
+        {
+            Parts.Clear();
+            foreach (var part in value.Parts)
+                Parts.Add(new EnvironmentToolStatus(part.Name, PurposeText(part.Purpose), part.Path, SourceDisplay(part.Source)));
+        }
         Notify();
     }
-    public void SetInstallProgress(ComponentInstallProgress value) { install = value; Notify(); }
+
+    private static string PurposeText(ComponentPartPurpose purpose) => purpose switch
+    {
+        ComponentPartPurpose.PackagingAndProbe => "封装与轨道探测",
+        ComponentPartPurpose.SubtitleFontChapterExtraction => "字幕、字体与章节提取",
+        ComponentPartPurpose.TrackMetadataRepair => "轨道与容器元数据修补",
+        ComponentPartPurpose.SubtitleRenderPreview => "字幕渲染与预览",
+        ComponentPartPurpose.PrimaryFontSubsetting => "字体子集化主工具",
+        ComponentPartPurpose.FallbackFontSubsetting => "字体子集化备用工具",
+        _ => ""
+    };
+    private static string SourceDisplay(ComponentPartSource source) => source switch
+    {
+        ComponentPartSource.MuxDeck => "Mux Deck", ComponentPartSource.Path => "PATH", ComponentPartSource.System => "系统", _ => "未找到"
+    };
+    public void SetInstallProgress(ComponentProgress value) { install = value; Notify(); }
     public void BeginInstall()
     {
         removing = false; removalError = false; confirmationPlan = null;
         error = ""; logPath = ""; detailsOpen = false;
-        SetInstallProgress(new(ComponentInstallPhase.Preparing, "准备安装"));
+        SetInstallProgress(new(ComponentPhase.Preparing, "准备安装"));
     }
     public void Fail(string message, string? log = null)
     {
         error = message; logPath = log ?? "";
-        SetInstallProgress(new(ComponentInstallPhase.Failed, "安装失败"));
+        SetInstallProgress(new(ComponentPhase.Failed, "安装失败"));
     }
     public void Notify()
     {

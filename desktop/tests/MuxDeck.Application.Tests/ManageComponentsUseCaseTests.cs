@@ -120,7 +120,7 @@ public sealed class ManageComponentsUseCaseTests
     {
         var coordinator = new OperationCoordinator();
         var backend = new FakeComponents { Inspect = new("afs", ComponentState.DependencyMissing,
-            [new("AFS", "path", ComponentState.Found, null, "用途", "Mux Deck")], "2.1.1", "缺后端") };
+            [new("AFS", "path", ComponentState.Found, null, ComponentPartPurpose.Unknown, ComponentPartSource.MuxDeck)], "2.1.1", "缺后端") };
         backend.OnInspection = () => Assert.Equal(OperationKind.ComponentInspection, coordinator.State.ActiveOperations[^1]);
         var useCase = new ManageComponentsUseCase(backend, coordinator);
         await using var install = await coordinator.TryAcquireAsync(OperationKind.ComponentInstall, cancellationToken: TestContext.Current.CancellationToken);

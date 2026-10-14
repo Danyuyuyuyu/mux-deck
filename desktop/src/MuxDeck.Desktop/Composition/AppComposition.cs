@@ -3,7 +3,7 @@ using MuxDeck.Application;
 using MuxDeck.Application.Ports;
 using MuxDeck.Contracts;
 using MuxDeck.Core;
-using MuxDeck.Core.Components;
+using MuxDeck.Infrastructure.Components;
 using MuxDeck.Core.Muxing;
 using MuxDeck.Desktop.Preferences;
 using MuxDeck.Desktop.ViewModels;
@@ -16,16 +16,6 @@ namespace MuxDeck.Desktop.Composition;
 // 生产启动与 Smoke 共用对象图；外部边界可替换，ViewModel 不创建默认服务。
 public static class AppComposition
 {
-    // 4a-2 前旧组件 API 仍通过同一个桥接取得租约，创建归属已经移出 Core。
-    private static readonly Lazy<IOperationCoordinator> legacyCoordinator = new(() =>
-    {
-        var coordinator = new OperationCoordinator();
-        ComponentManagement.ConfigureLegacyCoordinator(coordinator);
-        return coordinator;
-    });
-
-    public static void InitializeLegacyComponents() => _ = legacyCoordinator.Value;
-
     public static void Start(string[] args)
     {
         if (args.Length != 0 && (args.Length != 2 || args[0] != "--root"))
@@ -35,10 +25,9 @@ public static class AppComposition
         var storage = LoadStorage(workspace, !string.IsNullOrWhiteSpace(explicitRoot), StorageSettingsStore.DefaultPath);
         storage.EnsureDirectories();
         workspace = workspace with { ToolsDirectoryOverride = storage.ToolsDirectory };
-        InitializeLegacyComponents();
         AppBuilder.Configure(() => new App(() => new MainWindow
         {
-            DataContext = CreateMain(workspace, preferences: UserPreferencesStore.CreateDefault(storage), storage: storage)
+            DataContext = CreateMain(workspace, preferences: UserPreferencesStore.CreateDefault(storage.ConfigDirectory), storage: storage)
         })).UsePlatformDetect().LogToTrace().StartWithClassicDesktopLifetime(args);
     }
 
@@ -67,13 +56,17 @@ public static class AppComposition
         string? settingsPath = null, IComponentVerifier? verifier = null, IComponentInstaller? installer = null,
         IComponentUninstaller? uninstaller = null)
     {
-        InitializeLegacyComponents();
         var settings = new StorageSettingsStore(settingsPath ?? StorageSettingsStore.DefaultPath);
         verifier ??= new ComponentVerifier();
         installer ??= new ComponentInstaller(verifier: verifier);
         uninstaller ??= new ComponentUninstaller();
-        return new(workspace, storage, next => settings.Save(new(next.AppDataRoot, next.ToolsDirectory)),
-            verifier, installer, uninstaller, current => new ToolLocator(current).Inspect());
+        var coordinator = new OperationCoordinator();
+        var manager = new ManageComponentsUseCase(new InfrastructureComponentManager(verifier, installer, uninstaller), coordinator);
+        var configuration = new ComponentConfiguration(workspace.Root, storage.ToolsDirectory, storage.LogsDirectory, storage.CacheDirectory, workspace.FontToolsDirectoryOverride);
+        var definitions = ComponentCatalog.All.Select(value => new EnvironmentComponentDefinition(value.Id, value.Name, value.Description, value.IsCore, value.ToolNames, value.GuideUrl)).ToArray();
+        IReadOnlyList<EnvironmentToolStatus> Inspect(ComponentConfiguration value) => new ToolLocator(value).Inspect().Select(part => new EnvironmentToolStatus(part.Name, part.Purpose, part.Path, part.Source)).ToArray();
+        var viewStorage = new EnvironmentStorage(storage.AppDataRoot, storage.ToolsDirectory, storage.ConfigDirectory, storage.LogsDirectory, storage.CacheDirectory);
+        return new(configuration, viewStorage, manager, Inspect, definitions, next => settings.Save(new(next.AppDataRoot, next.ToolsDirectory)));
     }
 
     public static MainWindowViewModel CreateMain(Workspace workspace, SingleMuxService? singleService = null,
@@ -82,7 +75,7 @@ public static class AppComposition
         var paths = storage ?? StoragePaths.ForWorkspace(workspace.Root);
         if (storage is not null)
             workspace = workspace with { ToolsDirectoryOverride = storage.ToolsDirectory, StorageOverride = storage };
-        return new(workspace, paths, environment ?? CreateEnvironment(workspace, paths),
-            CreateSingle(singleService ?? CreateSingleService(workspace), preferences));
+        var env = environment ?? CreateEnvironment(workspace, paths);
+        return new(workspace, env.Storage, env, CreateSingle(singleService ?? CreateSingleService(workspace), preferences));
     }
 }

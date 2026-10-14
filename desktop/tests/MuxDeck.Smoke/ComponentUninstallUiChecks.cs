@@ -1,3 +1,4 @@
+using C = MuxDeck.Contracts;
 using MuxDeck.Desktop.Composition;
 using MuxDeck.Infrastructure;
 using MuxDeck.Infrastructure.Muxing;
@@ -8,7 +9,6 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using MuxDeck.Core;
-using MuxDeck.Core.Components;
 using MuxDeck.Core.Muxing;
 using MuxDeck.Desktop;
 using MuxDeck.Desktop.Preferences;
@@ -120,7 +120,7 @@ internal static class ComponentUninstallUiChecks
                 Check(afs.RemovalDescription.Contains("主程序保留"), "依赖确认说明保留主程序");
                 Snapshot("confirm-dependency");
                 Confirm(afs);
-                Check(File.Exists(Path.Combine(storage.ToolsDirectory, "assfontsubset", "AssFontSubset.Console.exe")) && afs.State == ComponentState.DependencyMissing && afs.InstallActionText == "安装依赖", "卸载独立依赖保留主程序并恢复安装依赖");
+                Check(File.Exists(Path.Combine(storage.ToolsDirectory, "assfontsubset", "AssFontSubset.Console.exe")) && afs.State == C.ComponentState.DependencyMissing && afs.InstallActionText == "安装依赖", "卸载独立依赖保留主程序并恢复安装依赖");
                 UiInputTestSupport.Click(window, Button(afs, "安装依赖"));
                 UiInputTestSupport.Pump(env.InstallTask); UiInputTestSupport.Pump(env.ValidationTask);
                 Check(afs.IsHealthy && afs.CanRemoveDependencies, "安装依赖后恢复可用及依赖管理");
@@ -148,12 +148,12 @@ internal static class ComponentUninstallUiChecks
                 probeRunner.Hold = true;
                 var import = main.Single.PrepareMediaInputAsync([new(video, InputCandidateKind.LocalFile)]);
                 Check(main.Single.HasActiveToolProbes && !env.CanChangePaths, "媒体识别探测未结束时禁止卸载和路径修改");
-                env.RequestRemoval(mkv, ComponentRemovalKind.Component);
+                env.RequestRemoval(mkv, C.ComponentRemovalKind.Component);
                 Check(!mkv.IsConfirmingRemoval, "正在使用工具的导入探测阻止卸载确认");
                 probeRunner.Release(); UiInputTestSupport.Pump(import);
                 Check(!main.Single.HasActiveToolProbes && env.CanChangePaths, "探测真正结束后解除目录操作锁");
                 env.SetWorkGuard(() => true);
-                env.RequestRemoval(mkv, ComponentRemovalKind.Component);
+                env.RequestRemoval(mkv, C.ComponentRemovalKind.Component);
                 Check(!mkv.IsConfirmingRemoval && Directory.Exists(Path.Combine(storage.ToolsDirectory, "mkvtoolnix")), "封装或探测忙碌时拒绝卸载请求");
                 env.SetWorkGuard(() => false);
                 Request(mkv, "卸载组件");
@@ -193,20 +193,20 @@ internal static class ComponentUninstallUiChecks
     {
         public Dictionary<string, string> External { get; } = [];
         public bool ExternalBackend { get; set; }
-        public Task<ComponentInspection> VerifyAsync(ComponentDefinition component, Workspace workspace, CancellationToken cancellationToken)
+        public Task<MuxDeck.Infrastructure.Components.ComponentInspection> VerifyAsync(ComponentDefinition component, C.ComponentConfiguration configuration, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var release = ComponentReleases.All[component.Id];
             var parts = component.ToolNames.Select((name, index) =>
             {
-                var own = Path.Combine(workspace.ToolsDirectory, release.Directory, release.RequiredFiles[index]);
+                var own = Path.Combine(configuration.ToolsDirectory, release.Directory, release.RequiredFiles[index]);
                 var path = File.Exists(own) ? own : External.GetValueOrDefault(component.Id);
                 return new ToolStatus(name, "", path) { Source = path == own ? "Mux Deck" : path is null ? "未找到" : "PATH" };
             }).ToArray();
             var missing = parts.All(p => p.Path is null);
             bool Pair(string scripts) => File.Exists(Path.Combine(scripts, "pyftsubset.exe")) && File.Exists(Path.Combine(scripts, "ttx.exe"));
-            var depsMissing = component.Id == "afs" && !ExternalBackend && !Pair(Path.Combine(workspace.ToolsDirectory, "fonttools", "Scripts")) && !Pair(Path.Combine(workspace.ToolsDirectory, "assfontsubset", "python", "Scripts"));
-            return Task.FromResult(new ComponentInspection(missing ? ComponentState.Missing : depsMissing ? ComponentState.DependencyMissing : ComponentState.Available, parts, missing ? null : "1.0", missing ? "未检测到可执行文件。" : depsMissing ? "缺少 fonttools 后端。" : null));
+            var depsMissing = component.Id == "afs" && !ExternalBackend && !Pair(Path.Combine(configuration.ToolsDirectory, "fonttools", "Scripts")) && !Pair(Path.Combine(configuration.ToolsDirectory, "assfontsubset", "python", "Scripts"));
+            return Task.FromResult(new MuxDeck.Infrastructure.Components.ComponentInspection(missing ? ComponentState.Missing : depsMissing ? ComponentState.DependencyMissing : ComponentState.Available, parts, missing ? null : "1.0", missing ? "未检测到可执行文件。" : depsMissing ? "缺少 fonttools 后端。" : null));
         }
     }
     private sealed class Installer : IComponentInstaller

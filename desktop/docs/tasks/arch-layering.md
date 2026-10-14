@@ -172,12 +172,36 @@ Core 的全局 Gate 仅覆盖安装与卸载（含 AssfontsInstaller 兼容入�
 
 **用户已批准**：`ComponentVerifier`、`ComponentInstaller`、`ComponentUninstaller`、`ComponentDirectories`、`ComponentReleases` 五个组件类与 `StoragePaths`、`ToolLocator` 迁入 Infrastructure；`EnvironmentViewModel`、`EnvironmentComponentViewModel` 改为调用 `IManageComponents` 和契约模型；清理下方“3e 遗留问题”中列入 4a-2 的问题，不含 4d 和第 5 步条目；组件和环境 Smoke 按需改测试逻辑。
 
+**用户已批准**：环境页目录显示采用“契约新增同步只读查询”方案。查询结果只用于显示；确认卸载仍走 `PrepareUninstallAsync`，执行时复核边界。UI 线程同步检查文件系统的问题记为遗留。
+
+**用户已批准**：新增架构测试，Desktop 中只有 `MuxDeck.Desktop.Composition` 命名空间可以引用 `MuxDeck.Infrastructure`。
+
 ### 4a-3 导入用例（中）
 
 **用户已批准**：实现 `IPrepareImport`，`MediaImport.cs` 的接纳和校验逻辑迁进用例；SRT 时间轴规则移进 Domain，由 `RunSingleMuxUseCase` 和导入用例共用；字幕读取统一走 Infrastructure `MuxInputReader`；删除 Core `SubtitleText`。
 
+**用户已批准**：`RunSingleMuxUseCase` 的 `ValidLanguage` / `LanguagePattern` 移进 Domain，和 SRT 时间轴规则一起共用。`LanguageDisplay` 的显示别名和 QC 匹配规则不动。
+
+- 合并字幕读取时，缺文件、非 UTF-8、非字幕、空 SRT、ASS 缺少必要节时，导入界面的错误文案必须和原来逐字一致。
+
 - 验证：接纳 88/89、输入反馈 24 及相关 UI 套件。
 - 执行顺序：4a-1 → 4a-2 → 4a-3 → 4b。
+
+#### 4a-2 实施与实际验证（2026-10-14）
+
+本步基于 `72b76de`，提交在 `review/4a-2`。组件边界实现及其依赖已从 Core 移到 Infrastructure；`AssfontsInstaller` 仍留在 Core，按计划在第 5 步处理。Core 的 `ComponentManagement` 和静态 `ComponentOperations` 桥接删除，旧公开入口不再绕回 `*CoreAsync`，`legacyExceptions` 与 `checker is ComponentVerifier` 特判删除。`ComponentPart.Source/Purpose` 改为契约枚举，中文文字由 Desktop 映射，现有显示文案保持不变。
+
+契约只增加两类内容：`ComponentPartPurpose` / `ComponentPartSource` 枚举，以及同步的 `ComponentDirectoryQuery` 只读查询。`ManageComponentsUseCase` 以同一个 `OperationCoordinator` 管理检测、安装、卸载租约；协调器由 `AppComposition` 创建。环境两个 ViewModel 只依赖 `IManageComponents`、契约和 Desktop 映射模型。目录查询只用于显示，确认卸载仍调用 `PrepareUninstallAsync`，执行时再次检查边界；忙碌或关闭期间查询返回空，保留原来隐藏候选的行为。Desktop 对 Infrastructure 的引用仅保留在 `MuxDeck.Desktop.Composition`，新增架构测试并用故意违规样例确认规则会拒绝。
+
+Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionChecks.cs`、`ComponentInstallationUiChecks.cs`、`ComponentUninstallUiChecks.cs` 改用契约配置和 Infrastructure 组件接口；`ComponentUninstallChecks.cs` 的并发互斥场景改为同一协调器与 `ManageComponentsUseCase`；`EnvironmentUiChecks.cs` 的契约检查夹具保留既有 Parts 显示；`AutomaticMediaDropChecks.cs`、`Phase1Integration.cs`、`Program.cs`、`WarningPolicyChecks.cs` 只把工具定位参数改为配置快照。断言、预期文案和状态序列未改。原 Core 的 `ComponentManagementTests.cs`、`ToolLocatorSourceTests.cs` 移到 `Infrastructure.IntegrationTests`，测试总数仍保留原有 786 项。
+
+本地验证结果：locked restore 11/11；Release 构建 0 警告 / 0 错误；全量单元测试 786/786（Core 57、Application 161、Domain 298、Architecture 198、Infrastructure 72）；受控套件 13/13、656/656；组件检测 31/31、环境 UI 23/23、安装 UI 37/37、卸载 UI 61/61、存储与 `--root` 隔离 5/5；固定缓存真实卸载循环 17/17。以 `72b76de` 的 Smoke 源文件提取文案比较，环境 UI 16/16、安装 UI 35/35、卸载 UI 47/47 相同。此步没有改变探测命令行或参数，因此未运行额外真实探测基准；真实卸载是本步要求的唯一真实工具链验证。
+
+#### 4a-2 调查报告
+
+1. `EnvironmentComponentViewModel.cs:134` 原先同步调用 `ComponentDirectories.TryPlan`，而 `IManageComponents` 只有异步 `PrepareUninstallAsync`。本步采用契约新增同步只读查询：它只读取并返回不可变目录结果，适合刷新显示；确认和执行仍走异步准备并在执行时复核，UI 套件只需把替身从旧组件接口换成契约查询，断言和状态序列不变。另一方案是把 UI 改成异步刷新目录：可完全避免 UI 线程同步文件系统访问，但会引入加载/竞态状态，环境 UI 需要等待或重排刷新时序，现有套件更容易出现时序差异。当前同步查询造成的 UI 线程文件系统检查记为遗留。
+2. Core `SubtitleText.Read` 与 Infrastructure `MuxInputReader.ReadTrackAsync` 对 ASS 均调用 `AssGlyphValidator.ReadAss`，因此都严格 UTF-8、去除开头 BOM，并在缺少 `[Script Info]` / `[Events]` 等必要节时报同一错误；SRT 都严格 UTF-8、去除 BOM，空文件都返回空字符串，均不做编码回退。差异是调用边界：`SubtitleText.Read` 只按扩展名读取，非 ASS 路径也会按 SRT 文本读取；`MuxInputReader` 还要求轨道类型为字幕且扩展名为 `.ass` / `.srt`，否则返回 `SubtitleText = null`。ASS 读取路径在两者中都经 `AssGlyphValidator`，缺文件仍由外层事实读取报告不存在，读取异常不被吞掉。
+3. 语言规则目前没有重复实现 `InferImported` 或 QC 的 `Matches`：两者集中在 Domain `LanguageRules`，`MediaImport` 与 `OutputQcRules` 分别调用。另有一份待 4a-3 合并的校验规则：`RunSingleMuxUseCase` 私有 `ValidLanguage` / `LanguagePattern`；SRT 时间轴正则也只在该用例出现。Desktop `LanguageDisplay` 仅负责显示别名，不能与 QC 匹配规则合并；本步未改动这些行为。
 
 ### 4b 草稿会话 `MuxDraft`（大，高风险）
 
@@ -263,7 +287,7 @@ Core 的全局 Gate 仅覆盖安装与卸载（含 AssfontsInstaller 兼容入�
 | **3d** | SingleMuxService 只含旧模型转换与用例调用（用户批准 UpdateWorkspace 外壳留到 4a）；Desktop 与 Smoke 零改动；全部受控与六项真实套件等于 dbe9f56 基准；e005923 与新代码四项逐产物对照一致；只本地提交，报告与两个哈希交用户确认后一起推送 |
 | **3e** | `ComponentOperations.Gate` 删除，所有互斥经 `IOperationCoordinator`；协调器测试覆盖同类/异类互斥矩阵、异常与取消后的租约释放、`ShutdownAsync` 等待全部租约；组件与环境相关套件等于基准；本地 `--component-uninstall-real` 17/17 |
 | **4a-1** | `AppComposition` 集中装配，ViewModel 构造注入，协调器由装配创建；UpdateWorkspace 外壳与 App.Workspace / App.Storage 删除；StorageSettingsStore 位于 Infrastructure；IProbeMedia 复用已有端口并以配置快照探测；仅新增 Desktop → Infrastructure，装配边界护栏保持通过；`--root` 与默认存储路径行为不变；原 777 单元测试保留，受控 13/13、656/656 与 UI 全套通过；Smoke 仅改装配 |
-| **4a-2** | 五个组件类、StoragePaths、ToolLocator 位于 Infrastructure；环境 ViewModel 只调用 IManageComponents 与契约模型；4a-2 的 3e 遗留问题清理完成；组件和环境 Smoke 按需迁移并保留行为覆盖 |
+| **4a-2** | 五个组件类、StoragePaths、ToolLocator 位于 Infrastructure；环境 ViewModel 只调用 IManageComponents 与契约模型；4a-2 的 3e 遗留问题清理完成；组件和环境 Smoke 按需迁移并保留行为覆盖；本地 786/786、受控 13/13 与 656/656、环境 23/23、安装 37/37、卸载 61/61、真实卸载 17/17 |
 | **4a-3** | IPrepareImport 接管接纳与校验；Domain SRT 时间轴规则由导入和 RunSingleMuxUseCase 共用；字幕只经 MuxInputReader 读取，Core SubtitleText 删除；接纳 88/89、输入反馈 24 及相关 UI 套件通过 |
 | **4b** | `MuxDraft` 测试覆盖：同值赋值不增修订号、一次接纳批次只增一次、准备→提交、运行中锁定拒绝、`ToSpec()` 快照与后续修改隔离；ViewModel 中不再有 SC/TC 默认规则等业务代码；UI、接纳、工作台、输入反馈、自动导入套件等于基准；1040×760 与 1280×900 截图与基线逐张对照无差异（差异须逐项说明）；本地 `--ui-integration` 等于基准；**推送前经用户确认** |
 | **4c** | `SingleMuxViewModel` 只做组合与过渡转发；六个区域 ViewModel 的绑定均为编译绑定且构建通过；可访问名称不变；全部 UI 套件等于基准 |
@@ -275,6 +299,7 @@ Core 的全局 Gate 仅覆盖安装与卸载（含 AssfontsInstaller 兼容入�
 | PR | 状态 | 验证 | 备注 |
 |---|---|---|---|
 | [4a-1 · `e87cb18`](https://github.com/Danyuyuyuyu/mux-deck/commit/e87cb18a0152222669fa47c8b754c52e2bef71af) | 已完成并推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38549905783) | locked restore 11/11；Release 0 警告 / 0 错误；test 786/786（原 777 保留，新增 9）；架构 198/198；受控 13/13、656/656，UI 全套通过；存储装配隔离检查 5/5 | AppComposition、构造注入、不可变配置与 IProbeMedia、存储索引迁入 Infrastructure；Smoke 仅装配，17 个源文件经精确替换比对；详见下方 4a-1 实施与实际验证和[后续调查报告](arch-layering-4a-investigation.md)。 |
+| [4a-2 · `review/4a-2`](https://github.com/Danyuyuyuyu/mux-deck/tree/review/4a-2) | 已完成，待审查；该分支未触发 Desktop CI | locked restore 11/11；Release 0 警告 / 0 错误；test 786/786；受控 13/13、656/656；组件 31/31；环境 UI 23/23；安装 UI 37/37；卸载 UI 61/61；存储与 `--root` 隔离 5/5；固定缓存真实卸载 17/17；基线文案比较相同 | 组件边界迁入 Infrastructure、契约枚举与同步目录查询、单一协调器和 Desktop 引用护栏；详见上方 4a-2 实施与调查报告；提交哈希待提交后回填。 |
 | [1a · PR #3](https://github.com/Danyuyuyuyu/mux-deck/pull/3) | 已合并（`c4f932e`） | 锁定 restore：9/9 项目；Release build：0 警告 / 0 错误；dotnet test：32/32（架构规则 27 + 扫描反例 5），失败/跳过 0；Smoke：28/28 | 三个空生产项目、三个 xUnit 测试项目、过渡引用、NetArchTest 护栏、CI test 步骤与全部新增项目锁文件；按已接受 ADR-0001 实施，未移动代码、定义契约或修改行为。Domain/Application 业务测试 0；未重放真实工具链或原生 UI。 |
 | [1b · `aa85458`](https://github.com/Danyuyuyuyu/mux-deck/commit/aa85458a3caf7b11e76ae5f7d60317d3c862ffe8) | 已完成，已推送，Desktop CI 通过 | restore 10/10；Release 0 警告 / 0 错误；dotnet test 71/71（转换 26、Domain 8、架构 37）；受控 13/13 套件、656/656；契约两条故意违反均被拒绝 | 公共不可变契约、四个 Domain 值类型与 Core 兼容转换；旧调用方零改动；详见下方命令与计数。未重放真实工具链或原生 UI。 |
 | [2a · `34c4c18`](https://github.com/Danyuyuyuyu/mux-deck/commit/34c4c1827169270c715a955fe027a0bd6622509d) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38390147903) | locked restore 10/10；Release 0 警告 / 0 错误；dotnet test 208/208；受控 13/13、656/656 | TrackPolicy、LanguageRules、OutputNaming 已迁入 Domain；新增 Domain 69、架构 3，原 136 全部保留；详见 2a 实际验证。 |
@@ -1118,6 +1143,8 @@ restore 11 个项目成功，Release 0 警告 / 0 错误，test 717/717。[构�
 - **4a-2**：旧公开方法经 ComponentManagement、用例、Backend 绕回 `*CoreAsync`，以及 `legacyExceptions` 开关；`checker is ComponentVerifier` 特判；`ComponentPart.Source/Purpose` 是中文显示文字，应改为枚举；协调器是 Core 静态单例（创建归属先在 4a-1 调整，组件迁移时清理过渡入口）。
 - **4d**：关闭期间组件检测抛 `InvalidOperationException`，和忙碌时返回结果的行为不一致。
 - **第 5 步**：`AssfontsInstaller` 未使用。
+- **4b/4c**：`SingleMuxViewModel` 通过 `service.Prober` / `service.Tools` 取依赖，应改为构造函数注入。
+- **4a-2**：`ConfigureTools` 去掉了原 `UpdateWorkspace` 对空工作区的校验；后续构造注入收口时补回等价边界校验。
 
 ### 4a-1 实施与实际验证（2026-10-14）
 

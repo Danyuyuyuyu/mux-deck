@@ -1,19 +1,13 @@
-namespace MuxDeck.Core.Components;
+namespace MuxDeck.Infrastructure.Components;
 
 public sealed class ComponentUninstaller : IComponentUninstaller
 {
     public async Task<ComponentRemovalResult> UninstallAsync(ComponentRemovalPlan plan, StoragePaths storage, IProgress<ComponentRemovalProgress> progress, CancellationToken cancellationToken)
-    {
-        MuxDeck.Contracts.IManageComponents manager = new ComponentManagement(null, null, this, null, true, null);
-        var result = await manager.UninstallAsync(ComponentManagement.Contract(plan), ComponentManagement.Configuration(storage),
-            new LegacyRemovalProgress(progress), cancellationToken).ConfigureAwait(false);
-        ComponentManagement.RequireSuccess(result, cancellationToken);
-        return new(result.Directory!, result.Log!.Path);
-    }
+        => await UninstallImplementationAsync(plan, storage, progress, cancellationToken).ConfigureAwait(false);
     private sealed class LegacyRemovalProgress(IProgress<ComponentRemovalProgress> progress) : IProgress<MuxDeck.Contracts.ComponentProgress>
     { public void Report(MuxDeck.Contracts.ComponentProgress value) => progress.Report(new(value.Message)); }
 
-    internal async Task<ComponentRemovalResult> UninstallCoreAsync(ComponentRemovalPlan plan, StoragePaths storage, IProgress<ComponentRemovalProgress> progress, CancellationToken cancellationToken)
+    private async Task<ComponentRemovalResult> UninstallImplementationAsync(ComponentRemovalPlan plan, StoragePaths storage, IProgress<ComponentRemovalProgress> progress, CancellationToken cancellationToken)
     {
         var logPath = Path.Combine(storage.LogsDirectory, "components", "uninstall-" + Guid.NewGuid().ToString("N") + ".log");
         StreamWriter? log = null;

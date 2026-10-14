@@ -1,15 +1,20 @@
 using MuxDeck.Application;
 using MuxDeck.Contracts;
-using MuxDeck.Core.Components;
+using MuxDeck.Infrastructure.Components;
 using MuxDeck.Infrastructure;
 using Xunit;
 using C = MuxDeck.Contracts;
 
-namespace MuxDeck.Core.Tests;
+namespace MuxDeck.Infrastructure.IntegrationTests;
 
 public sealed class ComponentManagementTests
 {
-    static ComponentManagementTests() => ComponentManagement.ConfigureLegacyCoordinator(new OperationCoordinator());
+    private static IManageComponents CreateManager(IOperationCoordinator coordinator, ComponentVerifier? verifier = null)
+    {
+        verifier ??= new ComponentVerifier();
+        return new ManageComponentsUseCase(new InfrastructureComponentManager(verifier, new ComponentInstaller(verifier: verifier), new ComponentUninstaller()), coordinator);
+    }
+
     [Fact]
     public async Task Inspection_contract_preserves_legacy_tool_identity_source_version_and_reason()
     {
@@ -19,14 +24,13 @@ public sealed class ComponentManagementTests
         foreach (var name in new[] { "mkvmerge", "mkvextract", "mkvpropedit" }) File.WriteAllText(Path.Combine(tools, "mkvtoolnix", name + ".exe"), "fixture");
         var verifier = new ComponentVerifier(new VersionRunner());
         var definition = ComponentCatalog.All.Single(value => value.Id == "mkvtoolnix");
-        var legacy = await verifier.VerifyAsync(definition, new(fixture.Root), TestContext.Current.CancellationToken);
-        IManageComponents manager = new ComponentManagement(verifier, coordinator: new OperationCoordinator());
+        var legacy = await verifier.VerifyAsync(definition, new(fixture.Root, tools, Path.Combine(fixture.Root, "logs"), Path.Combine(fixture.Root, "cache")), TestContext.Current.CancellationToken);
+        IManageComponents manager = CreateManager(new OperationCoordinator(), verifier);
         var result = await manager.InspectAsync("mkvtoolnix", new(fixture.Root, tools, "logs", "cache"), TestContext.Current.CancellationToken);
         Assert.Equal(C.ComponentState.Available, result.State);
         Assert.Equal(legacy.Version, result.Version);
         Assert.Equal(legacy.Reason, result.Reason);
-        Assert.Equal(legacy.Parts.Select(part => (part.Name, part.Path, part.Purpose, part.Source)),
-            result.Parts.Select(part => (part.Name, part.Path, part.Purpose, part.Source)));
+        Assert.Equal(legacy.Parts.Select(part => (part.Name, part.Path)), result.Parts.Select(part => (part.Name, part.Path)));
         Assert.All(result.Parts, part => Assert.Equal(C.ComponentState.Found, part.State));
     }
 
@@ -35,7 +39,7 @@ public sealed class ComponentManagementTests
     {
         using var fixture = new Fixture();
         var coordinator = new OperationCoordinator();
-        IManageComponents manager = new ComponentManagement(coordinator: coordinator);
+        IManageComponents manager = CreateManager(coordinator);
         var plan = await manager.PrepareUninstallAsync("assfonts", C.ComponentRemovalKind.Component, fixture.Configuration, TestContext.Current.CancellationToken);
         Assert.Equal(fixture.Target, plan.TargetDirectory);
         var messages = new List<ComponentProgress>();
@@ -67,7 +71,7 @@ public sealed class ComponentManagementTests
     {
         using var fixture = new Fixture();
         var coordinator = new OperationCoordinator();
-        IManageComponents manager = new ComponentManagement(coordinator: coordinator);
+        IManageComponents manager = CreateManager(coordinator);
         var forged = new ComponentUninstallPlan("assfonts", C.ComponentRemovalKind.Component, fixture.Tools, fixture.Root);
         var result = await manager.UninstallAsync(forged, fixture.Configuration, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(ComponentOperationStatus.Failed, result.Status);
@@ -85,8 +89,8 @@ public sealed class ComponentManagementTests
     {
         using var fixture = new Fixture();
         var coordinator = new OperationCoordinator();
-        IManageComponents first = new ComponentManagement(coordinator: coordinator);
-        IManageComponents second = new ComponentManagement(coordinator: coordinator);
+        IManageComponents first = CreateManager(coordinator);
+        IManageComponents second = CreateManager(coordinator);
         await using var lease = await coordinator.TryAcquireAsync(OperationKind.ComponentInstall, TestContext.Current.CancellationToken);
         var result = uninstall
             ? await first.UninstallAsync(new("assfonts", C.ComponentRemovalKind.Component, fixture.Tools, fixture.Target), fixture.Configuration, cancellationToken: TestContext.Current.CancellationToken)

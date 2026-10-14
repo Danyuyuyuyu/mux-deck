@@ -1,3 +1,5 @@
+using C = MuxDeck.Contracts;
+using MuxDeck.Application;
 using MuxDeck.Infrastructure;
 using MuxDeck.Infrastructure.Muxing;
 using MuxDeck.Infrastructure.Components;
@@ -5,7 +7,6 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 using MuxDeck.Core;
-using MuxDeck.Core.Components;
 
 internal static class ComponentUninstallChecks
 {
@@ -105,17 +106,23 @@ internal static class ComponentUninstallChecks
             File.SetAttributes(readOnlyFile, FileAttributes.Normal); await Remove(readOnly, "assfonts");
             var concurrent = Paths("concurrent"); FileAt(Path.Combine(concurrent.ToolsDirectory, "assfonts", "assfonts.exe"));
             var blocking = new BlockingProgress();
-            var removal = remover.UninstallAsync(ComponentDirectories.CreatePlan(concurrent, "assfonts", ComponentRemovalKind.Component), concurrent, blocking, default);
+            var coordinator = new OperationCoordinator();
+            var manager = new ManageComponentsUseCase(new InfrastructureComponentManager(new ComponentVerifier(), new ComponentInstaller(), remover), coordinator);
+            var concurrentConfiguration = new C.ComponentConfiguration(concurrent.AppDataRoot, concurrent.ToolsDirectory, concurrent.LogsDirectory, concurrent.CacheDirectory);
+            var concurrentPlan = await manager.PrepareUninstallAsync("assfonts", C.ComponentRemovalKind.Component, concurrentConfiguration);
+            var removal = manager.UninstallAsync(concurrentPlan, concurrentConfiguration, new ProgressAdapter(blocking), default);
             await blocking.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
             try
             {
-                try { await new ComponentInstaller().InstallAsync("assfonts", Paths("blocked-install"), new Progress(), default); throw new Exception("预期安装互斥"); }
-                catch (IOException) { Check(!Directory.Exists(Paths("blocked-install").ToolsDirectory), "卸载与真实安装服务共用守卫，不启动下载"); }
-                try { await Remove(concurrent, "assfonts"); throw new Exception("预期卸载互斥"); }
-                catch (IOException) { Check(Directory.Exists(Path.Combine(concurrent.ToolsDirectory, "assfonts")), "重复卸载不并行删除"); }
+                var blockedStorage = Paths("blocked-install");
+                var blockedConfiguration = new C.ComponentConfiguration(blockedStorage.AppDataRoot, blockedStorage.ToolsDirectory, blockedStorage.LogsDirectory, blockedStorage.CacheDirectory);
+                var installResult = await manager.InstallAsync("assfonts", blockedConfiguration);
+                Check(installResult.Status == C.ComponentOperationStatus.Failed && !Directory.Exists(blockedStorage.ToolsDirectory), "卸载与真实安装服务共用守卫，不启动下载");
+                var duplicate = await manager.UninstallAsync(concurrentPlan, concurrentConfiguration);
+                Check(duplicate.Status == C.ComponentOperationStatus.Failed && Directory.Exists(Path.Combine(concurrent.ToolsDirectory, "assfonts")), "重复卸载不并行删除");
             }
             finally { blocking.Release(); }
-            await removal; Check(!Directory.Exists(Path.Combine(concurrent.ToolsDirectory, "assfonts")), "持有守卫的卸载正常收尾");
+            var completedRemoval = await removal; Check(completedRemoval.Status == C.ComponentOperationStatus.Succeeded && !Directory.Exists(Path.Combine(concurrent.ToolsDirectory, "assfonts")), "持有守卫的卸载正常收尾");
             var safe = Paths("safe"); FileAt(Path.Combine(safe.ToolsDirectory, "assfonts", "assfonts.exe"));
             var plan = ComponentDirectories.CreatePlan(safe, "assfonts", ComponentRemovalKind.Component);
             var outside = Path.Combine(root, "outside"); FileAt(Path.Combine(outside, "keep.txt"));
@@ -156,6 +163,8 @@ internal static class ComponentUninstallChecks
             Console.WriteLine($"Component uninstall: {checks.Count} PASS; Artifacts: {root}");
         }
     }
+    private sealed class ProgressAdapter(IProgress<ComponentRemovalProgress> sink) : IProgress<C.ComponentProgress>
+    { public void Report(C.ComponentProgress value) => sink.Report(new(value.Message)); }
     private sealed class Progress : IProgress<ComponentRemovalProgress>, IProgress<ComponentInstallProgress>
     {
         public void Report(ComponentRemovalProgress value) { }

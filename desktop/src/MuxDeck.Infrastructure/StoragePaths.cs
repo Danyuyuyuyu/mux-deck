@@ -1,4 +1,4 @@
-namespace MuxDeck.Core;
+namespace MuxDeck.Infrastructure;
 
 /// <summary>
 /// Mux Deck 的持久化目录布局。工具目录与工作目录分开，便携版仍可使用工作区内的 bin/data。
