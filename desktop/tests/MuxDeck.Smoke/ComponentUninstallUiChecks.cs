@@ -1,4 +1,5 @@
 using C = MuxDeck.Contracts;
+using MuxDeck.Application;
 using MuxDeck.Desktop.Composition;
 using MuxDeck.Infrastructure;
 using MuxDeck.Infrastructure.Muxing;
@@ -36,7 +37,7 @@ internal static class ComponentUninstallUiChecks
                 var installer = new Installer();
                 var remover = new DelayedRemover();
                 var workspace = new Workspace(root) { ToolsDirectoryOverride = storage.ToolsDirectory };
-                var env = AppComposition.CreateEnvironment(workspace, storage, Path.Combine(root, "settings.json"), checker, installer, remover);
+                var env = AppComposition.CreateEnvironment(workspace, storage, new OperationCoordinator(), Path.Combine(root, "settings.json"), checker, installer, remover);
                 var probeRunner = new BlockingProbeRunner();
                 var main = AppComposition.CreateMain(workspace, AppComposition.CreateSingleService(workspace, probeRunner), preferences: new UserPreferencesStore(Path.Combine(root, "preferences.json")), storage: storage, environment: env);
                 var window = new MainWindow { DataContext = main };
@@ -142,6 +143,12 @@ internal static class ComponentUninstallUiChecks
                 checker.ExternalBackend = true;
                 Request(afs, "卸载独立依赖"); Confirm(afs);
                 Check(afs.IsHealthy && !afs.ShowManagementMenu && File.Exists(externalAfs), "存在其他后端时卸载依赖后保持可用，保留外部主程序");
+
+                // 工具落在同前缀的兄弟目录（assfontsubset-old）时，不能当成组件目录内的文件提供卸载。
+                var sibling = Path.Combine(storage.ToolsDirectory, "assfontsubset-old", "AssFontSubset.Console.exe"); Write(sibling);
+                checker.External["afs"] = sibling;
+                env.Refresh(); UiInputTestSupport.Pump(env.ValidationTask);
+                Check(!afs.CanRemoveComponent && !afs.ShowManagementMenu, "同前缀兄弟目录中的工具不提供目录卸载候选");
 
                 var mkv = env.CoreComponents.Single(c => c.Id == "mkvtoolnix");
                 var video = Path.Combine(root, "probe.mkv"); Write(video);

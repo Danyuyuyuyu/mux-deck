@@ -1,4 +1,5 @@
 using MuxDeck.Infrastructure;
+using MuxDeck.Application;
 using C = MuxDeck.Contracts;
 using MuxDeck.Desktop.Composition;
 using Avalonia;
@@ -30,7 +31,7 @@ internal static class ComponentInstallationUiChecks
                 var checker = new Checker();
                 var installer = new Installer(checker);
                 var storePath = Path.Combine(root, "settings.json");
-                var env = AppComposition.CreateEnvironment(workspace, storage, storePath, checker, installer);
+                var env = AppComposition.CreateEnvironment(workspace, storage, new OperationCoordinator(), storePath, checker, installer);
                 var main = AppComposition.CreateMain(workspace, storage: storage, environment: env);
                 var window = new MainWindow { DataContext = main };
                 window.Show(); main.ShowEnvironmentCommand.Execute(null);

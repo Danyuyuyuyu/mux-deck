@@ -10,8 +10,9 @@ public sealed class ManageComponentsUseCase(IManageComponents components, IOpera
         ComponentConfiguration configuration, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        // 只在关闭中或有安装/卸载进行时隐藏候选；组件检测进行中仍按 3e 互斥矩阵正常返回。
         var state = coordinator.State;
-        if (state.IsShuttingDown || state.ActiveOperations.Any(kind => kind is OperationKind.ComponentInspection or OperationKind.ComponentInstall or OperationKind.ComponentUninstall)) return null;
+        if (state.IsShuttingDown || state.ActiveOperations.Any(kind => kind is OperationKind.ComponentInstall or OperationKind.ComponentUninstall)) return null;
         return components.QueryUninstallDirectory(componentId, kind, configuration, cancellationToken);
     }
     public async Task<EquatableArray<ComponentInspection>> InspectAsync(ComponentConfiguration configuration,

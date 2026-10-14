@@ -1,6 +1,8 @@
 using Mono.Cecil;
 using Mono.Cecil.Cil;
+using NetArchTest.Rules;
 using Xunit;
+using Leak = MuxDeck.Desktop.Environment;
 
 namespace MuxDeck.Architecture.Tests;
 
@@ -49,6 +51,20 @@ public sealed class CompositionEntryRuleTests
         var rule = new CompositionEntryRule(fixture.Root);
         Assert.False(rule.MeetsRule(fixture.Type));
         Assert.Contains("Views", rule.FailureReason!);
+    }
+
+    // 再次故意违反：Desktop 命名空间、装配目录之外的类型真的引用了 Infrastructure，规则必须拒绝。
+    [Fact]
+    public void Infrastructure_dependency_outside_composition_is_rejected_with_reason()
+    {
+        var fixture = typeof(Leak.DesktopEnvironmentReader);
+        var types = Types.InAssembly(fixture.Assembly).That().HaveName(fixture.Name);
+        Assert.True(types.Should().HaveDependencyOn("MuxDeck.Infrastructure").GetResult().IsSuccessful);
+        var rule = new CompositionEntryRule();
+        var result = types.Should().MeetCustomRule(rule).GetResult();
+        Assert.False(result.IsSuccessful);
+        Assert.Contains(fixture.FullName!, result.FailingTypeNames!);
+        Assert.Contains("只能在 MuxDeck.Desktop.Composition 使用", rule.FailureReason!);
     }
 
     // 反例程序集和便携 PDB 仅在本测试拥有的唯一 artifacts 子目录内生成。

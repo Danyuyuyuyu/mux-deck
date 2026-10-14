@@ -117,9 +117,13 @@ internal static class ComponentUninstallChecks
                 var blockedStorage = Paths("blocked-install");
                 var blockedConfiguration = new C.ComponentConfiguration(blockedStorage.AppDataRoot, blockedStorage.ToolsDirectory, blockedStorage.LogsDirectory, blockedStorage.CacheDirectory);
                 var installResult = await manager.InstallAsync("assfonts", blockedConfiguration);
-                Check(installResult.Status == C.ComponentOperationStatus.Failed && !Directory.Exists(blockedStorage.ToolsDirectory), "卸载与真实安装服务共用守卫，不启动下载");
+                Check(installResult.Status == C.ComponentOperationStatus.Failed &&
+                    installResult.Failure is { Code: C.ErrorCodes.ComponentOperationBusy, Message: "已有组件安装或卸载正在进行。" } &&
+                    !Directory.Exists(blockedStorage.ToolsDirectory), "卸载与真实安装服务共用守卫，不启动下载");
                 var duplicate = await manager.UninstallAsync(concurrentPlan, concurrentConfiguration);
-                Check(duplicate.Status == C.ComponentOperationStatus.Failed && Directory.Exists(Path.Combine(concurrent.ToolsDirectory, "assfonts")), "重复卸载不并行删除");
+                Check(duplicate.Status == C.ComponentOperationStatus.Failed &&
+                    duplicate.Failure is { Code: C.ErrorCodes.ComponentOperationBusy, Message: "已有组件安装或卸载正在进行。" } &&
+                    Directory.Exists(Path.Combine(concurrent.ToolsDirectory, "assfonts")), "重复卸载不并行删除");
             }
             finally { blocking.Release(); }
             var completedRemoval = await removal; Check(completedRemoval.Status == C.ComponentOperationStatus.Succeeded && !Directory.Exists(Path.Combine(concurrent.ToolsDirectory, "assfonts")), "持有守卫的卸载正常收尾");

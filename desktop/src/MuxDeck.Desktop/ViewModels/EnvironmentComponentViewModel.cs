@@ -13,13 +13,17 @@ public sealed class EnvironmentComponentViewModel : ObservableObject
     private string removalMessage = "";
     private ComponentUninstallPlan? componentPlan, dependencyPlan, confirmationPlan, lastRemovalPlan;
     private Func<bool> canOperate = () => false;
+    private readonly Func<string, string, bool> isInside;
 
-    public EnvironmentComponentViewModel(string name, string description, string category, IReadOnlyList<EnvironmentToolStatus> parts)
-        : this(new EnvironmentComponentDefinition(name, name, description, category == "核心组件", parts.Select(p => p.Name).ToArray(), ""), parts) { }
+    public EnvironmentComponentViewModel(string name, string description, string category, IReadOnlyList<EnvironmentToolStatus> parts,
+        Func<string, string, bool> isInside)
+        : this(new EnvironmentComponentDefinition(name, name, description, category == "核心组件", parts.Select(p => p.Name).ToArray(), ""), parts, isInside) { }
 
-    public EnvironmentComponentViewModel(EnvironmentComponentDefinition definition, IReadOnlyList<EnvironmentToolStatus> parts)
+    public EnvironmentComponentViewModel(EnvironmentComponentDefinition definition, IReadOnlyList<EnvironmentToolStatus> parts,
+        Func<string, string, bool> isInside)
     {
         Definition = definition;
+        this.isInside = isInside;
         Parts = new(parts);
         inspection = new(Id, parts.All(p => p.Path is null) ? ComponentState.Missing : ComponentState.Found, []);
         ToggleDetailsCommand = new(() => { detailsOpen = !detailsOpen; Notify(); });
@@ -129,8 +133,9 @@ public sealed class EnvironmentComponentViewModel : ObservableObject
             // 用户已清理目标或切换组件目录，旧卸载错误不能阻止当前目录的安装。
             removalError = false; lastRemovalPlan = null; error = ""; logPath = ""; detailsOpen = false;
         }
+        // 归属判断统一走注入的 Infrastructure 规则，Desktop 不再自行比较路径。
         componentPlan = main is not null && (Parts.All(p => p.Path is null) || Parts.Any(p => p.Path is { } path &&
-            path.StartsWith(main.TargetDirectory, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
+            isInside(main.TargetDirectory, path)))
             ? new ComponentUninstallPlan(main.ComponentId, main.Kind, main.ToolsDirectory, main.TargetDirectory) : null;
         dependencyPlan = dependencies is null ? null : new ComponentUninstallPlan(dependencies.ComponentId, dependencies.Kind,
             dependencies.ToolsDirectory, dependencies.TargetDirectory);

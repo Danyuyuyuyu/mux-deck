@@ -52,7 +52,7 @@ public static class AppComposition
     public static SingleMuxViewModel CreateSingle(SingleMuxService service, UserPreferencesStore? preferences = null) =>
         new(service, new TrackColumnLayout(preferences));
 
-    public static EnvironmentViewModel CreateEnvironment(Workspace workspace, StoragePaths storage,
+    public static EnvironmentViewModel CreateEnvironment(Workspace workspace, StoragePaths storage, IOperationCoordinator coordinator,
         string? settingsPath = null, IComponentVerifier? verifier = null, IComponentInstaller? installer = null,
         IComponentUninstaller? uninstaller = null)
     {
@@ -60,13 +60,20 @@ public static class AppComposition
         verifier ??= new ComponentVerifier();
         installer ??= new ComponentInstaller(verifier: verifier);
         uninstaller ??= new ComponentUninstaller();
-        var coordinator = new OperationCoordinator();
         var manager = new ManageComponentsUseCase(new InfrastructureComponentManager(verifier, installer, uninstaller), coordinator);
         var configuration = new ComponentConfiguration(workspace.Root, storage.ToolsDirectory, storage.LogsDirectory, storage.CacheDirectory, workspace.FontToolsDirectoryOverride);
         var definitions = ComponentCatalog.All.Select(value => new EnvironmentComponentDefinition(value.Id, value.Name, value.Description, value.IsCore, value.ToolNames, value.GuideUrl)).ToArray();
         IReadOnlyList<EnvironmentToolStatus> Inspect(ComponentConfiguration value) => new ToolLocator(value).Inspect().Select(part => new EnvironmentToolStatus(part.Name, part.Purpose, part.Path, part.Source)).ToArray();
+        // 保存路径时由装配负责生成目录，ViewModel 不再自己拼路径。
+        static EnvironmentStorage CreateStorage(string workRoot, string toolsDirectory)
+        {
+            var paths = StoragePaths.ForRoot(workRoot, toolsDirectory);
+            paths.EnsureDirectories();
+            return new(paths.AppDataRoot, paths.ToolsDirectory, paths.ConfigDirectory, paths.LogsDirectory, paths.CacheDirectory);
+        }
         var viewStorage = new EnvironmentStorage(storage.AppDataRoot, storage.ToolsDirectory, storage.ConfigDirectory, storage.LogsDirectory, storage.CacheDirectory);
-        return new(configuration, viewStorage, manager, Inspect, definitions, next => settings.Save(new(next.AppDataRoot, next.ToolsDirectory)));
+        // 目录归属判断复用 Infrastructure 的纯规则，Desktop 只注入不重写。
+        return new(configuration, viewStorage, manager, Inspect, ComponentDirectories.IsInside, CreateStorage, definitions, coordinator, next => settings.Save(new(next.AppDataRoot, next.ToolsDirectory)));
     }
 
     public static MainWindowViewModel CreateMain(Workspace workspace, SingleMuxService? singleService = null,
@@ -75,7 +82,8 @@ public static class AppComposition
         var paths = storage ?? StoragePaths.ForWorkspace(workspace.Root);
         if (storage is not null)
             workspace = workspace with { ToolsDirectoryOverride = storage.ToolsDirectory, StorageOverride = storage };
-        var env = environment ?? CreateEnvironment(workspace, paths);
-        return new(workspace, env.Storage, env, CreateSingle(singleService ?? CreateSingleService(workspace), preferences));
+        // 每个对象图只创建一个协调器；环境页与组件用例共用同一实例。
+        var env = environment ?? CreateEnvironment(workspace, paths, new OperationCoordinator());
+        return new(workspace, env.Storage, env, CreateSingle(singleService ?? CreateSingleService(workspace), preferences), env.Coordinator);
     }
 }

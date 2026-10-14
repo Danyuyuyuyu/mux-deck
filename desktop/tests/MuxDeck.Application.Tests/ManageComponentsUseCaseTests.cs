@@ -149,6 +149,40 @@ public sealed class ManageComponentsUseCaseTests
         Assert.Empty(coordinator.State.ActiveOperations);
     }
 
+    [Fact]
+    public async Task Directory_query_forwards_while_idle_or_inspecting_and_hides_while_mutating_or_closing()
+    {
+        var coordinator = new OperationCoordinator();
+        var backend = new FakeComponents { Query = new("afs", ComponentRemovalKind.Component, "tools", "tools/afs") };
+        var useCase = new ManageComponentsUseCase(backend, coordinator);
+        var token = TestContext.Current.CancellationToken;
+
+        // 空闲：原样返回与 TryPlan 一致的目录。
+        Assert.Same(backend.Query, useCase.QueryUninstallDirectory("afs", ComponentRemovalKind.Component, Configuration, token));
+
+        // 检测中：与 3e 互斥矩阵一致，目录查询不受检测影响。
+        await using (await coordinator.TryAcquireAsync(OperationKind.ComponentInspection, token))
+            Assert.Same(backend.Query, useCase.QueryUninstallDirectory("afs", ComponentRemovalKind.Component, Configuration, token));
+
+        // 安装中：隐藏候选，且不触碰后端。
+        backend.QueryCalled = false;
+        await using (await coordinator.TryAcquireAsync(OperationKind.ComponentInstall, token))
+        {
+            Assert.Null(useCase.QueryUninstallDirectory("afs", ComponentRemovalKind.Component, Configuration, token));
+            Assert.False(backend.QueryCalled);
+        }
+
+        // 卸载中：隐藏候选。
+        await using (await coordinator.TryAcquireAsync(OperationKind.ComponentUninstall, token))
+            Assert.Null(useCase.QueryUninstallDirectory("afs", ComponentRemovalKind.Component, Configuration, token));
+
+        // 关闭中：隐藏候选。
+        var shutdown = coordinator.ShutdownAsync(token);
+        Assert.Null(useCase.QueryUninstallDirectory("afs", ComponentRemovalKind.Component, Configuration, token));
+        await shutdown;
+        Assert.True(coordinator.State.IsShuttingDown);
+    }
+
     private sealed class InlineProgress : IProgress<ComponentProgress>
     { public void Report(ComponentProgress value) { } }
     private sealed class FakeComponents : IManageComponents
@@ -162,6 +196,10 @@ public sealed class ManageComponentsUseCaseTests
         public bool IgnoreCancellation;
         public Action? OnInspection;
         public ComponentInspection Inspect = new("afs", ComponentState.Missing, []);
+        public ComponentDirectoryQuery? Query;
+        public bool QueryCalled;
+        public ComponentDirectoryQuery? QueryUninstallDirectory(string componentId, ComponentRemovalKind kind, ComponentConfiguration configuration, CancellationToken cancellationToken = default)
+        { QueryCalled = true; Configuration = configuration; Id = componentId; return Query; }
         public Task<EquatableArray<ComponentInspection>> InspectAsync(ComponentConfiguration configuration, CancellationToken cancellationToken = default)
         { Configuration = configuration; OnInspection?.Invoke(); return Task.FromResult<EquatableArray<ComponentInspection>>([Inspect]); }
         public Task<ComponentInspection> InspectAsync(string componentId, ComponentConfiguration configuration, CancellationToken cancellationToken = default)

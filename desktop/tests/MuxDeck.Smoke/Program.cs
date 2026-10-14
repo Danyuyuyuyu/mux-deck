@@ -1,4 +1,5 @@
 using MuxDeck.Desktop.Composition;
+using MuxDeck.Application;
 using MuxDeck.Infrastructure;
 using MuxDeck.Infrastructure.Muxing;
 using MuxDeck.Infrastructure.Components;
@@ -147,7 +148,7 @@ foreach (var path in new[]
 var environmentStorePath = Path.Combine(environmentRoot, "settings.json");
 var environmentStorage = StoragePaths.ForRoot(Path.Combine(environmentRoot, "data"), portableTools);
 var environment = AppComposition.CreateEnvironment(new Workspace(environmentRoot) { ToolsDirectoryOverride = portableTools },
-    environmentStorage, environmentStorePath);
+    environmentStorage, new OperationCoordinator(), environmentStorePath);
 Check(environment.CoreComponents.Count == 2 && environment.ExtensionComponents.Count == 2 && environment.Tools.Count == 6,
     "环境页按组件分组并保留六项工具状态");
 var customTools = Path.Combine(environmentRoot, "custom-tools");

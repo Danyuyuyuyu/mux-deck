@@ -176,6 +176,8 @@ Core 的全局 Gate 仅覆盖安装与卸载（含 AssfontsInstaller 兼容入�
 
 **用户已批准**：新增架构测试，Desktop 中只有 `MuxDeck.Desktop.Composition` 命名空间可以引用 `MuxDeck.Infrastructure`。
 
+**用户已批准**：`ComponentUninstallChecks` 里原来“预期抛 IOException”的两处并发互斥断言改为检查返回结果，必须同时满足 `Status == Failed`、`Failure.Code == MUX_COMPONENT_OPERATION_BUSY`、`Failure.Message` 逐字等于“已有组件安装或卸载正在进行。”；原来的目录存在性检查继续保留。
+
 ### 4a-3 导入用例（中）
 
 **用户已批准**：实现 `IPrepareImport`，`MediaImport.cs` 的接纳和校验逻辑迁进用例；SRT 时间轴规则移进 Domain，由 `RunSingleMuxUseCase` 和导入用例共用；字幕读取统一走 Infrastructure `MuxInputReader`；删除 Core `SubtitleText`。
@@ -202,6 +204,22 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 1. `EnvironmentComponentViewModel.cs:134` 原先同步调用 `ComponentDirectories.TryPlan`，而 `IManageComponents` 只有异步 `PrepareUninstallAsync`。本步采用契约新增同步只读查询：它只读取并返回不可变目录结果，适合刷新显示；确认和执行仍走异步准备并在执行时复核，UI 套件只需把替身从旧组件接口换成契约查询，断言和状态序列不变。另一方案是把 UI 改成异步刷新目录：可完全避免 UI 线程同步文件系统访问，但会引入加载/竞态状态，环境 UI 需要等待或重排刷新时序，现有套件更容易出现时序差异。当前同步查询造成的 UI 线程文件系统检查记为遗留。
 2. Core `SubtitleText.Read` 与 Infrastructure `MuxInputReader.ReadTrackAsync` 对 ASS 均调用 `AssGlyphValidator.ReadAss`，因此都严格 UTF-8、去除开头 BOM，并在缺少 `[Script Info]` / `[Events]` 等必要节时报同一错误；SRT 都严格 UTF-8、去除 BOM，空文件都返回空字符串，均不做编码回退。差异是调用边界：`SubtitleText.Read` 只按扩展名读取，非 ASS 路径也会按 SRT 文本读取；`MuxInputReader` 还要求轨道类型为字幕且扩展名为 `.ass` / `.srt`，否则返回 `SubtitleText = null`。ASS 读取路径在两者中都经 `AssGlyphValidator`，缺文件仍由外层事实读取报告不存在，读取异常不被吞掉。
 3. 语言规则目前没有重复实现 `InferImported` 或 QC 的 `Matches`：两者集中在 Domain `LanguageRules`，`MediaImport` 与 `OutputQcRules` 分别调用。另有一份待 4a-3 合并的校验规则：`RunSingleMuxUseCase` 私有 `ValidLanguage` / `LanguagePattern`；SRT 时间轴正则也只在该用例出现。Desktop `LanguageDisplay` 仅负责显示别名，不能与 QC 匹配规则合并；本步未改动这些行为。
+
+#### 4a-2 返工（2026-10-14）
+
+审查后按用户批准返工；目录归属判断的“原样移进 Domain”方案在实施前被 Domain 护栏挡下，据实改道，其余按原批准执行。
+
+- **目录归属判断**：`ComponentDirectories.IsInside`（`GetFullPath` + 末尾分隔符 + 平台大小写）依赖 `System.IO`，Domain 禁止该命名空间（`DependencyTests.cs:144`、`Domain_assembly_depends_only_on_system_and_domain`）。实测在 `MuxDeck.Domain` 加入该规则原样会触发 `Inner_namespaces_do_not_use_side_effects_or_outer_layers` 失败（`依赖规则违反：MuxDeck.Domain.TempIsInsideProbe`），Application/Contracts 的 `PurePathMembersRule` 白名单同样不含 `GetFullPath`。按用户批准改为：`IsInside` 留在 `MuxDeck.Infrastructure.Components.ComponentDirectories` 不动，由 `AppComposition` 以 `Func<string, string, bool>` 注入 `EnvironmentComponentViewModel`（与 `inspectTools` 同法），删掉 VM 里的 `StartsWith`；契约与护栏均不变。
+- **租约语义**：`ManageComponentsUseCase.QueryUninstallDirectory` 只在关闭中或安装/卸载进行时返回空；组件检测进行中正常返回，和 3e 互斥矩阵一致。
+- **契约**：删除 `IManageComponents.QueryUninstallDirectory` 的默认实现，改用例与全部测试替身显式实现。
+- **改路径**：`EnvironmentViewModel.SaveSettings` 不再自己拼目录；`AppComposition` 注入工厂（内部 `StoragePaths.ForRoot` + `EnsureDirectories`）生成 `EnvironmentStorage`，顺序与异常类型、文案不变。
+- **协调器**：`CreateMain` 每个对象图只创建一个 `OperationCoordinator` 并传给 `CreateEnvironment`，`CreateEnvironment` 不再新建；实例经 `EnvironmentViewModel.Coordinator` 与 `MainWindowViewModel.Coordinator` 暴露，供 4d 读取。
+- **格式**：`EnvironmentViewModel` 恢复 `72b76de` 的多行结构，方法、语句换行方式还原。
+- **Smoke**：`ComponentUninstallChecks` 两处并发断言按上方批准改为结构化结果校验并保留目录存在性检查；`EnvironmentUiChecks` 夹具把行内 parts 映射成契约 parts 传回 `ApplyInspection`（不再传空集合）；`ComponentUninstallUiChecks` 增加一条“同前缀兄弟目录（assfontsubset-old）中的工具不提供目录卸载候选”用例。
+
+新增单元测试 11 个：租约语义 1（Application）、`IsInside` 边界 5 与 `StoragePaths.ForRoot` 规范化 1（Infrastructure）、Purpose/Source 字符串到枚举 1（Infrastructure）、Purpose/Source 枚举到中文 1、装配共享协调器 1、`..` 规范化等价 1（Architecture）、故意违反 Composition 规则的架构反例 1（Architecture）。原 786 全部保留。
+
+本地验证：locked restore 11/11；Release 0 警告 / 0 错误；`dotnet test` 797/797（Core 57、Application 162、Domain 298、Architecture 202、Infrastructure 78）；受控 13/13、657/657（卸载 UI 由 61 增至 62，来自新增兄弟目录用例）；组件 31/31、环境 UI 23/23、安装 UI 37/37、卸载 UI 62/62；存储与 `--root` 隔离 5/5；固定缓存真实卸载 17/17。以 `72b76de` 三个 Smoke 源文件逐条提取含中文的字面量核对：环境 24/24、安装 36/36、卸载 45/45 全部原样保留，卸载文件仅新增 1 条授权用例文案。
 
 ### 4b 草稿会话 `MuxDraft`（大，高风险）
 
@@ -299,7 +317,7 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 | PR | 状态 | 验证 | 备注 |
 |---|---|---|---|
 | [4a-1 · `e87cb18`](https://github.com/Danyuyuyuyu/mux-deck/commit/e87cb18a0152222669fa47c8b754c52e2bef71af) | 已完成并推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38549905783) | locked restore 11/11；Release 0 警告 / 0 错误；test 786/786（原 777 保留，新增 9）；架构 198/198；受控 13/13、656/656，UI 全套通过；存储装配隔离检查 5/5 | AppComposition、构造注入、不可变配置与 IProbeMedia、存储索引迁入 Infrastructure；Smoke 仅装配，17 个源文件经精确替换比对；详见下方 4a-1 实施与实际验证和[后续调查报告](arch-layering-4a-investigation.md)。 |
-| [4a-2 · `review/4a-2`](https://github.com/Danyuyuyuyu/mux-deck/tree/review/4a-2) | 已完成，待审查；该分支未触发 Desktop CI | locked restore 11/11；Release 0 警告 / 0 错误；test 786/786；受控 13/13、656/656；组件 31/31；环境 UI 23/23；安装 UI 37/37；卸载 UI 61/61；存储与 `--root` 隔离 5/5；固定缓存真实卸载 17/17；基线文案比较相同 | 组件边界迁入 Infrastructure、契约枚举与同步目录查询、单一协调器和 Desktop 引用护栏；详见上方 4a-2 实施与调查报告；提交哈希待提交后回填。 |
+| [4a-2 · `review/4a-2`](https://github.com/Danyuyuyuyu/mux-deck/tree/review/4a-2) | 已完成，待审查；该分支未触发 Desktop CI | locked restore 11/11；Release 0 警告 / 0 错误；test 797/797（原 786 全部保留，新增 11）；受控 13/13、657/657；组件 31/31；环境 UI 23/23；安装 UI 37/37；卸载 UI 62/62；存储与 `--root` 隔离 5/5；固定缓存真实卸载 17/17；与 `72b76de` 文案逐条核对无缺失 | 组件边界迁入 Infrastructure、契约枚举与同步目录查询、单一协调器和 Desktop 引用护栏；另含 4a-2 返工（IsInside 经装配注入 VM、目录查询租约语义、契约去默认实现、路径工厂、`EnvironmentViewModel` 多行格式还原）；详见上方 4a-2 实施、调查报告与返工记录；提交哈希待提交后回填。 |
 | [1a · PR #3](https://github.com/Danyuyuyuyu/mux-deck/pull/3) | 已合并（`c4f932e`） | 锁定 restore：9/9 项目；Release build：0 警告 / 0 错误；dotnet test：32/32（架构规则 27 + 扫描反例 5），失败/跳过 0；Smoke：28/28 | 三个空生产项目、三个 xUnit 测试项目、过渡引用、NetArchTest 护栏、CI test 步骤与全部新增项目锁文件；按已接受 ADR-0001 实施，未移动代码、定义契约或修改行为。Domain/Application 业务测试 0；未重放真实工具链或原生 UI。 |
 | [1b · `aa85458`](https://github.com/Danyuyuyuyu/mux-deck/commit/aa85458a3caf7b11e76ae5f7d60317d3c862ffe8) | 已完成，已推送，Desktop CI 通过 | restore 10/10；Release 0 警告 / 0 错误；dotnet test 71/71（转换 26、Domain 8、架构 37）；受控 13/13 套件、656/656；契约两条故意违反均被拒绝 | 公共不可变契约、四个 Domain 值类型与 Core 兼容转换；旧调用方零改动；详见下方命令与计数。未重放真实工具链或原生 UI。 |
 | [2a · `34c4c18`](https://github.com/Danyuyuyuyu/mux-deck/commit/34c4c1827169270c715a955fe027a0bd6622509d) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38390147903) | locked restore 10/10；Release 0 警告 / 0 错误；dotnet test 208/208；受控 13/13、656/656 | TrackPolicy、LanguageRules、OutputNaming 已迁入 Domain；新增 Domain 69、架构 3，原 136 全部保留；详见 2a 实际验证。 |

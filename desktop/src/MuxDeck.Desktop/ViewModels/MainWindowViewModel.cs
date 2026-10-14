@@ -10,12 +10,13 @@ public sealed class MainWindowViewModel : ObservableObject
     private string log = "桌面工作区已就绪。选择视频或检查本机工具环境。";
 
     public MainWindowViewModel(Workspace workspace, EnvironmentStorage storage, EnvironmentViewModel environment,
-        SingleMuxViewModel single)
+        SingleMuxViewModel single, IOperationCoordinator coordinator)
     {
         WorkspaceRoot = workspace.Root;
         Storage = storage;
         Environment = environment;
         Single = single;
+        Coordinator = coordinator;
         Environment.SetWorkGuard(() => !Single.CanEdit || Single.IsProbing || Single.HasActiveToolProbes);
         Environment.OperationChanged += () =>
         {
@@ -45,6 +46,8 @@ public sealed class MainWindowViewModel : ObservableObject
     public EnvironmentStorage Storage { get; private set; }
     public EnvironmentViewModel Environment { get; }
     public SingleMuxViewModel Single { get; }
+    // 与环境页共用的唯一协调器；供 4d 的关闭等待与跨页面忙碌状态读取。
+    public IOperationCoordinator Coordinator { get; }
     public int SelectedPage
     {
         get => selectedPage;

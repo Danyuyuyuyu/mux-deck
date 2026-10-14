@@ -1,4 +1,5 @@
 using MuxDeck.Desktop.Composition;
+using C = MuxDeck.Contracts;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -31,16 +32,20 @@ internal static class EnvironmentUiChecks
                 env.CoreComponents.Clear();
                 env.ExtensionComponents.Clear();
                 var longPath = Path.Combine(root, new string('a', 100), "mkvmerge.exe");
+                // 把行内展示的 parts 映射成契约 parts，保持等价输入而不是空集合。
+                C.ComponentPart[] ContractParts(EnvironmentComponentViewModel row) => row.Parts.Select(part => new C.ComponentPart(
+                    part.Name, part.Path, C.ComponentState.Found, null, C.ComponentPartPurpose.Unknown,
+                    part.Source switch { "系统" => C.ComponentPartSource.System, "Mux Deck" => C.ComponentPartSource.MuxDeck, "PATH" => C.ComponentPartSource.Path, _ => C.ComponentPartSource.Missing })).ToArray();
                 env.CoreComponents.Add(new("MKVToolNix", "MKV 封装、轨道读取与元数据修补", "核心组件", [
                     new("mkvmerge", "", longPath) { Source = "系统" },
                     new("mkvextract", "", longPath) { Source = "系统" },
-                    new("mkvpropedit", "", longPath) { Source = "系统" }]));
-                env.CoreComponents.Add(new("AssFontSubset", "ASS 字体子集化工具", "核心组件", [new("AssFontSubset", "", longPath) { Source = "Mux Deck" }]));
-                env.ExtensionComponents.Add(new("FFmpeg", "字幕渲染、媒体信息读取与预览", "扩展组件", [new("ffmpeg", "", longPath) { Source = "PATH" }]));
-                var missing = new EnvironmentComponentViewModel("assfonts", "字体子集化备用后端", "扩展组件", [new("assfonts", "", null)]);
+                    new("mkvpropedit", "", longPath) { Source = "系统" }], ComponentDirectories.IsInside));
+                env.CoreComponents.Add(new("AssFontSubset", "ASS 字体子集化工具", "核心组件", [new("AssFontSubset", "", longPath) { Source = "Mux Deck" }], ComponentDirectories.IsInside));
+                env.ExtensionComponents.Add(new("FFmpeg", "字幕渲染、媒体信息读取与预览", "扩展组件", [new("ffmpeg", "", longPath) { Source = "PATH" }], ComponentDirectories.IsInside));
+                var missing = new EnvironmentComponentViewModel("assfonts", "字体子集化备用后端", "扩展组件", [new("assfonts", "", null)], ComponentDirectories.IsInside);
                 env.ExtensionComponents.Add(missing);
                 foreach (var row in env.CoreComponents.Concat(env.ExtensionComponents).Where(r => !r.IsMissing))
-                    row.ApplyInspection(new MuxDeck.Contracts.ComponentInspection(row.Id, MuxDeck.Contracts.ComponentState.Available, [], "1.0"));
+                    row.ApplyInspection(new C.ComponentInspection(row.Id, C.ComponentState.Available, [.. ContractParts(row)], "1.0"));
                 env.ToolsDirectoryInput = longPath;
                 env.WorkDirectoryInput = longPath;
                 var window = new MainWindow { DataContext = model };

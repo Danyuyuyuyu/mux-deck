@@ -23,7 +23,7 @@ public interface IPrepareImport
 public interface IManageComponents
 {
     ComponentDirectoryQuery? QueryUninstallDirectory(string componentId, ComponentRemovalKind kind,
-        ComponentConfiguration configuration, CancellationToken cancellationToken = default) => null;
+        ComponentConfiguration configuration, CancellationToken cancellationToken = default);
     Task<ComponentInspection> InspectAsync(string componentId, ComponentConfiguration configuration,
         CancellationToken cancellationToken = default);
     Task<EquatableArray<ComponentInspection>> InspectAsync(ComponentConfiguration configuration,
