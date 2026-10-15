@@ -33,6 +33,7 @@ internal static class MediaInputText
                 or ErrorCodes.ImportFontDirectories or ErrorCodes.ImportSourceVideoCount or ErrorCodes.ImportAudioMissing
                 or ErrorCodes.ImportSubtitleMismatch or ErrorCodes.ImportTrackConflict or ErrorCodes.ImportSubtitleTimeline
                 => Describe(failure.Code, failure.Detail),
+            ErrorCodes.ImportAssUsage => "无法识别拖入文件，整批未接纳：" + failure.Message,
             _ => "无法识别拖入文件，整批未接纳：" + failure.Message
         };
 }

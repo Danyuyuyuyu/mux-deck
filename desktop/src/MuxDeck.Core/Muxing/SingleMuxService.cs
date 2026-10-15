@@ -21,6 +21,7 @@ public sealed class SingleMuxService
     public static IPathFacts DefaultPathFacts { get; } = SystemPathFacts.Instance;
     // 导入用例以契约形式交付给视图层；默认实现由基础设施端口组装，装配可覆盖。
     public IPrepareImport Import { get; }
+    // 仅为 4a-3 特征测试冻结的三参旧构造保留默认端口；生产对象图必须由 Composition 显式装配。
     public SingleMuxService(ToolConfiguration tools, IProbeMedia prober,
         Func<ITaskWorkspaceFactory, IRunSingleMux> createRun,
         IMuxInputReader? inputReader = null, IPathFacts? pathFacts = null,

@@ -127,6 +127,62 @@ public sealed class ImportCharacterizationTests : IDisposable
     }
 
     [Fact]
+    public async Task Prepare_reports_ass_undefined_style_usage()
+    {
+        var path = Write("undefined-style.ass", AssText(style: "Missing"));
+        var prober = new FakeProber { Handler = _ => Probe(Subtitle("ASS", "S_TEXT/ASS")) };
+        Assert.Equal("无法识别拖入文件，整批未接纳：字幕使用了未定义样式：Missing", (await Prepare(Create(prober), path)).Message);
+    }
+
+    [Fact]
+    public async Task Prepare_reports_ass_animated_font_usage()
+    {
+        var path = Write("animated-font.ass", AssText(text: @"{\t(0,100,\fnArial)}你好"));
+        var prober = new FakeProber { Handler = _ => Probe(Subtitle("ASS", "S_TEXT/ASS")) };
+        Assert.Equal("无法识别拖入文件，整批未接纳：首阶段尚不支持 \\t 动画中的字体/粗斜体切换。", (await Prepare(Create(prober), path)).Message);
+    }
+
+    [Fact]
+    public async Task Prepare_reports_ass_animated_bold_or_italic_usage()
+    {
+        var path = Write("animated-style.ass", AssText(text: @"{\t(0,100,\b1\i1)}你好"));
+        var prober = new FakeProber { Handler = _ => Probe(Subtitle("ASS", "S_TEXT/ASS")) };
+        Assert.Equal("无法识别拖入文件，整批未接纳：首阶段尚不支持 \\t 动画中的字体/粗斜体切换。", (await Prepare(Create(prober), path)).Message);
+    }
+
+    [Fact]
+    public async Task Prepare_reports_ass_nonstandard_weight_usage()
+    {
+        var path = Write("nonstandard-weight.ass", AssText(text: @"{\b200}你好"));
+        var prober = new FakeProber { Handler = _ => Probe(Subtitle("ASS", "S_TEXT/ASS")) };
+        Assert.Equal("无法识别拖入文件，整批未接纳：首阶段尚不支持非标准 ASS 字重：200", (await Prepare(Create(prober), path)).Message);
+    }
+
+    [Fact]
+    public async Task Prepare_reports_ass_without_subsettable_dialogue()
+    {
+        var path = Write("drawing-only.ass", AssText(text: @"{\p1}m 0 0 l 1 1"));
+        var prober = new FakeProber { Handler = _ => Probe(Subtitle("ASS", "S_TEXT/ASS")) };
+        Assert.Equal("无法识别拖入文件，整批未接纳：ASS 未包含可子集化的文本对白。", (await Prepare(Create(prober), path)).Message);
+    }
+
+    [Fact]
+    public async Task Prepare_reports_ass_missing_format_field()
+    {
+        var path = Write("missing-format-field.ass", AssText(styleFormat: "Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding"));
+        var prober = new FakeProber { Handler = _ => Probe(Subtitle("ASS", "S_TEXT/ASS")) };
+        Assert.Equal("无法识别拖入文件，整批未接纳：ASS 格式字段缺失：Italic", (await Prepare(Create(prober), path)).Message);
+    }
+
+    [Fact]
+    public async Task Prepare_reports_ass_missing_override_style()
+    {
+        var path = Write("missing-override-style.ass", AssText(text: @"{\rMissing}你好"));
+        var prober = new FakeProber { Handler = _ => Probe(Subtitle("ASS", "S_TEXT/ASS")) };
+        Assert.Equal("无法识别拖入文件，整批未接纳：字幕覆盖样式不存在：Missing", (await Prepare(Create(prober), path)).Message);
+    }
+
+    [Fact]
     public async Task Prepare_reports_probe_mismatch_for_subtitle()
     {
         var path = Write("s.ass", ValidAss);
@@ -261,6 +317,16 @@ public sealed class ImportCharacterizationTests : IDisposable
         var path = Path.Combine(root, name);
         Directory.CreateDirectory(path);
         return path;
+    }
+
+    private static string AssText(string style = "Default", string text = "你好", string? styleFormat = null)
+    {
+        styleFormat ??= "Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding";
+        var styleLine = "Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1";
+        return "[Script Info]\nTitle: t\nScriptType: v4.00+\n\n" +
+            "[V4+ Styles]\nFormat: " + styleFormat + "\nStyle: " + styleLine + "\n\n" +
+            "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" +
+            "Dialogue: 0,0:00:00.00,0:00:01.00," + style + ",,0,0,0,," + text + "\n";
     }
 
     private SingleMuxViewModel Create(IProbeMedia prober) =>

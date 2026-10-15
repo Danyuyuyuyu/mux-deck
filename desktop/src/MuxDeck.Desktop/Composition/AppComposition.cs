@@ -43,12 +43,15 @@ public static class AppComposition
     {
         runner ??= new MuxToolRunner();
         var prober = new MkvmergeProber(runner);
-        return new(workspace, new ProbeMediaUseCase(prober), workspaces =>
-            new RunSingleMuxUseCase(new MuxInputReader(), new ToolReadiness(runner), prober,
+        var inputReader = new MuxInputReader();
+        var pathFacts = SystemPathFacts.Instance;
+        var probeMedia = new ProbeMediaUseCase(prober);
+        var import = new PrepareImportUseCase(probeMedia, inputReader, pathFacts);
+        return new(workspace, probeMedia, workspaces =>
+            new RunSingleMuxUseCase(inputReader, new ToolReadiness(runner), prober,
                 new AfsSubsetter(runner), new MkvmergeMuxer(runner), new MkvextractExtractor(runner),
                 new MediaReferenceBuilder(runner), new MuxEvidenceReader(), new NoOverwritePublisher(), workspaces),
-            // 拖入反馈的同步事实收集与导入用例的异步端口来自同一份实现。
-            collectFacts: SystemPathFacts.Instance.Collect);
+            inputReader: inputReader, pathFacts: pathFacts, collectFacts: pathFacts.Collect, import: import);
     }
 
     public static SingleMuxViewModel CreateSingle(SingleMuxService service, UserPreferencesStore? preferences = null) =>

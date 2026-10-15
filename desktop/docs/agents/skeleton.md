@@ -37,7 +37,7 @@ Domain ← Application ← Infrastructure
 | Core | Domain、Application、Infrastructure（3b 用户批准过渡，第 5 步移除） |
 | Desktop | Core、Application、Infrastructure（4a-1 接入，仅 Program / Composition 使用） |
 
-Core → Infrastructure 为 3b 用户批准的单向过渡，到第 5 步移除；Infrastructure 不引用 Core 的护栏不变。4a-1 已接入 Desktop → Infrastructure，只有 Program / Composition 使用；Desktop → Core 保留到第 5 步。StoragePaths、ToolLocator 与组件实现留 Core 到 4a-2，导入逻辑留 Desktop 到 4a-3。上述过渡引用不豁免目标命名空间规则：Core 内先改为 `MuxDeck.Domain`、`MuxDeck.Contracts`、`MuxDeck.Application`、`MuxDeck.Infrastructure` 的类型与对应新项目一起接受架构测试，搬迁时只移动文件。每完成一步，在同一改动中更新本节与下方“迁移前现状”。
+Core → Infrastructure 为 3b 用户批准的单向过渡，到第 5 步移除；Infrastructure 不引用 Core 的护栏不变。4a-1 已接入 Desktop → Infrastructure，只有 Program / Composition 使用；Desktop → Core 保留到第 5 步。StoragePaths、ToolLocator 与组件实现已在 4a-2 迁入 Infrastructure；4a-3 已将导入识别与校验迁入 Application，Core 只保留旧入口兼容。上述过渡引用不豁免目标命名空间规则：Core 内先改为 `MuxDeck.Domain`、`MuxDeck.Contracts`、`MuxDeck.Application`、`MuxDeck.Infrastructure` 的类型与对应新项目一起接受架构测试，搬迁时只移动文件。每完成一步，在同一改动中更新本节与下方“迁移前现状”。
 
 测试按层划分：
 
@@ -143,7 +143,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 
 - `src/MuxDeck.Domain/InputRules.cs` 是媒体/字体扩展名、固定槽位类型与数量、候选来源类型、完整路径事实校验、规范化路径比较、去重及单字体目录的唯一规则位置；自动导入中的源视频数量、字幕/音频探测类型和已加入轨道身份也由该规则判定。
 - `MuxDeck.Core.Muxing.MediaFileTypes` 与旧 `SingleMuxService.IsFont` 仅提取扩展名并调用 Domain，保留现有调用方。Core 按运行平台决定路径大小写策略，Desktop 仍按 Windows 大小写无关策略比较。
-- `ViewModels/SingleMuxViewModel.cs` 与 `MediaImport.cs` 暂时收集 `Path` 规范化/完整性/无效字符、文件/目录存在性和媒体探测事实。规范化键先在边界收集，再交给 Domain 比较；Domain 不使用 `System.IO`，不查询文件或目录。
+- `Infrastructure/SystemPathFacts.cs` 收集路径规范化/完整性/文件目录存在性事实，同步拖入反馈与 `PrepareImportUseCase` 的异步端口共用该实现；`MediaImport.cs` 只负责 ViewModel 状态投影。规范化键先在边界收集，再交给 Domain 比较；Domain 不使用 `System.IO`，不查询文件或目录。
 - 固定槽位仍只接纳 MKV/MP4 与 ASS，自动导入保留原有广泛视频/音频/ASS/SRT/字体入口。两者的设备路径与规范化细节差异保持原行为，不统一或扩大允许范围。
 - 准备/提交、编辑锁、迟到修订、替换确认、原拒绝文案和全批次原子更新仍留 Desktop，随 4b 迁移。SC/TC 去重比较最终槽位集合；同音频容器按真实 Track ID 区分，字幕按文件身份去重。Domain 规则测试与新增副作用架构检查覆盖这些边界。
 
@@ -165,6 +165,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 | 旧入口与唯一单任务用例 | Core/Muxing/SingleMuxService.cs、LegacyMuxContractConverter.cs；Application/RunSingleMuxUseCase.cs | 旧入口只接线和转换，ExternalMedia.cs 的流程辅助已删除；七阶段流程仅在 Application。检查文案、参考往返、哈希和提交后取消保持 |
 | AFS 诊断与字体文件校验 | Infrastructure/Muxing/AfsDiagnosticClassifier.cs、AfsDiagnosticCollector.cs、AssGlyphValidator.cs | 分类调用 Domain DiagnosticPolicy；ASS 规则调用 Domain AssDocument；保留诊断计数、实时输出与字体来源证明 |
 | 可替换进程边界 | Infrastructure/Muxing/IMuxToolRunner.cs；Infrastructure/ProcessRunner.cs、WindowsProcessJob.cs | 进程与 Job 整体搬迁；旧受控回归继续注入同一 runner，不更改测试逻辑；Start 到 Assign Job 的已知竞态仍未覆盖 |
+| 导入识别与校验 | Application/PrepareImportUseCase.cs、Domain/InputRules.cs、Domain/SubtitleRules.cs、Domain/AssDocument.cs | 用例编排路径事实、只读探测、字幕读取、ASS 用法和计划；ASS 用法失败保留旧 `AssGlyphValidator.ReadUsage` 文案，失败路径暂存 `OperationFailure.Detail` |
 | 探测、子集化、封装、提取、字体表 | Infrastructure/Muxing/MkvmergeProber.cs、AfsSubsetter.cs、MkvmergeMuxer.cs、MkvextractExtractor.cs、TtxFontInspector.cs、ToolExecutor.cs | 实现 Application 端口；列表参数、双流完整日志、UTF-8、超时和取消；失败统一 ToolFailureException，取消保留 OperationCanceledException |
 | 工作区、日志与不覆盖发布 | Infrastructure/FileTaskWorkspace.cs、NoOverwritePublisher.cs | 独占 cache/run-id/work，异步释放等待清理；日志保留；同目录暂存、刷盘、最后取消检查与不覆盖 rename；提交后不取消已完成成品 |
 | QC 判定 | Core/Muxing/SingleMuxService.cs 调用 Domain OutputQcRules；Infrastructure/Muxing/AssGlyphValidator.cs 保留字体 IO 核验 | 对比源视频与音轨，逐轨验证新增 ASS 名称/语言/default/forced；验证附件身份、大小、类型、提取 SHA-256 和 ASS 内容；不能仅按语言找到任意轨即通过。ASS 以同一 MKVToolNix 将每条修正 ASS 单独封装、提取为参考，与真实成品提取全文比较；仅统一 CRLF/LF，Dialogue 文本、时序、Style、字体、事件顺序和文本边缘空格均须一致 |
@@ -172,7 +173,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 | 集中装配与设置存储 | Desktop/Composition/AppComposition.cs；Infrastructure/StorageSettingsStore.cs；Desktop/Preferences/UserPreferencesStore.cs | Program 只调用装配；App 注入窗口工厂，无静态 Workspace / Storage；MainWindow、Environment、SingleMux ViewModel 注入服务依赖；存储索引只保存工作与工具目录，装配转换为旧 StoragePaths；界面偏好留 Desktop |
 | 只读媒体探测 | Application/ProbeMediaUseCase.cs；Infrastructure/Muxing/MkvmergeProber.cs | 4a-1 给 `IMediaProber` 新增 `ProbeReadOnlyAsync`，暴露已有的只读重载；IProbeMedia 消费配置快照，探测命令与参数不变；旧 MediaProbe 由转换类完整投影 |
 
-新增的多轨与自动导入范围以 [自动拖放任务](../tasks/automatic-media-drop.md) 为准：`SubtitleText` 统一 ASS/SRT 的 UTF-8 与结构校验，ASS 继续使用 `AssGlyphValidator`；外加音频包含真实输入 Track ID，`ExternalMedia` 构建选择参数；编码、声道、采样率与元数据的 QC 调用 Domain `OutputQcRules`。字幕采用同工具往返全文参考，音频采用同工具参考的 `--fullraw`（含 CodecPrivate）SHA-256，任一不符阻止发布。只在 A/V 输入时长均已声明时检查总时长，不以字幕尾时间替代未知容器数据。
+新增的多轨与自动导入范围以 [自动拖放任务](../tasks/automatic-media-drop.md) 为准：`PrepareImportUseCase` 统一编排输入事实、媒体探测、`MuxInputReader` 字幕读取、SRT 时间轴和 ASS 用法校验；ASS 子集化阶段仍由 `AssGlyphValidator` 负责字体 IO 核验。外加音频包含真实输入 Track ID，`ExternalMedia` 构建选择参数；编码、声道、采样率与元数据的 QC 调用 Domain `OutputQcRules`。字幕采用同工具往返全文参考，音频采用同工具参考的 `--fullraw`（含 CodecPrivate）SHA-256，任一不符阻止发布。只在 A/V 输入时长均已声明时检查总时长，不以字幕尾时间替代未知容器数据。
 
 接口合同与第一阶段具体验收案例见 [阶段一任务](../tasks/phase-1-single-mux.md)。Core 已确认的探测类型为 `MediaTrack`、`MediaAttachment`、`MediaProbe`；公开的单任务签名按任务文档约定，真实文件和额外依赖以实现为准。
 
@@ -206,7 +207,7 @@ tests/MuxDeck.Infrastructure.IntegrationTests 只直接引用 Infrastructure，�
 
 #### 阶段一 Desktop 单任务约定
 
-最新自动入口由 `ViewModels/MediaImport.cs` 和 `Views/SingleMuxView.MediaInput.cs` 承担：工作区文件格式优先，混合批次准备后一次提交；文件名仅在语言未声明时提供提示，路径拆分后调用 Domain `LanguageRules.InferImported`，不在 ViewModel 内保留推断实现。字幕/音频追加到共享 `externalOrder`，显示 ID 连续编号，GUID 只作内部身份；一份音频容器可以投影多条真实音轨。字幕/音频更换、移除与编辑守卫共同维护草稿版本。ASS 才要求字体目录和字体后端；SRT/音频可单独封装。`MuxRequest` 快照复制字幕与音频集合，开始/取消/关闭锁定不变，关闭等待还包含媒体识别进程。以下 SC/TC API 保留其旧草稿契约和回归，不再限制新拖放/添加入口。
+最新自动入口由 Application `PrepareImportUseCase`、`ViewModels/MediaImport.cs` 和 `Views/SingleMuxView.MediaInput.cs` 协作承担：工作区文件格式优先，混合批次准备后一次提交；文件名仅在语言未声明时提供提示，路径拆分后调用 Domain `LanguageRules.InferImported`，不在 ViewModel 内保留推断实现。字幕/音频追加到共享 `externalOrder`，显示 ID 连续编号，GUID 只作内部身份；一份音频容器可以投影多条真实音轨。字幕/音频更换、移除与编辑守卫共同维护草稿版本。ASS 才要求字体目录和字体后端；SRT/音频可单独封装。`MuxRequest` 快照复制字幕与音频集合，开始/取消/关闭锁定不变，关闭等待还包含媒体识别进程。以下 SC/TC API 保留其旧草稿契约和回归，不再限制新拖放/添加入口。
 
 最新输入反馈见[窗口输入反馈任务](../tasks/window-input-feedback.md)：`Views/SingleMuxView.DropFeedback.cs` 在窗口宿主统一处理拖入，包含左侧导航，只有单个封装可接纳；`MainWindow` 的透明遮罩覆盖整块客户区且退出命中测试。子控件 Leave/Enter 通过 70ms 合并，真正窗口外离开、Drop、Esc、切页及脱离清理；详情面板坐标遮挡、忙碌和所有可见 owned dialog 均拒绝。原生对话框的 enabled 状态不能只凭托管 `IsEnabled` 推断。
 

@@ -62,6 +62,7 @@ public static class ErrorCodes
     public const string ImportSubtitleMismatch = "MUX_IMPORT_SUBTITLE_MISMATCH";
     public const string ImportTrackConflict = "MUX_IMPORT_TRACK_CONFLICT";
     public const string ImportSubtitleTimeline = "MUX_IMPORT_SUBTITLE_TIMELINE";
+    public const string ImportAssUsage = "MUX_IMPORT_ASS_USAGE";
 }
 
 /// <summary>Domain 批量校验结果到契约错误码的唯一映射，生产与消费两侧共用。</summary>

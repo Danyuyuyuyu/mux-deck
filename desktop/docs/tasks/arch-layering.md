@@ -310,7 +310,7 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 | **3e** | `ComponentOperations.Gate` 删除，所有互斥经 `IOperationCoordinator`；协调器测试覆盖同类/异类互斥矩阵、异常与取消后的租约释放、`ShutdownAsync` 等待全部租约；组件与环境相关套件等于基准；本地 `--component-uninstall-real` 17/17 |
 | **4a-1** | `AppComposition` 集中装配，ViewModel 构造注入，协调器由装配创建；UpdateWorkspace 外壳与 App.Workspace / App.Storage 删除；StorageSettingsStore 位于 Infrastructure；IProbeMedia 复用已有端口并以配置快照探测；仅新增 Desktop → Infrastructure，装配边界护栏保持通过；`--root` 与默认存储路径行为不变；原 777 单元测试保留，受控 13/13、656/656 与 UI 全套通过；Smoke 仅改装配 |
 | **4a-2** | 五个组件类、StoragePaths、ToolLocator 位于 Infrastructure；环境 ViewModel 只调用 IManageComponents 与契约模型；4a-2 的 3e 遗留问题清理完成；组件和环境 Smoke 按需迁移并保留行为覆盖；本地 786/786、受控 13/13 与 656/656、环境 23/23、安装 37/37、卸载 61/61、真实卸载 17/17 |
-| **4a-3** | IPrepareImport 接管接纳与校验；Domain SRT 时间轴规则由导入和 RunSingleMuxUseCase 共用；字幕只经 MuxInputReader 读取，Core SubtitleText 删除；接纳 88/89、输入反馈 24 及相关 UI 套件通过 |
+| **4a-3** | `IPrepareImport` 接管接纳与校验；Domain SRT 时间轴和 ASS 用法规则由导入与 `RunSingleMuxUseCase` 共用；字幕只经 `MuxInputReader` 读取，Core `SubtitleText` 删除；装配显式共享端口；847/847 单元、受控 13/13（656/656）、真实 integration 121/121、media-drop-real 37/37；`compare-smoke-text.py 761eb99` 缺失 0 |
 | **4b** | `MuxDraft` 测试覆盖：同值赋值不增修订号、一次接纳批次只增一次、准备→提交、运行中锁定拒绝、`ToSpec()` 快照与后续修改隔离；ViewModel 中不再有 SC/TC 默认规则等业务代码；UI、接纳、工作台、输入反馈、自动导入套件等于基准；1040×760 与 1280×900 截图与基线逐张对照无差异（差异须逐项说明）；本地 `--ui-integration` 等于基准；**推送前经用户确认** |
 | **4c** | `SingleMuxViewModel` 只做组合与过渡转发；六个区域 ViewModel 的绑定均为编译绑定且构建通过；可访问名称不变；全部 UI 套件等于基准 |
 | **4d** | 结果详情直接展示结构化检查项、诊断与失败阶段，代码中不再对检查文本做字符串匹配；`MainWindow` 关闭只等待 `IOperationCoordinator.ShutdownAsync()`；关闭等待相关用例通过；两尺寸截图检查 |
@@ -332,7 +332,7 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 | [3c · 7c9a477](https://github.com/Danyuyuyuyu/mux-deck/commit/7c9a477410768aa1758551116193fac19e8172de) + [修正 · a3dbea9](https://github.com/Danyuyuyuyu/mux-deck/commit/a3dbea92f867a739aae4490e249ace1a493300d3) | 用户已确认，保留三提交推送主分支；[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38530034209)，head_sha=a3dbea9 | 初验 675；结构化修正 test 717/717；restore 11/11、Release 0/0；受控 656/656；真实 238/238 | 原 676 保留，新增 41；[15/15、150/150 对照报告](../../artifacts/arch-corrections/3c-structured-final/summary-all15.json)；远端审查分支已删除。 |
 | [3d · 0f1927b](https://github.com/Danyuyuyuyu/mux-deck/commit/0f1927b5b374eee9198ff9c22e3e047c27dad448) | 用户已确认并推送主分支；[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38530034209)，head_sha=a3dbea9 | 初验 676；结构化修正 test 717/717；restore 11/11、Release 0/0；受控 656/656；真实 238/238；脚本反例 22/22 | [15 项逐项对照报告](../../artifacts/arch-corrections/3c-structured-final/summary-all15.json)全部一致；旧/旧来源复核 10/10，原始报告保留。 |
 | [3e · 292f2af](https://github.com/Danyuyuyuyu/mux-deck/commit/292f2afd8441188bae47f09fbb86b255d311cea1) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38535828389)，head_sha=292f2af | locked restore 11/11；Release 0 警告 / 0 错误；test 777/777；受控 13/13、656/656；真实卸载 17/17 | 内存租约与 IManageComponents 已接入；原 717 保留，新增 60；Desktop/Smoke/ADR/护栏零改动；组件搬迁按批准留到 4a；见下方实际验证。 |
-| 4a | 未开始 | | |
+| [4a-3 · `review/4a-3`] | 已完成本地验证，待追加提交并推送 | Release 0/0；test 847/847（本轮新增 14）；受控 13/13、656/656；integration 121/121；media-drop-real 37/37；Smoke 文案对照 missing 0 | ASS 用法迁移、共享 `MuxInputReader`/`SystemPathFacts`、Application 替身端口用例；详见下方 4a-3 实施与实际验证。 |
 | 4b | 未开始 | | |
 | 4c | 未开始 | | |
 | 4d | 未开始 | | |
@@ -1167,6 +1167,7 @@ restore 11 个项目成功，Release 0 警告 / 0 错误，test 717/717。[构�
 - **第 5 步**：`AssfontsInstaller` 未使用。
 - **4b/4c**：`SingleMuxViewModel` 通过 `service.Prober` / `service.Tools` 取依赖，应改为构造函数注入。
 - **4a-2**：`ConfigureTools` 去掉了原 `UpdateWorkspace` 对空工作区的校验；后续构造注入收口时补回等价边界校验。
+- **4a-3**：静态 `MediaInputError` 与 `SingleMuxService.DefaultCollectFacts` 被特征测试冻结，暂时保留；4b 删除，并清除 Core 间接使用 Infrastructure 路径。
 - **第 5 步**：Desktop 的行为测试暂时放在 `MuxDeck.Architecture.Tests`（仓库没有 Desktop 测试项目，且为不改动受控 Smoke 计数）；第 5 步评估是否新建 Desktop 测试项目并把这些用例迁过去。
 
 ### 4a-1 实施与实际验证（2026-10-14）
@@ -1206,3 +1207,13 @@ Smoke 表中每项命令为 `dotnet run --project tests/MuxDeck.Smoke --no-build
 未改探测命令行或参数：MkvmergeProber 的既有只读方法保留原 `-J`、完整路径、两分钟超时、无工作目录/环境覆盖、JSON 捕获与失败边界；新增接口成员仅转发。按用户要求本次不运行真实工具链基准或真实探测套件，不把历史真实计数记录为本次结果。原生选择器、Explorer、DPI 与播放器未人工验收，本步不改变这些交互。
 
 第三部分的目录查询两个方案、字幕读取差异和语言规则结论见[只读调查报告](arch-layering-4a-investigation.md)，本次不实施调查中的改造。
+
+### 4a-3 实施与实际验证（2026-10-15）
+
+本步基于 `cb13564`，在 `review/4a-3` 追加实现。`PrepareImportUseCase` 现在对 ASS 原文调用 Domain `AssDocument.ReadUsage`，并将 `MediaRuleException` 映射为保留旧 `AssGlyphValidator.ReadUsage` 文案的导入失败；`ToolFailureException` 的 Code、Message、Detail 原样进入结果。`AppComposition.CreateSingleService` 显式传入 `inputReader`、`pathFacts`、`collectFacts` 和 `import`：同步事实与异步端口共用 `SystemPathFacts.Instance`，导入与单任务运行共用一个 `MuxInputReader`。三参 `SingleMuxService` 默认构造仅为冻结的特征测试保留，并由装配测试确认生产对象图没有走默认端口。`DropFeedback` 使用注入模型校验，否则回退静态入口。
+
+新增 7 条 ASS 用法特征测试（未定义样式、`\\t` 字体切换、`\\t` 粗斜体切换、非标准字重、无可子集化对白、格式字段缺失、覆盖样式不存在），在旧实现 `e749512` 上输出 26/26（原 19 条加新增 7 条），在新实现上同样为 26/26；原有 19 条特征测试未改动。Application 新增 6 条替身端口用例，覆盖每个导入错误码的路径、ASS 用法失败、工具失败原样透传、取消重抛、冲突和计划字段；装配共享端口新增 1 条架构测试。本轮相对 `cb13564` 新增 14 条测试。
+
+已知差异有两处。草稿在识别期间变化时，旧实现会立即停止后续探测；新实现会把整批探测完成，再返回相同的“识别期间任务或草稿已变化，整批输入保持原样。”文案。导入失败的出错路径暂时放在 `OperationFailure.Detail`，4d 统一结果结构时再整理。
+
+本地验证结果：Release 构建 0 警告 / 0 错误；全量测试 847/847（Domain 298、Application 181、Core 57、Architecture 233、Infrastructure 78）；受控 13/13、656/656（无参数 28、warning-policy 57、单任务 89、单任务 UI 176、工作台 38、输入反馈 24、自动导入 25、环境 23、组件 31、安装 UI 37、安装全流程 41、卸载 26、卸载 UI 61）；真实 `--integration` 121/121；真实 `--media-drop-real` 37/37；`python tools/compare-smoke-text.py 761eb99` 总计 485/485，缺失 0、新增 0。卸载套件的 junction 用例以提升权限运行，26/26；其余套件在工作区专属临时目录运行。
