@@ -20,10 +20,10 @@
 ## 依赖顺序
 
 ```text
-1a → 1b → 2a / 2b / 2c（可并行）→ 3a → 3b → 3c → 3d → 3e → 4a-1 → 4a-2 → 4a-3 → 4b → 4c → 4d → 5
+1a → 1b → 2a / 2b / 2c（可并行）→ 3a → 3b → 3c → 3d → 3e → 4a-1 → 4a-2 → 4a-3 → 4b-1 → 4b-2 → 4c → 4d → 5
 ```
 
-高风险步骤为 **3c**（流水线改写）与 **4b**（草稿会话），推送前须经用户确认，分别要求真实工具链对照与 UI 截图对照。
+高风险步骤为 **3c**（流水线改写）与 **4b-2**（草稿会话接 VM），推送前须经用户确认，分别要求真实工具链对照与 UI 截图对照。4b-1 只新增模型与测试，不接 VM，可直接推主分支。
 
 ## 第 1 步：骨架与护栏
 
@@ -231,6 +231,39 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 - Application 不引用 Avalonia：草稿以普通 C# 事件（携带修订号）通知变化，ViewModel 订阅后投影。
 - 验证：Application 草稿测试；接纳 88/89、UI 176、工作台 38、输入反馈 24；两尺寸截图对照。
 
+#### 4b 计划调整（2026-10-15，用户已批准）
+
+用户在本步实施前批准拆分与范围收紧；本节先记录，再按 4b-1、4b-2 两步实施。
+
+**拆分与推送方式**
+
+- **4b-1 草稿模型与测试**：只新增 Application `MuxDraft` 模型、模型测试与冻结旧 VM 行为的特征测试；不接 VM、不改 XAML、不改 Smoke、不改生产装配，可直接推 `v2/avalonia-rewrite`。
+- **4b-2 VM 订阅投影**：把 `SingleMuxViewModel` 改为订阅 `MuxDraft` 后投影，并完成特征测试迁移与旧入口删除。先推审查分支 `review/4b`，完成 1040×760 与 1280×900 截图对照和 `--ui-integration`，经用户确认后才 `--ff-only` 快进到 `v2/avalonia-rewrite`。
+
+**4b 范围（只处理与草稿直接相关的遗留）**
+
+1. `TrackRowViewModel.InclusionBox` 的 `Policy == "保留"` 文字判断改为结构化策略。
+2. `TrackRowViewModel.IsSubtitleSlot` 写死改为 Domain `InputRules` 判断。
+3. `ImportedTrack` 与 `ImportedTrackSpec` 的互转收口到一处。
+4. `OutputNaming` 写死的“源文件名”预览规则改为由草稿传入视频名。
+5. 下方“3e 遗留问题”中第 2 项（静态 `MediaInputError` 与 `SingleMuxService.DefaultCollectFacts` 的删除）。
+
+**4b 明确不做**：`service.Prober` / `service.Tools` / `service.Import` / `CollectFacts` 改为构造函数注入挪到 4c；只有删除旧入口时不得不改的调用点才在 4b 处理（特征测试迁移、`MuxDraft` 接线、第 5 项的删除）。
+
+**空草稿默认**：空草稿时 SC 默认为 true，保持不变（`TrackPolicy.InitialScDefault`）。4b 不改该默认。
+
+**特征测试迁移授权**：4a-3 的 26 条导入特征测试（`MuxDeck.Architecture.Tests/ImportCharacterizationTests.cs`）允许迁移，但只改调用入口，断言文字与用例数都不变，并在交付时提供新旧断言的逐条对照。迁移在 4b-2 进行，同时删除静态 `MediaInputError` 与 `SingleMuxService.DefaultCollectFacts` / `DefaultPathFacts`。4b-1 的草稿特征测试同样先放在 `MuxDeck.Architecture.Tests`，4b-2 迁移到 `MuxDeck.Application.Tests`。
+
+**4b-1 补充冻结项（用户批准）**：旧 VM 的“整组交换 SC/TC”只在 4a-3 的受控 Smoke `--single-mux-round1` 中被覆盖，没有单元级特征测试；4b-1 除既有草稿范围外，另冻结“一组 `PrepareSubtitleInputs` + `CommitInput` 同时换掉 SC 与 TC”的修订号步进，迁移时同样只换调用入口。
+
+#### 4b-1 实施与实际验证（2026-10-15）
+
+- 新增 `MuxDeck.Architecture.Tests/SingleMuxDraftCharacterizationTests.cs`，在未修改的生产代码上冻结 `SingleMuxViewModel` 的当前草稿行为：修订号步进（逐个、批量、同值、整组交换、自动导入）、编辑锁（运行中/取消中/关闭中，`Prepare*` 与 `CommitInput` 都返回 `Locked` 且修订号不变）、计划过期与替换确认，以及 8 种草稿状态下 `StartAsync` 的请求经 `LegacyMuxContractConverter.ToRunSpec` 得到的整体 `MuxJobSpec`。
+- 新增 Application `MuxDraft` 草稿会话模型与其测试；`ToSpec(ToolConfiguration)` 返回独立快照，后续草稿修改不影响已返回的规格。
+- 提交 1 交付时报告用例数，并对其中 3 条做反向验证（临时改动行为确认变红后改回）。
+- 范围：不接 VM、不改 XAML、不改 Smoke、不碰 `MediaInputError` 与 `DefaultCollectFacts`；`MuxDeck.sln`、锁文件、`Directory.Build.props` 与 `docs/agents/` 不改。
+- 验证：`dotnet test` 全量与受控 13 套件，只允许新增用例，受控套件计数不变（659/659）；不放宽任何架构测试。
+
 ### 4c 拆分 ViewModel（大）
 
 - 拆出 `VideoSummaryViewModel`、`TrackListViewModel`、`TrackInspectorViewModel`、`OutputSettingsViewModel`、`RunPanelViewModel`、`ResultDetailsViewModel`。
@@ -311,7 +344,8 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 | **4a-1** | `AppComposition` 集中装配，ViewModel 构造注入，协调器由装配创建；UpdateWorkspace 外壳与 App.Workspace / App.Storage 删除；StorageSettingsStore 位于 Infrastructure；IProbeMedia 复用已有端口并以配置快照探测；仅新增 Desktop → Infrastructure，装配边界护栏保持通过；`--root` 与默认存储路径行为不变；原 777 单元测试保留，受控 13/13、656/656 与 UI 全套通过；Smoke 仅改装配 |
 | **4a-2** | 五个组件类、StoragePaths、ToolLocator 位于 Infrastructure；环境 ViewModel 只调用 IManageComponents 与契约模型；4a-2 的 3e 遗留问题清理完成；组件和环境 Smoke 按需迁移并保留行为覆盖；本地 786/786、受控 13/13 与 656/656、环境 23/23、安装 37/37、卸载 61/61、真实卸载 17/17（批准新增兄弟目录用例和两条前提断言后，实际为卸载 UI 64/64、合计 659/659，见 4a-2 返工记录（`8dc522d`）。） |
 | **4a-3** | `IPrepareImport` 接管接纳与校验；Domain SRT 时间轴和 ASS 用法规则由导入与 `RunSingleMuxUseCase` 共用；字幕只经 `MuxInputReader` 读取，Core `SubtitleText` 删除；装配显式共享端口；847/847 单元、受控 13/13（659/659）、真实 integration 121/121、media-drop-real 37/37；`compare-smoke-text.py 761eb99` 缺失 0 |
-| **4b** | `MuxDraft` 测试覆盖：同值赋值不增修订号、一次接纳批次只增一次、准备→提交、运行中锁定拒绝、`ToSpec()` 快照与后续修改隔离；ViewModel 中不再有 SC/TC 默认规则等业务代码；UI、接纳、工作台、输入反馈、自动导入套件等于基准；1040×760 与 1280×900 截图与基线逐张对照无差异（差异须逐项说明）；本地 `--ui-integration` 等于基准；**推送前经用户确认** |
+| **4b-1** | Application `MuxDraft` 测试覆盖：同值赋值不增修订号、一次接纳批次只增一次、准备→提交、运行中锁定拒绝、`ToSpec()` 快照与后续修改隔离；另用 `MuxDraft` 构造提交 1 的 8 种草稿状态，`ToSpec()` 与冻结的 `MuxJobSpec` 逐个相等；旧 VM 草稿行为特征测试冻结通过；不接 VM、不改 XAML/Smoke/生产装配；只新增用例，受控计数不变；可直接推主分支 |
+| **4b-2** | ViewModel 中不再有 SC/TC 默认规则等业务代码，改为订阅 `MuxDraft` 后投影；草稿遗留 1–5 项处理完成；26 条导入特征测试迁入 Application 且断言逐字不变、提供新旧逐条对照；静态 `MediaInputError` 与 `DefaultCollectFacts`/`DefaultPathFacts` 删除；UI、接纳、工作台、输入反馈、自动导入套件等于基准；1040×760 与 1280×900 截图与基线逐张对照无差异（差异须逐项说明）；本地 `--ui-integration` 等于基准；先推 `review/4b`，**推送主分支前经用户确认** |
 | **4c** | `SingleMuxViewModel` 只做组合与过渡转发；六个区域 ViewModel 的绑定均为编译绑定且构建通过；可访问名称不变；全部 UI 套件等于基准 |
 | **4d** | 结果详情直接展示结构化检查项、诊断与失败阶段，代码中不再对检查文本做字符串匹配；`MainWindow` 关闭只等待 `IOperationCoordinator.ShutdownAsync()`；关闭等待相关用例通过；两尺寸截图检查 |
 | **5** | `MuxDeck.Core`、旧模型、转换类与旧入口删除；架构测试无过渡例外；全部受控与真实套件等于基准（计数变化逐项说明）；`skeleton.md` “迁移前现状”改写为现状、两份 README 与 `verification.md` 已更新 |
@@ -1167,7 +1201,7 @@ restore 11 个项目成功，Release 0 警告 / 0 错误，test 717/717。[构�
 - **第 5 步**：`AssfontsInstaller` 未使用。
 - **4b/4c**：`SingleMuxViewModel` 通过 `service.Prober` / `service.Tools` 取依赖，应改为构造函数注入。
 - **4a-2**：`ConfigureTools` 去掉了原 `UpdateWorkspace` 对空工作区的校验；后续构造注入收口时补回等价边界校验。
-- **4a-3**：静态 `MediaInputError` 与 `SingleMuxService.DefaultCollectFacts` 被特征测试冻结，暂时保留；4b 删除，并清除 Core 间接使用 Infrastructure 路径。
+- **4a-3**：静态 `MediaInputError` 与 `SingleMuxService.DefaultCollectFacts` 被特征测试冻结，暂时保留；**4b-2** 删除，并清除 Core 间接使用 Infrastructure 路径（4a-3 的 26 条特征测试同时迁入 Application，只改调用入口）。
 - **第 5 步**：Desktop 的行为测试暂时放在 `MuxDeck.Architecture.Tests`（仓库没有 Desktop 测试项目，且为不改动受控 Smoke 计数）；第 5 步评估是否新建 Desktop 测试项目并把这些用例迁过去。
 
 ### 4a-1 实施与实际验证（2026-10-14）
