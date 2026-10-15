@@ -264,6 +264,27 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 - 范围：不接 VM、不改 XAML、不改 Smoke、不碰 `MediaInputError` 与 `DefaultCollectFacts`；`MuxDeck.sln`、锁文件、`Directory.Build.props` 与 `docs/agents/` 不改。
 - 验证：`dotnet test` 全量与受控 13 套件，只允许新增用例，受控套件计数不变（659/659）；不放宽任何架构测试。
 
+#### 4b-1 实施与实际验证（2026-10-15）
+
+本步在未修改的生产代码上新增特征测试，再落地草稿模型；未接 VM、未改 XAML、未改 Smoke、未改生产装配，也未碰静态 `MediaInputError` 与 `SingleMuxService.DefaultCollectFacts` / `DefaultPathFacts`。
+
+**特征测试（`tests/MuxDeck.Architecture.Tests/SingleMuxDraftCharacterizationTests.cs`，27 条）**：冻结 `SingleMuxViewModel` 当前草稿行为。
+
+1. 修订号步进 11 条：视频 1；单槽提交 SC、TC 各 1（同一用例）；字体目录 1；输出目录 1；输出文件名 1；轨道字段 name/default/forced/included 各 1（4 条 Theory 变体）；一次提交同时改多个字段 1；同值赋值 1；整组交换 SC/TC 1；自动导入一批 1。
+2. 编辑锁 3 条：运行中、取消清理中、关闭等待中，`PrepareVideoInput` / `PrepareSubtitleInputs` / `PrepareFontsDirectory` / `PrepareOutputDirectory` / `RemoveSubtitle` / `CommitInput` 都返回 `Locked`，修订号与草稿快照不变。
+3. 过期与确认 2 条：计划产生后草稿变化返回 `Stale`（“候选确认期间草稿已变化，请重新分配和确认。”）；替换未确认返回 `ConfirmationRequired`（“替换已有视频或字幕需要明确确认。”），确认后同一计划提交成功。
+4. 运行请求 9 条：仅 SC、仅 TC、SC+TC、TC 被排除、外加音频、同容器多音轨、其他字幕、自定义文件名、空文件名；每条都整体冻结 `StartAsync` 请求经 `LegacyMuxContractConverter.ToRunSpec` 得到的 `MuxJobSpec`（视频路径、外加轨顺序与全部字段、空源轨选择、字体与输出规格、工具配置）。同容器多音轨的实际行为是按文件去重只保留首个可导入轨，已在用例中注明并断言。
+
+**草稿模型（`src/MuxDeck.Application/Drafts/MuxDraft.cs`，17 条测试）**：`MuxDraft` 保存视频、SC/TC 槽位（路径、纳入、名称、语言、默认、强制）、有序外加轨道（含 `SourceTrackId`）、字体目录、输出目录与文件名。修订号只在真实内容变化时增加；`Batch` 支持嵌套且整批只加 1；同值赋值不加修订号、不触发 `Changed`；普通 C# 事件带修订号；编辑锁下所有修改返回 `DraftOutcome` 错误码、不抛异常、不改修订号、不触发事件。准备→提交绑定 owner 与修订号，提交时重新核验锁、是否过期、是否已确认；文件系统事实全部走 `IPathFacts` 端口，Application 不直接调用 File/Directory。默认规则调用 Domain `TrackPolicy`，空草稿 SC 默认为 true 不变。拒绝结果只给错误码，中文文案留在 Desktop。`ToSpec(ToolConfiguration)` 返回的不可变规格与后续草稿修改隔离；同一用例用 `MuxDraft` 构造 8 种草稿状态，逐个与 4b-1 冻结的规格比对。
+
+为不把 `Path.GetInvalidPathChars` 带进 Application 层，`InputPathFacts` 新增端口事实 `ContainsInvalidPathChars`，由 Infrastructure `SystemPathFacts` 采集、Domain `InputRules.AcceptsNormalizedPathSyntax` 消费；路径语法判定仍只有一处。此改动同时被 4b-2 的接纳迁移复用。
+
+**与冻结值的差异（据实记录，4b-2 处理）**：草稿把 SC/TC 槽位的名称初始化为显示名“简体/繁体”，而旧 VM 的 `ScTrack.Name` / `TcTrack.Name` 固定为“SC”/“TC”；因此 `MuxDraft.ToSpec` 产出的槽位轨道名与冻结的 VM 规格在上述状态里相差这一项。8 种草稿状态的外加轨道（来源、顺序、语言、default/forced、音频 `SourceTrackId`、空输出文件名）与冻结值逐字段一致。4b-2 迁入时由 VM 把槽位名称投影为草稿显示名，或把草稿名称初始值改为与旧值一致，二者取其一后特征测试必须逐字一致。
+
+本地验证：locked restore 11/11；Release 构建 0 警告 / 0 错误；`dotnet test MuxDeck.sln --no-build -c Release` 全绿（Domain 298、Application 198、Core 57、Architecture 260、Infrastructure 78，合计 891；4a-3 的 847 全部保留，本步新增 44：特征测试 27 + 草稿测试 17）；受控 13 套件 13/13、659/659，逐套件与基准一致（不新增、不减少）；不做放宽或跳过。
+
+**反向验证**：① 临时去掉 `CommitInput` 的 `ChangeConfiguration` 批次包裹（交换时两个槽位各算一次），`Swapping_sc_and_tc_in_one_prepare_commit_increments_revision_exactly_once` 失败（Expected 6 / Actual 7）；② 临时交换 `StartAsync` 里 SC/TC 的提交顺序，`Run_request_is_frozen_for_sc_and_tc_draft` 的整体 `MuxJobSpec` 比对失败（轨道顺序差异）；③ 临时去掉 `PrepareInput` 的接纳锁核验，`Prepare_commit_and_remove_return_locked_while_running_without_touching_revision` 与 `Prepare_returns_locked_while_cancelling_cleanup_waits` 都失败（Expected Locked / Actual None）。三次都改回原实现，恢复后全量测试与受控套件重新通过。
+
 ### 4c 拆分 ViewModel（大）
 
 - 拆出 `VideoSummaryViewModel`、`TrackListViewModel`、`TrackInspectorViewModel`、`OutputSettingsViewModel`、`RunPanelViewModel`、`ResultDetailsViewModel`。
@@ -305,7 +326,7 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 | 组件安装 UI | `--component-install-ui` | 37/37 | CI + 本地 | — | — |
 | 组件安装（受控） | `--component-install-all` | 41/41 | CI + 本地 | — | — |
 | 组件卸载（受控） | `--component-uninstall` | 26/26 | CI + 本地 | — | — |
-| 组件卸载 UI | `--component-uninstall-ui` | 61/61 | CI + 本地 | — | — |
+| 组件卸载 UI | `--component-uninstall-ui` | 61/61 | CI + 本地 | 2026-10-15：64/64（4a-2 批准新增用例后的实测基准，见结果表 4a-2 行） | — |
 | 真实工具链 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --integration` | 121/121 | 仅本地 | 2026-10-13：121/121，失败 0 | MKV 100.0 / FFmpeg 8.1.1 / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10；[报告](../../artifacts/phase1/20261013-142859-82b3d25cf1e54a029ee505f2922a67b2/report.json) |
 | 真实多轨导入 | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --media-drop-real` | 37/37 | 仅本地 | 2026-10-13：37/37，失败 0 | MKV 100.0 / FFmpeg 8.1.1 / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10；[报告](../../artifacts/automatic-drop/real-1f9252ddf7484002b912bd2b8ce067db/report.json) |
 | 真实 UI | `dotnet run --project tests/MuxDeck.Smoke --no-build -c Release -- --ui-integration artifacts/phase1/20261013-142859-82b3d25cf1e54a029ee505f2922a67b2 artifacts/arch-corrections/real-baseline/new-ui.png` | 39/39 | 仅本地 | 2026-10-13：39/39，失败 0 | MKV 100.0 / FFmpeg 8.1.1 / AFS 2.1.1 / fontTools 4.61.1 / Python 3.12.10；[报告](../../artifacts/single-mux-round1-b/real-0894ff063db94e0c9d57b4d3358cd596/report.json) |
@@ -367,7 +388,8 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 | [3d · 0f1927b](https://github.com/Danyuyuyuyu/mux-deck/commit/0f1927b5b374eee9198ff9c22e3e047c27dad448) | 用户已确认并推送主分支；[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38530034209)，head_sha=a3dbea9 | 初验 676；结构化修正 test 717/717；restore 11/11、Release 0/0；受控 656/656；真实 238/238；脚本反例 22/22 | [15 项逐项对照报告](../../artifacts/arch-corrections/3c-structured-final/summary-all15.json)全部一致；旧/旧来源复核 10/10，原始报告保留。 |
 | [3e · 292f2af](https://github.com/Danyuyuyuyu/mux-deck/commit/292f2afd8441188bae47f09fbb86b255d311cea1) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38535828389)，head_sha=292f2af | locked restore 11/11；Release 0 警告 / 0 错误；test 777/777；受控 13/13、656/656；真实卸载 17/17 | 内存租约与 IManageComponents 已接入；原 717 保留，新增 60；Desktop/Smoke/ADR/护栏零改动；组件搬迁按批准留到 4a；见下方实际验证。 |
 | [4a-3 · `6483ddb`](https://github.com/Danyuyuyuyu/mux-deck/commit/6483ddb) + [缩进修正 · `756dca6`](https://github.com/Danyuyuyuyu/mux-deck/commit/756dca6) + [计数订正 · `61ed271`](https://github.com/Danyuyuyuyu/mux-deck/commit/61ed2712f395c3b498a416b1afa7cd2b890380db) | 已完成并合入 `v2/avalonia-rewrite`，[Desktop CI #38729598219 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38729598219)，head_sha=`61ed2712f395c3b498a416b1afa7cd2b890380db`；审查分支 `review/4a-3` 保留 | Release 0/0；test 847/847（本轮新增 14）；受控 13/13、659/659（卸载 UI 64）；integration 121/121；media-drop-real 37/37；Smoke 文案对照 missing 0 | ASS 用法迁移、共享 `MuxInputReader`/`SystemPathFacts`、Application 替身端口用例；另含 ASS 校验块缩进修正与受控计数订正；详见下方 4a-3 实施与实际验证。 |
-| 4b | 未开始 | | |
+| [4b-1 · `5b43413`](https://github.com/Danyuyuyuyu/mux-deck/commit/5b43413) + [草稿模型 · `73ace12`](https://github.com/Danyuyuyuyu/mux-deck/commit/73ace12) | 已完成，已推送 `v2/avalonia-rewrite`，CI 结果见交付回报 | locked restore 11/11；Release 0 警告 / 0 错误；test 891/891（Domain 298、Application 198、Core 57、Architecture 260、Infrastructure 78；原 847 全部保留，本步新增 44：特征测试 27 + 草稿测试 17）；受控 13/13、659/659，逐套件与基准一致；反向验证 3 条 | Application `MuxDraft` 草稿会话模型与 `SingleMuxViewModel` 草稿行为特征测试；未接 VM、未改 XAML/Smoke、未碰 `MediaInputError` 与 `DefaultCollectFacts`；为新端口事实 `ContainsInvalidPathChars` 顺带改了 Domain `InputPathFacts` 与 Infrastructure `SystemPathFacts`；与冻结值只差槽位名称（简体/繁体 vs SC/TC），4b-2 处理；详见下方 4b-1 实施与实际验证。 |
+| 4b-2 | 未开始（先推 `review/4b`，用户确认后合入） | | |
 | 4c | 未开始 | | |
 | 4d | 未开始 | | |
 | 5 | 未开始 | | |
