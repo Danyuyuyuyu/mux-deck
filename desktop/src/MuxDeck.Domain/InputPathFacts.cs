@@ -24,4 +24,5 @@ public sealed record InputPathFacts(
     string Directory,
     InputLocationKind Kind,
     bool FileExists,
-    bool DirectoryExists);
+    bool DirectoryExists,
+    bool ContainsInvalidPathChars = false);

@@ -18,7 +18,8 @@ public sealed class SystemPathFacts : IPathFacts
         var directory = item.Kind == InputLocationKind.LocalDirectory
             ? Normalize(item.Path) : Normalize(Path.GetDirectoryName(item.Path) ?? "");
         return new(item.Path, Path.IsPathFullyQualified(item.Path), Normalize(item.Path), Path.GetExtension(item.Path),
-            directory, item.Kind, File.Exists(item.Path), Directory.Exists(item.Path));
+            directory, item.Kind, File.Exists(item.Path), Directory.Exists(item.Path),
+            item.Path.IndexOfAny(Path.GetInvalidPathChars()) >= 0);
     }
 
     public Task<EquatableArray<InputPathFacts>> CollectAsync(IReadOnlyList<InputItem> items, CancellationToken cancellationToken = default)
