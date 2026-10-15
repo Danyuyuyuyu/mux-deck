@@ -34,15 +34,15 @@ public sealed class PrepareImportUseCase(IProbeMedia prober, IMuxInputReader rea
                     var text = await ReadSubtitleAsync(item.FullPath, cancellationToken).ConfigureAwait(false);
                     if (!InputRules.IsAssExtension(item.Extension) && !SubtitleRules.HasSrtTimeline(text))
                         return Reject(ErrorCodes.ImportSubtitleTimeline, item.FullPath);
-                if (InputRules.IsAssExtension(item.Extension))
-                {
-                    try { _ = AssDocument.ReadUsage(text); }
-                    catch (MediaRuleException ex)
+                    if (InputRules.IsAssExtension(item.Extension))
                     {
-                        // Domain 保留旧 AssGlyphValidator.ReadUsage 的原始文案；界面只补旧入口前缀。
-                        return new(ImportStatus.Rejected, null, new(ErrorCodes.ImportAssUsage, ex.Message, item.FullPath));
+                        try { _ = AssDocument.ReadUsage(text); }
+                        catch (MediaRuleException ex)
+                        {
+                            // Domain 保留旧 AssGlyphValidator.ReadUsage 的原始文案；界面只补旧入口前缀。
+                            return new(ImportStatus.Rejected, null, new(ErrorCodes.ImportAssUsage, ex.Message, item.FullPath));
+                        }
                     }
-                }
                     var subtitle = probe.Tracks.Where(track => track.Kind == TrackKind.Subtitle).ToArray();
                     if (!InputRules.AcceptsSubtitleProbe(subtitle.Length, subtitle.Length == 1 ? subtitle[0].CodecId : null,
                         subtitle.Length == 1 ? subtitle[0].Codec : "", InputRules.IsAssExtension(item.Extension)))
