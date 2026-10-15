@@ -322,7 +322,7 @@ public sealed class MuxDraftTests
     {
         // 仅 SC
         var scOnly = new MuxDraft(Facts());
-        await SetVideoAndFonts(scOnly);
+        SetVideoAndFonts(scOnly);
         await Accept(scOnly, SubtitleSlot.Sc, "C:/in/sc.ass");
         AssertSpec(scOnly.ToSpec(Tools), "C:/in/v.mkv",
             [new("C:/in/sc.ass", TrackKind.Subtitle, null, "简体", new("zh-Hans"), new(true, false))],
@@ -330,7 +330,7 @@ public sealed class MuxDraftTests
 
         // 仅 TC
         var tcOnly = new MuxDraft(Facts());
-        await SetVideoAndFonts(tcOnly);
+        SetVideoAndFonts(tcOnly);
         await Accept(tcOnly, SubtitleSlot.Tc, "C:/in/tc.ass");
         AssertSpec(tcOnly.ToSpec(Tools), "C:/in/v.mkv",
             [new("C:/in/tc.ass", TrackKind.Subtitle, null, "繁体", new("zh-Hant"), new(true, false))],
@@ -338,7 +338,7 @@ public sealed class MuxDraftTests
 
         // SC + TC
         var both = new MuxDraft(Facts());
-        await SetVideoAndFonts(both);
+        SetVideoAndFonts(both);
         await Accept(both, SubtitleSlot.Sc, "C:/in/sc.ass");
         await Accept(both, SubtitleSlot.Tc, "C:/in/tc.ass");
         AssertSpec(both.ToSpec(Tools), "C:/in/v.mkv", [
@@ -348,7 +348,7 @@ public sealed class MuxDraftTests
 
         // TC 被排除
         var excluded = new MuxDraft(Facts());
-        await SetVideoAndFonts(excluded);
+        SetVideoAndFonts(excluded);
         await Accept(excluded, SubtitleSlot.Sc, "C:/in/sc.ass");
         await Accept(excluded, SubtitleSlot.Tc, "C:/in/tc.ass");
         excluded.SetSubtitleIncluded(SubtitleSlot.Tc, false);
@@ -358,7 +358,7 @@ public sealed class MuxDraftTests
 
         // 外加音频
         var audioDraft = new MuxDraft(Facts());
-        await SetVideoAndFonts(audioDraft);
+        SetVideoAndFonts(audioDraft);
         audioDraft.AddExternalTrack(Audio("a2", "C:/in/audio.wav", 2, included: true));
         AssertSpec(audioDraft.ToSpec(Tools), "C:/in/v.mkv",
             [new("C:/in/audio.wav", TrackKind.Audio, new(2), "", new("und"), new(false, false))],
@@ -366,7 +366,7 @@ public sealed class MuxDraftTests
 
         // 多音轨同容器
         var multiAudio = new MuxDraft(Facts());
-        await SetVideoAndFonts(multiAudio);
+        SetVideoAndFonts(multiAudio);
         multiAudio.AddExternalTrack(Audio("a2", "C:/in/multi.wav", 2, included: true));
         AssertSpec(multiAudio.ToSpec(Tools), "C:/in/v.mkv",
             [new("C:/in/multi.wav", TrackKind.Audio, new(2), "", new("und"), new(false, false))],
@@ -374,7 +374,7 @@ public sealed class MuxDraftTests
 
         // 其他字幕
         var other = new MuxDraft(Facts());
-        await SetVideoAndFonts(other);
+        SetVideoAndFonts(other);
         await Accept(other, SubtitleSlot.Sc, "C:/in/sc.ass");
         other.AddExternalTrack(OtherSubtitle("s1", "C:/in/other.ass"));
         AssertSpec(other.ToSpec(Tools), "C:/in/v.mkv", [
@@ -384,7 +384,7 @@ public sealed class MuxDraftTests
 
         // 自定义文件名
         var custom = new MuxDraft(Facts());
-        await SetVideoAndFonts(custom);
+        SetVideoAndFonts(custom);
         await Accept(custom, SubtitleSlot.Sc, "C:/in/sc.ass");
         custom.SetOutputFileName("自定义 成品.mkv");
         AssertSpec(custom.ToSpec(Tools), "C:/in/v.mkv",
@@ -401,12 +401,11 @@ public sealed class MuxDraftTests
         return draft;
     }
 
-    private static async Task SetVideoAndFonts(MuxDraft draft)
+    private static void SetVideoAndFonts(MuxDraft draft)
     {
         Assert.True(draft.SetVideoPath("C:/in/v.mkv").Succeeded);
         Assert.True(draft.SetFontsDirectory("C:/fonts").Succeeded);
         Assert.True(draft.SetOutputDirectory("C:/out").Succeeded);
-        await Task.CompletedTask;
     }
 
     private static async Task Accept(MuxDraft draft, SubtitleSlot slot, string path)
