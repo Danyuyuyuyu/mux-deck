@@ -72,8 +72,13 @@ public static class InputRules
 
     public static bool HasDuplicatePaths(IEnumerable<string> normalizedPaths)
     {
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        return normalizedPaths.Any(path => !seen.Add(path));
+        var seen = new List<string>();
+        foreach (var path in normalizedPaths)
+        {
+            if (seen.Any(existing => SameNormalizedPath(existing, path, ignoreCase: true))) return true;
+            seen.Add(path);
+        }
+        return false;
     }
 
     public static bool SubtitlePathsConflict(string sc, string tc, bool samePath) =>
@@ -82,8 +87,13 @@ public static class InputRules
     public static bool RequiresReplacement(string currentPath, bool samePath) =>
         !string.IsNullOrWhiteSpace(currentPath) && !samePath;
 
-    public static bool AcceptsFontDirectories(IEnumerable<string> normalizedDirectories) =>
-        normalizedDirectories.Distinct(StringComparer.OrdinalIgnoreCase).Count() <= 1;
+    public static bool AcceptsFontDirectories(IEnumerable<string> normalizedDirectories)
+    {
+        var seen = new List<string>();
+        foreach (var path in normalizedDirectories)
+            if (!seen.Any(existing => SameNormalizedPath(existing, path, ignoreCase: true))) seen.Add(path);
+        return seen.Count <= 1;
+    }
 
     public static bool AcceptsMediaCandidateType(InputLocationKind kind, string extension) =>
         kind != InputLocationKind.LocalFile || IsSupportedMediaExtension(extension);

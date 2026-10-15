@@ -17,9 +17,11 @@ public sealed class SystemPathFacts : IPathFacts
     {
         var directory = item.Kind == InputLocationKind.LocalDirectory
             ? Normalize(item.Path) : Normalize(Path.GetDirectoryName(item.Path) ?? "");
-        return new(item.Path, Path.IsPathFullyQualified(item.Path), Normalize(item.Path), Path.GetExtension(item.Path),
+        // 旧实现是在 GetFullPath 规范化之后判断非法字符；这里对同一个规范化结果判断，保持等价。
+        var normalized = Normalize(item.Path);
+        return new(item.Path, Path.IsPathFullyQualified(item.Path), normalized, Path.GetExtension(item.Path),
             directory, item.Kind, File.Exists(item.Path), Directory.Exists(item.Path),
-            item.Path.IndexOfAny(Path.GetInvalidPathChars()) >= 0);
+            normalized.IndexOfAny(Path.GetInvalidPathChars()) >= 0);
     }
 
     public Task<EquatableArray<InputPathFacts>> CollectAsync(IReadOnlyList<InputItem> items, CancellationToken cancellationToken = default)

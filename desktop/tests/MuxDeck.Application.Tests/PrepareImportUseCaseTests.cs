@@ -142,7 +142,7 @@ public sealed class PrepareImportUseCaseTests
     private static ImportRequest Request(IEnumerable<InputItem> inputs) => new(Guid.NewGuid(), 1, new EquatableArray<InputItem>(inputs), null);
     private static InputPathFacts Fact(string path, InputLocationKind kind, string? full = null, bool qualified = true,
         string? extension = null, string? directory = null, bool exists = true) => new(path, qualified, full ?? path, extension ?? Path.GetExtension(path),
-        directory ?? "C:/", kind, exists && kind == InputLocationKind.LocalFile, exists && kind == InputLocationKind.LocalDirectory);
+        directory ?? "C:/", kind, exists && kind == InputLocationKind.LocalFile, exists && kind == InputLocationKind.LocalDirectory, false);
     private static MediaProbeResult SubtitleProbe() => new("s", [Track(1, TrackKind.Subtitle, "ASS", "S_TEXT/ASS")], [], null);
     private static MediaTrackInfo Track(int id, TrackKind kind, string codec, string codecId) =>
         new(new(id), kind, kind.ToString(), codec, codecId, default, null, "", default, null, null, null, true, true);

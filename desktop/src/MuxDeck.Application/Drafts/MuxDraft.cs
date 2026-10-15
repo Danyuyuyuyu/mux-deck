@@ -21,6 +21,7 @@ public static class DraftCodes
     public const string InvalidPath = "MUX_DRAFT_INVALID_PATH";
     public const string WrongType = "MUX_DRAFT_WRONG_TYPE";
     public const string MissingPath = "MUX_DRAFT_MISSING_PATH";
+    public const string ExternalTrackMissing = "MUX_DRAFT_EXTERNAL_TRACK_MISSING";
 }
 
 /// <summary>草稿拒绝只给错误码；中文文案由 Desktop 按键映射，Application 不保存界面文字。</summary>
@@ -58,7 +59,8 @@ public sealed class DraftAcceptancePlan
     public bool RequiresReplacementConfirmation { get; }
 }
 
-public sealed record SubtitleSlotSnapshot(string Path, bool IsIncluded, bool IsDefault, bool IsForced);
+public sealed record SubtitleSlotSnapshot(string Path, bool IsIncluded, string Name, LanguageTag Language,
+    bool IsDefault, bool IsForced);
 
 /// <summary>外加轨道的不可变投影；SourceTrackId 仅在音频导入时存在。</summary>
 public sealed record DraftExternalTrackSnapshot(string Identity, string Path, TrackKind Kind,
@@ -86,8 +88,9 @@ public sealed class MuxDraft
     private readonly List<MutableTrack> external = [];
     private readonly Dictionary<SubtitleSlot, MutableSubtitle> slots = new()
     {
-        [SubtitleSlot.Sc] = new MutableSubtitle("简体", new LanguageTag("zh-Hans"), TrackPolicy.InitialScDefault),
-        [SubtitleSlot.Tc] = new MutableSubtitle("繁体", new LanguageTag("zh-Hant"), TrackPolicy.InitialTcDefault)
+        // 槽位名是写进成品的轨道名，不是界面标签；界面显示名由 Desktop 负责。
+        [SubtitleSlot.Sc] = new MutableSubtitle("SC", new LanguageTag("zh-Hans"), TrackPolicy.InitialScDefault),
+        [SubtitleSlot.Tc] = new MutableSubtitle("TC", new LanguageTag("zh-Hant"), TrackPolicy.InitialTcDefault)
     };
     private long revision;
     private int batchDepth;
@@ -128,14 +131,20 @@ public sealed class MuxDraft
         EditabilityChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>把多个修改合并成一个批次；内部有真实改动时只增加一次修订号。</summary>
+    /// <summary>
+    /// 把多个修改合并成一个批次；内部有真实改动时只增加一次修订号。
+    /// 结算放在 finally，批次内抛异常时也已发生的改动同样结算，不残留未结算标记。
+    /// </summary>
     public void Batch(Action change)
     {
         ArgumentNullException.ThrowIfNull(change);
         batchDepth++;
         try { change(); }
-        finally { batchDepth--; }
-        if (batchDepth == 0 && batchDirty) { batchDirty = false; MarkChanged(); }
+        finally
+        {
+            batchDepth--;
+            if (batchDepth == 0 && batchDirty) { batchDirty = false; MarkChanged(); }
+        }
     }
 
     // ---------- 文档属性 ----------
@@ -143,7 +152,7 @@ public sealed class MuxDraft
     public DraftOutcome SetVideoPath(string value)
     {
         if (isLocked) return DraftOutcome.Refuse(DraftCodes.Locked);
-        if (videoPath == value) return DraftOutcome.Accept();
+        if (SamePath(videoPath, value)) return DraftOutcome.Accept();
         videoPath = value;
         MarkChanged();
         return DraftOutcome.Accept();
@@ -152,7 +161,7 @@ public sealed class MuxDraft
     public DraftOutcome SetFontsDirectory(string value)
     {
         if (isLocked) return DraftOutcome.Refuse(DraftCodes.Locked);
-        if (fontsDirectory == value) return DraftOutcome.Accept();
+        if (SamePath(fontsDirectory, value)) return DraftOutcome.Accept();
         fontsDirectory = value;
         MarkChanged();
         return DraftOutcome.Accept();
@@ -161,7 +170,7 @@ public sealed class MuxDraft
     public DraftOutcome SetOutputDirectory(string value)
     {
         if (isLocked) return DraftOutcome.Refuse(DraftCodes.Locked);
-        if (outputDirectory == value) return DraftOutcome.Accept();
+        if (SamePath(outputDirectory, value)) return DraftOutcome.Accept();
         outputDirectory = value;
         MarkChanged();
         return DraftOutcome.Accept();
@@ -181,11 +190,7 @@ public sealed class MuxDraft
     public DraftOutcome SetSubtitlePath(SubtitleSlot slot, string path)
     {
         if (isLocked) return DraftOutcome.Refuse(DraftCodes.Locked);
-        var state = slots[slot];
-        if (state.Path == path) return DraftOutcome.Accept();
-        var hadSubtitle = !string.IsNullOrWhiteSpace(state.Path);
-        state.Path = path;
-        if (hadSubtitle != !string.IsNullOrWhiteSpace(path)) ApplySubtitleDefaults();
+        if (!ApplySlotPath(slot, path)) return DraftOutcome.Accept();
         MarkChanged();
         return DraftOutcome.Accept();
     }
@@ -193,6 +198,8 @@ public sealed class MuxDraft
     public DraftOutcome SetSubtitleIncluded(SubtitleSlot slot, bool included)
     {
         if (isLocked) return DraftOutcome.Refuse(DraftCodes.Locked);
+        // 空槽位没有可切换的输入，和旧 SetSubtitleIncluded 一样报缺路径。
+        if (string.IsNullOrWhiteSpace(slots[slot].Path)) return DraftOutcome.Refuse(DraftCodes.MissingPath);
         var state = slots[slot];
         if (state.IsIncluded == included) return DraftOutcome.Accept();
         state.IsIncluded = included;
@@ -210,6 +217,7 @@ public sealed class MuxDraft
     {
         ArgumentNullException.ThrowIfNull(track);
         if (isLocked) return DraftOutcome.Refuse(DraftCodes.Locked);
+        if (external.Any(item => item.Identity == track.Identity)) return DraftOutcome.Refuse(DraftCodes.Duplicate);
         external.Add(new MutableTrack(track));
         MarkChanged();
         return DraftOutcome.Accept();
@@ -246,44 +254,42 @@ public sealed class MuxDraft
         ArgumentNullException.ThrowIfNull(candidates);
         ArgumentNullException.ThrowIfNull(assignments);
         if (isLocked) return new(false, DraftCodes.Locked);
-        var items = operation == DraftOperation.Subtitles
-            ? assignments.Select(assignment => assignment.Candidate.Item).ToArray()
-            : candidates.Select(candidate => candidate.Item).ToArray();
-        if (!InputRules.AcceptsSelectionCount(items.Length, operation == DraftOperation.Subtitles))
-            return new(false, DraftCodes.InvalidCount);
-        var actual = facts is not null
-            ? new EquatableArray<InputPathFacts>(facts.ToArray())
-            : await pathFacts.CollectAsync(items, cancellationToken).ConfigureAwait(false);
-        return operation == DraftOperation.Subtitles
-            ? PrepareSubtitles(actual, assignments)
-            : PrepareSingle(operation, actual, candidates);
+        return await InspectAsync(operation, candidates, assignments, facts, cancellationToken).ConfigureAwait(false);
     }
 
-    public DraftOutcome Commit(DraftAcceptancePlan plan, bool replacementsConfirmed = false)
+    /// <summary>
+    /// 提交计划：重新核验锁、过期、是否已确认，并像旧 CommitInput 一样重新收集路径事实、
+    /// 再跑一遍准备检查（存在、重复、类型）；是否需要确认按重新计算的结果判断。
+    /// </summary>
+    public async Task<DraftOutcome> CommitAsync(DraftAcceptancePlan plan, bool replacementsConfirmed = false,
+        IReadOnlyList<InputPathFacts>? facts = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(plan);
         if (isLocked) return DraftOutcome.Refuse(DraftCodes.Locked);
         // 计划只属于创建它的草稿；否则视为过期，避免跨草稿误提交。
         if (!ReferenceEquals(plan.Owner, this)) return DraftOutcome.Refuse(DraftCodes.Stale);
         if (plan.Revision != revision) return DraftOutcome.Refuse(DraftCodes.Stale);
-        if (plan.RequiresReplacementConfirmation && !replacementsConfirmed)
+        var inspection = await InspectAsync(plan.Operation, plan.Candidates, plan.Assignments, facts, cancellationToken).ConfigureAwait(false);
+        if (!inspection.Succeeded) return DraftOutcome.Refuse(inspection.ErrorCode!);
+        if (inspection.RequiresConfirmation && !replacementsConfirmed)
             return DraftOutcome.Refuse(DraftCodes.ConfirmationRequired);
+        var normalized = inspection.Plan!;
         Batch(() =>
         {
-            switch (plan.Operation)
+            switch (normalized.Operation)
             {
                 case DraftOperation.Subtitles:
-                    foreach (var assignment in plan.Assignments)
-                        ApplySlotPath(assignment.Slot, assignment.Candidate.Item.Path);
+                    foreach (var assignment in normalized.Assignments)
+                        if (ApplySlotPath(assignment.Slot, assignment.Candidate.Item.Path)) MarkChanged();
                     break;
                 case DraftOperation.Video:
-                    videoPath = plan.Candidates[0].Item.Path;
+                    if (!SamePath(videoPath, normalized.Candidates[0].Item.Path)) { videoPath = normalized.Candidates[0].Item.Path; MarkChanged(); }
                     break;
                 case DraftOperation.FontsDirectory:
-                    fontsDirectory = plan.Candidates[0].Item.Path;
+                    if (!SamePath(fontsDirectory, normalized.Candidates[0].Item.Path)) { fontsDirectory = normalized.Candidates[0].Item.Path; MarkChanged(); }
                     break;
                 case DraftOperation.OutputDirectory:
-                    outputDirectory = plan.Candidates[0].Item.Path;
+                    if (!SamePath(outputDirectory, normalized.Candidates[0].Item.Path)) { outputDirectory = normalized.Candidates[0].Item.Path; MarkChanged(); }
                     break;
             }
         });
@@ -337,22 +343,21 @@ public sealed class MuxDraft
     private SubtitleSlotSnapshot SnapshotSlot(SubtitleSlot slot)
     {
         var state = slots[slot];
-        return new(state.Path, state.IsIncluded, state.IsDefault, state.IsForced);
+        return new(state.Path, state.IsIncluded, state.Name, state.Language, state.IsDefault, state.IsForced);
     }
 
     private IReadOnlyList<DraftExternalTrackSnapshot> ProjectExternal() =>
         external.Select(track => new DraftExternalTrackSnapshot(track.Identity, track.Path, track.Kind,
-            track.SourceTrackId, track.Name, track.Language, new TrackFlags(track.IsDefault, track.IsForced))).ToArray();
+            track.SourceTrackId, track.Name, track.Language, new TrackFlags(track.IsDefault, track.IsForced))
+        { IsIncluded = track.IsIncluded }).ToArray();
 
     private DraftOutcome SetSlotField<T>(SubtitleSlot slot, T value, Action<MutableSubtitle, T> apply)
     {
         if (isLocked) return DraftOutcome.Refuse(DraftCodes.Locked);
         var state = slots[slot];
         var before = SnapshotSlot(slot);
-        var name = state.Name;
         apply(state, value);
-        // 槽位快照不含名称，名称变化必须单独比较，否则会被当成同值赋值。
-        if (SnapshotSlot(slot) == before && name == state.Name) return DraftOutcome.Accept();
+        if (SnapshotSlot(slot) == before) return DraftOutcome.Accept();
         MarkChanged();
         return DraftOutcome.Accept();
     }
@@ -361,7 +366,7 @@ public sealed class MuxDraft
     {
         if (isLocked) return DraftOutcome.Refuse(DraftCodes.Locked);
         var track = external.FirstOrDefault(item => item.Identity == identity);
-        if (track is null) return DraftOutcome.Refuse(DraftCodes.InvalidPath);
+        if (track is null) return DraftOutcome.Refuse(DraftCodes.ExternalTrackMissing);
         var before = new TrackFlags(track.IsDefault, track.IsForced);
         var name = track.Name;
         var included = track.IsIncluded;
@@ -379,16 +384,24 @@ public sealed class MuxDraft
         slots[SubtitleSlot.Tc].IsDefault = defaults.Tc;
     }
 
-    private void ApplySlotPath(SubtitleSlot slot, string path)
+    /// <summary>套用槽位路径；返回是否真的发生了变化。</summary>
+    private bool ApplySlotPath(SubtitleSlot slot, string path)
     {
         var state = slots[slot];
-        if (state.Path == path) return;
+        if (SamePath(state.Path, path)) return false;
         var hadSubtitle = !string.IsNullOrWhiteSpace(state.Path);
         state.Path = path;
-        if (hadSubtitle != !string.IsNullOrWhiteSpace(path)) ApplySubtitleDefaults();
-        // 槽位路径变化必须记入批次；同一批次里的多个槽位只算一次修订。
-        MarkChanged();
+        if (hadSubtitle != !string.IsNullOrWhiteSpace(path))
+        {
+            // 槽位从空变有、或从有变空时重置纳入状态，和旧 SetSubtitlePath 一致。
+            state.IsIncluded = true;
+            ApplySubtitleDefaults();
+        }
+        return true;
     }
+
+    /// <summary>旧实现按 Windows 忽略大小写比较规范化路径；草稿沿用同一规则。</summary>
+    private static bool SamePath(string left, string right) => InputRules.SameNormalizedPath(left, right, ignoreCase: true);
 
     private void MarkChanged()
     {
@@ -399,6 +412,34 @@ public sealed class MuxDraft
 
     // ---------- 内部：接纳校验 ----------
 
+    /// <summary>收集事实并跑一遍接纳检查；提交时复用同一路径，保证存在性与重复判断都是当前状态。</summary>
+    private async Task<DraftPrepareResult> InspectAsync(DraftOperation operation,
+        IReadOnlyList<DraftCandidate> candidates, IReadOnlyList<DraftAssignment> assignments,
+        IReadOnlyList<InputPathFacts>? facts, CancellationToken cancellationToken)
+    {
+        var items = operation == DraftOperation.Subtitles
+            ? assignments.Select(assignment => assignment.Candidate.Item).ToArray()
+            : candidates.Select(candidate => candidate.Item).ToArray();
+        if (!InputRules.AcceptsSelectionCount(items.Length, operation == DraftOperation.Subtitles))
+            return new(false, DraftCodes.InvalidCount);
+        EquatableArray<InputPathFacts> actual;
+        if (facts is not null)
+        {
+            actual = new EquatableArray<InputPathFacts>(facts.ToArray());
+        }
+        else
+        {
+            // 路径事实端口可能抛出规范化异常；旧实现把这类路径报成 InvalidPath，草稿沿用同一错误码。
+            try { actual = await pathFacts.CollectAsync(items, cancellationToken).ConfigureAwait(false); }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception)
+            { return new(false, DraftCodes.InvalidPath); }
+        }
+        return operation == DraftOperation.Subtitles
+            ? PrepareSubtitles(actual, assignments)
+            : PrepareSingle(operation, actual, candidates);
+    }
+
     private DraftPrepareResult PrepareSingle(DraftOperation operation,
         EquatableArray<InputPathFacts> facts, IReadOnlyList<DraftCandidate> candidates)
     {
@@ -406,15 +447,21 @@ public sealed class MuxDraft
         var expectsDirectory = operation != DraftOperation.Video;
         if (ValidateFact(facts[0], expectsDirectory, operation == DraftOperation.Video) is { } error) return new(false, error);
         var candidate = candidates[0] with { Item = new InputItem(facts[0].FullPath, facts[0].Kind) };
-        var requiresConfirmation = operation == DraftOperation.Video &&
-            InputRules.RequiresReplacement(videoPath, facts[0].FullPath == videoPath);
+        var current = operation switch
+        {
+            DraftOperation.Video => videoPath,
+            DraftOperation.FontsDirectory => fontsDirectory,
+            _ => outputDirectory
+        };
+        var requiresConfirmation = operation == DraftOperation.Video && InputRules.RequiresReplacement(current, SamePath(current, facts[0].FullPath));
         return new(true, null, new DraftAcceptancePlan(this, operation, revision,
             new List<DraftCandidate> { candidate }, new List<DraftAssignment>(), requiresConfirmation), requiresConfirmation);
     }
 
     private DraftPrepareResult PrepareSubtitles(EquatableArray<InputPathFacts> facts, IReadOnlyList<DraftAssignment> assignments)
     {
-        if (!InputRules.AcceptsSelectionCount(assignments.Count, subtitleSlots: true)) return new(false, DraftCodes.InvalidCount);
+        if (!InputRules.AcceptsSelectionCount(assignments.Count, subtitleSlots: true) || facts.Count != assignments.Count)
+            return new(false, DraftCodes.InvalidCount);
         var normalized = new List<DraftAssignment>();
         var requiresConfirmation = false;
         for (var index = 0; index < assignments.Count; index++)
@@ -424,13 +471,13 @@ public sealed class MuxDraft
                 return new(false, DraftCodes.InvalidSlot);
             if (ValidateFact(facts[index], expectsDirectory: false, isVideo: false) is { } error) return new(false, error);
             normalized.Add(new(assignment.Slot, assignment.Candidate with { Item = new InputItem(facts[index].FullPath, facts[index].Kind) }));
-            requiresConfirmation |= InputRules.RequiresReplacement(PathFor(assignment.Slot), facts[index].FullPath == PathFor(assignment.Slot));
+            requiresConfirmation |= InputRules.RequiresReplacement(PathFor(assignment.Slot), SamePath(PathFor(assignment.Slot), facts[index].FullPath));
         }
         // 与最终槽位集合比较；整组交换合法，不能拿将被替换的旧槽位误报重复。
         var finalSc = normalized.FirstOrDefault(item => item.Slot == SubtitleSlot.Sc)?.Candidate.Item.Path ?? PathFor(SubtitleSlot.Sc);
         var finalTc = normalized.FirstOrDefault(item => item.Slot == SubtitleSlot.Tc)?.Candidate.Item.Path ?? PathFor(SubtitleSlot.Tc);
-        if (InputRules.SubtitlePathsConflict(finalSc, finalTc, finalSc == finalTc)) return new(false, DraftCodes.Duplicate);
-        return new(true, null, new DraftAcceptancePlan(this, DraftOperation.Subtitles, revision, [], normalized, requiresConfirmation), requiresConfirmation);
+        if (InputRules.SubtitlePathsConflict(finalSc, finalTc, SamePath(finalSc, finalTc))) return new(false, DraftCodes.Duplicate);
+        return new(true, null, new DraftAcceptancePlan(this, DraftOperation.Subtitles, revision, new List<DraftCandidate>(), normalized, requiresConfirmation), requiresConfirmation);
     }
 
     private static string? ValidateFact(InputPathFacts fact, bool expectsDirectory, bool isVideo)
@@ -439,8 +486,7 @@ public sealed class MuxDraft
         if (kindError == InputKindError.NonLocal) return DraftCodes.NonLocal;
         if (kindError == InputKindError.WrongType) return DraftCodes.WrongType;
         if (!InputRules.AcceptsFixedSlotPath(fact.FullPath, fact.IsFullyQualified)) return DraftCodes.InvalidPath;
-        if (!InputRules.AcceptsNormalizedPathSyntax(fact.FullPath, fact.ContainsInvalidPathChars))
-            return DraftCodes.InvalidPath;
+        if (!InputRules.AcceptsNormalizedPathSyntax(fact.FullPath, fact.ContainsInvalidPathChars)) return DraftCodes.InvalidPath;
         if (expectsDirectory ? !fact.DirectoryExists : !fact.FileExists) return DraftCodes.MissingPath;
         if (!expectsDirectory && !InputRules.AcceptsFixedSlotExtension(fact.Extension, isVideo)) return DraftCodes.WrongType;
         return null;

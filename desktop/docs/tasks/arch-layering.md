@@ -238,7 +238,7 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 **拆分与推送方式**
 
 - **4b-1 草稿模型与测试**：只新增 Application `MuxDraft` 模型、模型测试与冻结旧 VM 行为的特征测试；不接 VM、不改 XAML、不改 Smoke、不改生产装配，可直接推 `v2/avalonia-rewrite`。
-- **4b-2 VM 订阅投影**：把 `SingleMuxViewModel` 改为订阅 `MuxDraft` 后投影，并完成特征测试迁移与旧入口删除。先推审查分支 `review/4b`，完成 1040×760 与 1280×900 截图对照和 `--ui-integration`，经用户确认后才 `--ff-only` 快进到 `v2/avalonia-rewrite`。
+- **4b-2 VM 订阅投影**：把 `SingleMuxViewModel` 改为订阅 `MuxDraft` 后投影，按批准范围调整现有特征测试调用入口并删除旧入口；特征测试继续留在 `MuxDeck.Architecture.Tests`。先推审查分支 `review/4b`，完成 1040×760 与 1280×900 截图对照和 `--ui-integration`，经用户确认后才 `--ff-only` 快进到 `v2/avalonia-rewrite`。
 
 **4b 范围（只处理与草稿直接相关的遗留）**
 
@@ -248,11 +248,11 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 4. `OutputNaming` 写死的“源文件名”预览规则改为由草稿传入视频名。
 5. 下方“3e 遗留问题”中第 2 项（静态 `MediaInputError` 与 `SingleMuxService.DefaultCollectFacts` 的删除）。
 
-**4b 明确不做**：`service.Prober` / `service.Tools` / `service.Import` / `CollectFacts` 改为构造函数注入挪到 4c；只有删除旧入口时不得不改的调用点才在 4b 处理（特征测试迁移、`MuxDraft` 接线、第 5 项的删除）。
+**4b 明确不做**：`service.Prober` / `service.Tools` / `service.Import` / `CollectFacts` 改为构造函数注入挪到 4c；只有删除旧入口时不得不改的调用点才在 4b 处理（特征测试调用入口调整、`MuxDraft` 接线、第 5 项的删除）。
 
 **空草稿默认**：空草稿时 SC 默认为 true，保持不变（`TrackPolicy.InitialScDefault`）。4b 不改该默认。
 
-**特征测试迁移授权**：4a-3 的 26 条导入特征测试（`MuxDeck.Architecture.Tests/ImportCharacterizationTests.cs`）允许迁移，但只改调用入口，断言文字与用例数都不变，并在交付时提供新旧断言的逐条对照。迁移在 4b-2 进行，同时删除静态 `MediaInputError` 与 `SingleMuxService.DefaultCollectFacts` / `DefaultPathFacts`。4b-1 的草稿特征测试同样先放在 `MuxDeck.Architecture.Tests`，4b-2 迁移到 `MuxDeck.Application.Tests`。
+**特征测试范围**：4a-3 的 26 条导入特征测试（`MuxDeck.Architecture.Tests/ImportCharacterizationTests.cs`）继续留在 `MuxDeck.Architecture.Tests`；后续只允许按批准范围改调用入口，断言文字与用例数保持不变，并提供新旧断言逐条对照。4b-1 的草稿特征测试同样留在 `MuxDeck.Architecture.Tests`。迁移到其他项目需要用户另行批准。
 
 **4b-1 补充冻结项（用户批准）**：旧 VM 的“整组交换 SC/TC”只在 4a-3 的受控 Smoke `--single-mux-round1` 中被覆盖，没有单元级特征测试；4b-1 除既有草稿范围外，另冻结“一组 `PrepareSubtitleInputs` + `CommitInput` 同时换掉 SC 与 TC”的修订号步进，迁移时同样只换调用入口。
 
@@ -260,7 +260,7 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 
 - 新增 `MuxDeck.Architecture.Tests/SingleMuxDraftCharacterizationTests.cs`，在未修改的生产代码上冻结 `SingleMuxViewModel` 的当前草稿行为：修订号步进（逐个、批量、同值、整组交换、自动导入）、编辑锁（运行中/取消中/关闭中，`Prepare*` 与 `CommitInput` 都返回 `Locked` 且修订号不变）、计划过期与替换确认，以及 8 种草稿状态下 `StartAsync` 的请求经 `LegacyMuxContractConverter.ToRunSpec` 得到的整体 `MuxJobSpec`。
 - 新增 Application `MuxDraft` 草稿会话模型与其测试；`ToSpec(ToolConfiguration)` 返回独立快照，后续草稿修改不影响已返回的规格。
-- 提交 1 交付时报告用例数，并对其中 3 条做反向验证（临时改动行为确认变红后改回）。
+- 提交 1 交付时报告用例数，并对其中 5 条做反向验证（临时改动行为确认变红后改回）。
 - 范围：不接 VM、不改 XAML、不改 Smoke、不碰 `MediaInputError` 与 `DefaultCollectFacts`；`MuxDeck.sln`、锁文件、`Directory.Build.props` 与 `docs/agents/` 不改。
 - 验证：`dotnet test` 全量与受控 13 套件，只允许新增用例，受控套件计数不变（659/659）；不放宽任何架构测试。
 
@@ -279,11 +279,11 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 
 为不把 `Path.GetInvalidPathChars` 带进 Application 层，`InputPathFacts` 新增端口事实 `ContainsInvalidPathChars`，由 Infrastructure `SystemPathFacts` 采集、Domain `InputRules.AcceptsNormalizedPathSyntax` 消费；路径语法判定仍只有一处。此改动同时被 4b-2 的接纳迁移复用。
 
-**与冻结值的差异（据实记录，4b-2 处理）**：草稿把 SC/TC 槽位的名称初始化为显示名“简体/繁体”，而旧 VM 的 `ScTrack.Name` / `TcTrack.Name` 固定为“SC”/“TC”；因此 `MuxDraft.ToSpec` 产出的槽位轨道名与冻结的 VM 规格在上述状态里相差这一项。8 种草稿状态的外加轨道（来源、顺序、语言、default/forced、音频 `SourceTrackId`、空输出文件名）与冻结值逐字段一致。4b-2 迁入时由 VM 把槽位名称投影为草稿显示名，或把草稿名称初始值改为与旧值一致，二者取其一后特征测试必须逐字一致。
+**冻结值对照**：`MuxDraft` 的 SC/TC 槽位名称初始化为成品轨道名“SC”/“TC”，语言、旗标、顺序、文件名和外加轨道字段与冻结的 VM 规格逐字段一致；路径允许使用测试事实中的等价路径。4b-2 保持这些成品字段不变，界面显示标签由 Desktop 投影负责。
 
-本地验证：locked restore 11/11；Release 构建 0 警告 / 0 错误；`dotnet test MuxDeck.sln --no-build -c Release` 全绿（Domain 298、Application 198、Core 57、Architecture 260、Infrastructure 78，合计 891；4a-3 的 847 全部保留，本步新增 44：特征测试 27 + 草稿测试 17）；受控 13 套件 13/13、659/659，逐套件与基准一致（不新增、不减少）；不做放宽或跳过。
+本地验证：Release 构建 0 警告 / 0 错误；`dotnet test MuxDeck.sln --no-restore -c Release` 全绿（Domain 298、Application 208、Core 57、Architecture 260、Infrastructure 78，合计 901；4a-3 的 891 全部保留，本步新增 10 条 Application 用例；27 条草稿特征测试一条未改）；受控 13 套件 13/13、659/659，逐套件与基准一致（不新增、不减少）；不做放宽或跳过。
 
-**反向验证**：① 临时去掉 `CommitInput` 的 `ChangeConfiguration` 批次包裹（交换时两个槽位各算一次），`Swapping_sc_and_tc_in_one_prepare_commit_increments_revision_exactly_once` 失败（Expected 6 / Actual 7）；② 临时交换 `StartAsync` 里 SC/TC 的提交顺序，`Run_request_is_frozen_for_sc_and_tc_draft` 的整体 `MuxJobSpec` 比对失败（轨道顺序差异）；③ 临时去掉 `PrepareInput` 的接纳锁核验，`Prepare_commit_and_remove_return_locked_while_running_without_touching_revision` 与 `Prepare_returns_locked_while_cancelling_cleanup_waits` 都失败（Expected Locked / Actual None）。三次都改回原实现，恢复后全量测试与受控套件重新通过。
+**反向验证**：临时改回旧写法后逐项变红，随后全部恢复：① 提交视频/字体/输出目录不调用 `MarkChanged`，`Committing_one_path_operation_increases_revision_and_raises_changed_once` 失败（Expected 1 / Actual 0，三种参数均失败）；② 提交不重新收集路径事实，`Commit_recollects_path_facts_and_reports_missing_path` 失败（Expected `MUX_DRAFT_MISSING_PATH` / Actual `null`）；③ 路径比较改回区分大小写，`Path_comparisons_ignore_case` 失败（Expected `MUX_DRAFT_DUPLICATE` / Actual `null`）；④ 去掉槽位存在性变化时的纳入重置，`Slot_presence_change_resets_inclusion_to_true` 失败（Expected `True` / Actual `False`）；⑤ 批次在 `finally` 外结算，`Batch_settles_changes_made_before_an_exception` 失败（Expected 1 / Actual 0）。恢复后草稿 27/27、全量 901/901 与受控套件重新通过。
 
 **提交与 CI**：本步按计划形成四个提交——`f97cfb4` 计划调整（纯文档）、`5b43413` 特征测试、`73ace12` 草稿模型（含 Domain `InputPathFacts` 与 Infrastructure `SystemPathFacts` 的新端口事实）、`fc0e183` 结果补录；后续的 `8902ee4` 只把测试助手改为同步，不动断言与用例数。推送顺序为 `git pull --rebase origin v2/avalonia-rewrite`（无需改写）后 `git push origin v2/avalonia-rewrite`。CI 在代码提交头 `fc0e183ba50f8c206796286cb506ff2e40024069` 上触发并全部步骤通过（locked restore、Release 构建、`dotnet test`、Smoke 与 11 个受控套件步骤）：[Desktop #38738041658](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38738041658)，head_sha 与实施提交一致。`8902ee4` 只含测试助手改动，随后与 `f7942e8`（CI 补录）一起推送，[Desktop CI #38738711883](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38738711883) 在该 head_sha `f7942e82011a643b5a14ea7be54087b1194ce119` 上同样全部步骤通过，head_sha 与远端一致。
 
@@ -368,7 +368,7 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 | **4a-2** | 五个组件类、StoragePaths、ToolLocator 位于 Infrastructure；环境 ViewModel 只调用 IManageComponents 与契约模型；4a-2 的 3e 遗留问题清理完成；组件和环境 Smoke 按需迁移并保留行为覆盖；本地 786/786、受控 13/13 与 656/656、环境 23/23、安装 37/37、卸载 61/61、真实卸载 17/17（批准新增兄弟目录用例和两条前提断言后，实际为卸载 UI 64/64、合计 659/659，见 4a-2 返工记录（`8dc522d`）。） |
 | **4a-3** | `IPrepareImport` 接管接纳与校验；Domain SRT 时间轴和 ASS 用法规则由导入与 `RunSingleMuxUseCase` 共用；字幕只经 `MuxInputReader` 读取，Core `SubtitleText` 删除；装配显式共享端口；847/847 单元、受控 13/13（659/659）、真实 integration 121/121、media-drop-real 37/37；`compare-smoke-text.py 761eb99` 缺失 0 |
 | **4b-1** | Application `MuxDraft` 测试覆盖：同值赋值不增修订号、一次接纳批次只增一次、准备→提交、运行中锁定拒绝、`ToSpec()` 快照与后续修改隔离；另用 `MuxDraft` 构造提交 1 的 8 种草稿状态，`ToSpec()` 与冻结的 `MuxJobSpec` 逐个相等；旧 VM 草稿行为特征测试冻结通过；不接 VM、不改 XAML/Smoke/生产装配；只新增用例，受控计数不变；可直接推主分支 |
-| **4b-2** | ViewModel 中不再有 SC/TC 默认规则等业务代码，改为订阅 `MuxDraft` 后投影；草稿遗留 1–5 项处理完成；26 条导入特征测试迁入 Application 且断言逐字不变、提供新旧逐条对照；静态 `MediaInputError` 与 `DefaultCollectFacts`/`DefaultPathFacts` 删除；UI、接纳、工作台、输入反馈、自动导入套件等于基准；1040×760 与 1280×900 截图与基线逐张对照无差异（差异须逐项说明）；本地 `--ui-integration` 等于基准；先推 `review/4b`，**推送主分支前经用户确认** |
+| **4b-2** | ViewModel 中不再有 SC/TC 默认规则等业务代码，改为订阅 `MuxDraft` 后投影；草稿遗留 1–5 项处理完成；留在 `MuxDeck.Architecture.Tests` 的 26 条导入特征测试只改批准的调用入口并提供新旧逐条对照；静态 `MediaInputError` 与 `DefaultCollectFacts`/`DefaultPathFacts` 删除；UI、接纳、工作台、输入反馈、自动导入套件等于基准；1040×760 与 1280×900 截图与基线逐张对照无差异（差异须逐项说明）；本地 `--ui-integration` 等于基准；先推 `review/4b`，**推送主分支前经用户确认** |
 | **4c** | `SingleMuxViewModel` 只做组合与过渡转发；六个区域 ViewModel 的绑定均为编译绑定且构建通过；可访问名称不变；全部 UI 套件等于基准 |
 | **4d** | 结果详情直接展示结构化检查项、诊断与失败阶段，代码中不再对检查文本做字符串匹配；`MainWindow` 关闭只等待 `IOperationCoordinator.ShutdownAsync()`；关闭等待相关用例通过；两尺寸截图检查 |
 | **5** | `MuxDeck.Core`、旧模型、转换类与旧入口删除；架构测试无过渡例外；全部受控与真实套件等于基准（计数变化逐项说明）；`skeleton.md` “迁移前现状”改写为现状、两份 README 与 `verification.md` 已更新 |
@@ -1225,7 +1225,7 @@ restore 11 个项目成功，Release 0 警告 / 0 错误，test 717/717。[构�
 - **第 5 步**：`AssfontsInstaller` 未使用。
 - **4b/4c**：`SingleMuxViewModel` 通过 `service.Prober` / `service.Tools` 取依赖，应改为构造函数注入。
 - **4a-2**：`ConfigureTools` 去掉了原 `UpdateWorkspace` 对空工作区的校验；后续构造注入收口时补回等价边界校验。
-- **4a-3**：静态 `MediaInputError` 与 `SingleMuxService.DefaultCollectFacts` 被特征测试冻结，暂时保留；**4b-2** 删除，并清除 Core 间接使用 Infrastructure 路径（4a-3 的 26 条特征测试同时迁入 Application，只改调用入口）。
+- **4a-3**：静态 `MediaInputError` 与 `SingleMuxService.DefaultCollectFacts` 被特征测试冻结，暂时保留；**4b-2** 删除，并清除 Core 间接使用 Infrastructure 路径。26 条导入特征测试继续留在 `MuxDeck.Architecture.Tests`，只改批准的调用入口；迁移项目需另行批准。
 - **第 5 步**：Desktop 的行为测试暂时放在 `MuxDeck.Architecture.Tests`（仓库没有 Desktop 测试项目，且为不改动受控 Smoke 计数）；第 5 步评估是否新建 Desktop 测试项目并把这些用例迁过去。
 
 ### 4a-1 实施与实际验证（2026-10-14）
