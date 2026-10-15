@@ -287,6 +287,8 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 
 **提交与 CI**：本步按计划形成四个提交——`f97cfb4` 计划调整（纯文档）、`5b43413` 特征测试、`73ace12` 草稿模型（含 Domain `InputPathFacts` 与 Infrastructure `SystemPathFacts` 的新端口事实）、`fc0e183` 结果补录；后续的 `8902ee4` 只把测试助手改为同步，不动断言与用例数。推送顺序为 `git pull --rebase origin v2/avalonia-rewrite`（无需改写）后 `git push origin v2/avalonia-rewrite`。CI 在代码提交头 `fc0e183ba50f8c206796286cb506ff2e40024069` 上触发并全部步骤通过（locked restore、Release 构建、`dotnet test`、Smoke 与 11 个受控套件步骤）：[Desktop #38738041658](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38738041658)，head_sha 与实施提交一致。`8902ee4` 只含测试助手改动，随后与 `f7942e8`（CI 补录）一起推送，[Desktop CI #38738711883](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38738711883) 在该 head_sha `f7942e82011a643b5a14ea7be54087b1194ce119` 上同样全部步骤通过，head_sha 与远端一致。
 
+**审查修正（2026-10-15）**：基于 `e0906de` 的修正提交为 `0c295e4`，已直接推送 `v2/avalonia-rewrite`。本地 `dotnet test` 为 901/901（Domain 298、Application 208、Core 57、Architecture 260、Infrastructure 78），受控 13 套件为 659/659（28/57/89/176/38/24/25/23/31/37/41/26/64），27 条 `SingleMuxDraftCharacterizationTests` 未修改；反向验证 5 项均按记录变红后恢复。推送后的 [Desktop CI #38762334451](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38762334451) completed/success，head_sha=`0c295e4` 与代码提交一致。
+
 ### 4c 拆分 ViewModel（大）
 
 - 拆出 `VideoSummaryViewModel`、`TrackListViewModel`、`TrackInspectorViewModel`、`OutputSettingsViewModel`、`RunPanelViewModel`、`ResultDetailsViewModel`。
