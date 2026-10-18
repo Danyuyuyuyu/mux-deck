@@ -289,6 +289,8 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 
 **审查修正（2026-10-15）**：基于 `e0906de` 的修正提交为 `0c295e4`，已直接推送 `v2/avalonia-rewrite`。本地 `dotnet test` 为 901/901（Domain 298、Application 208、Core 57、Architecture 260、Infrastructure 78），受控 13 套件为 659/659（28/57/89/176/38/24/25/23/31/37/41/26/64），27 条 `SingleMuxDraftCharacterizationTests` 未修改；反向验证 5 项均按记录变红后恢复。推送后的 [Desktop CI #38762334451](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38762334451) completed/success，head_sha=`0c295e4` 与代码提交一致。
 
+**第二次修正（2026-10-18）**：直接赋值路径恢复区分大小写，接纳检查同时规范化当前路径与候选路径，路径事实异常只捕获四类已知异常并通过 `Detail` 保留原始信息；`InputRules.HasDuplicatePaths` 与 `AcceptsFontDirectories` 恢复基线实现。全量测试为 908/908（Domain 298、Application 215、Core 57、Architecture 260、Infrastructure 78），本步新增 7 条 Application 用例；受控 13 套件仍为 659/659，27 条 `SingleMuxDraftCharacterizationTests` 未修改。反向验证 3 项均按记录变红后恢复。
+
 ### 4c 拆分 ViewModel（大）
 
 - 拆出 `VideoSummaryViewModel`、`TrackListViewModel`、`TrackInspectorViewModel`、`OutputSettingsViewModel`、`RunPanelViewModel`、`ResultDetailsViewModel`。

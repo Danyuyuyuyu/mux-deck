@@ -39,6 +39,36 @@ public sealed class MuxDraftTests
     }
 
     [Fact]
+    public void Direct_path_assignment_remains_case_sensitive()
+    {
+        var draft = new MuxDraft(Facts());
+        draft.SetVideoPath("C:/in/v.mkv");
+        draft.SetFontsDirectory("C:/fonts");
+        draft.SetOutputDirectory("C:/out");
+        draft.SetSubtitlePath(SubtitleSlot.Sc, "C:/in/sc.ass");
+        var revision = draft.DraftRevision;
+
+        draft.SetVideoPath("c:/IN/V.MKV");
+        Assert.Equal("c:/IN/V.MKV", draft.VideoPath);
+        Assert.Equal(revision + 1, draft.DraftRevision);
+        revision = draft.DraftRevision;
+
+        draft.SetFontsDirectory("c:/FONTS");
+        Assert.Equal("c:/FONTS", draft.FontsDirectory);
+        Assert.Equal(revision + 1, draft.DraftRevision);
+        revision = draft.DraftRevision;
+
+        draft.SetOutputDirectory("c:/OUT");
+        Assert.Equal("c:/OUT", draft.OutputDirectory);
+        Assert.Equal(revision + 1, draft.DraftRevision);
+        revision = draft.DraftRevision;
+
+        draft.SetSubtitlePath(SubtitleSlot.Sc, "c:/IN/SC.ASS");
+        Assert.Equal("c:/IN/SC.ASS", draft.Sc.Path);
+        Assert.Equal(revision + 1, draft.DraftRevision);
+    }
+
+    [Fact]
     public void One_batch_increases_revision_once_and_nested_batches_still_count_once()
     {
         var draft = new MuxDraft(Facts());
@@ -341,6 +371,59 @@ public sealed class MuxDraftTests
     }
 
     [Fact]
+    public async Task Commit_normalizes_current_and_candidate_paths_before_replacement_confirmation()
+    {
+        var facts = Facts();
+        facts.Items["C:/in/v.mkv"] = new("C:/in/v.mkv", true, "C:\\in\\v.mkv", ".mkv", "C:\\in",
+            InputLocationKind.LocalFile, true, false, false);
+        facts.Items["C:\\in\\v.mkv"] = new("C:\\in\\v.mkv", true, "C:\\in\\v.mkv", ".mkv", "C:\\in",
+            InputLocationKind.LocalFile, true, false, false);
+        var draft = new MuxDraft(facts);
+        draft.SetVideoPath("C:/in/v.mkv");
+        var prepared = await draft.PrepareAsync(DraftOperation.Video,
+            [Candidate("C:\\in\\v.mkv")], [], cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(prepared.Succeeded);
+        Assert.False(prepared.RequiresConfirmation);
+        var revision = draft.DraftRevision;
+        Assert.True((await draft.CommitAsync(prepared.Plan!, cancellationToken: TestContext.Current.CancellationToken)).Succeeded);
+        Assert.Equal(revision, draft.DraftRevision);
+        Assert.Equal("C:/in/v.mkv", draft.VideoPath);
+    }
+
+    [Theory]
+    [InlineData("argument")]
+    [InlineData("io")]
+    [InlineData("not-supported")]
+    [InlineData("unauthorized")]
+    public async Task Path_fact_failures_return_invalid_path_with_detail(string kind)
+    {
+        var facts = Facts();
+        var message = "路径事实失败：" + kind;
+        facts.Exception = kind switch
+        {
+            "argument" => new ArgumentException(message),
+            "io" => new IOException(message),
+            "not-supported" => new NotSupportedException(message),
+            _ => new UnauthorizedAccessException(message)
+        };
+        var result = await new MuxDraft(facts).PrepareAsync(DraftOperation.Video,
+            [Candidate("C:/in/v.mkv")], [], cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(DraftCodes.InvalidPath, result.ErrorCode);
+        Assert.Equal(message, result.Detail);
+    }
+
+    [Fact]
+    public async Task Unexpected_path_fact_failures_are_not_swallowed()
+    {
+        var facts = Facts();
+        facts.Exception = new InvalidOperationException("unexpected path fact failure");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new MuxDraft(facts).PrepareAsync(
+            DraftOperation.Video, [Candidate("C:/in/v.mkv")], [], cancellationToken: TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task Plan_is_stale_after_the_draft_changed()
     {
         var draft = new MuxDraft(Facts());
@@ -622,8 +705,11 @@ public sealed class MuxDraftTests
     private sealed class FakePathFacts : IPathFacts
     {
         public Dictionary<string, InputPathFacts> Items { get; } = new(StringComparer.Ordinal);
+        public Exception? Exception { get; set; }
         public Task<EquatableArray<InputPathFacts>> CollectAsync(IReadOnlyList<InputItem> items, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new EquatableArray<InputPathFacts>([.. items.Select(Item)]));
+            Exception is { } exception
+                ? throw exception
+                : Task.FromResult(new EquatableArray<InputPathFacts>([.. items.Select(Item)]));
 
         private InputPathFacts Item(InputItem item)
         {
