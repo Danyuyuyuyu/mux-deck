@@ -14,8 +14,7 @@ public sealed class SingleMuxService
     private readonly IPathFacts? pathFacts;
     private readonly Func<IReadOnlyList<InputItem>, IReadOnlyList<InputPathFacts>>? collectFacts;
     private readonly IPrepareImport? import;
-    private readonly ISyncPathFacts? slotPathFacts;
-    private readonly SingleMuxDraft? draft;
+    private readonly ISlotPathFacts? slotPathFacts;
     public ToolConfiguration Tools { get; }
     public IProbeMedia Prober { get; }
     public IMuxInputReader InputReader { get; }
@@ -23,19 +22,18 @@ public sealed class SingleMuxService
     // 拖入反馈的同步入口：与异步端口同一份事实实现，由装配显式注入。
     public Func<IReadOnlyList<InputItem>, IReadOnlyList<InputPathFacts>> CollectFacts =>
         collectFacts ?? throw new InvalidOperationException("SingleMuxService 未装配同步批量事实入口。");
-    // 固定槽位接纳使用裁剪后的完整路径语义；不能与拖入反馈的批量事实混用。
-    public ISyncPathFacts SlotPathFacts =>
-        slotPathFacts ?? throw new InvalidOperationException("SingleMuxService 未装配固定槽位事实端口。");
     // 导入用例以契约形式交付给视图层；默认实现只由调用方注入的端口组装。
     public IPrepareImport Import => import ?? throw new InvalidOperationException("SingleMuxService 未装配导入用例。");
-    // ViewModel 的草稿门面：仍由 SlotPathFacts 收集固定槽位事实，不向视图暴露 Application 类型。
-    public SingleMuxDraft Draft => draft ?? throw new InvalidOperationException("SingleMuxService 未装配固定槽位事实端口。");
+    // 每次调用创建独立草稿；ViewModel 只持有自己的一份，避免跨页面共享状态。
+    public SingleMuxDraft CreateDraft() => slotPathFacts is null
+        ? throw new InvalidOperationException("SingleMuxService 未装配固定槽位事实端口。")
+        : new SingleMuxDraft(slotPathFacts);
     // 三参旧构造仅供只运行 RunAsync 的过渡测试；任何端口未装配时在使用处明确失败。
     public SingleMuxService(ToolConfiguration tools, IProbeMedia prober,
         Func<ITaskWorkspaceFactory, IRunSingleMux> createRun,
         IMuxInputReader? inputReader = null, IPathFacts? pathFacts = null,
         Func<IReadOnlyList<InputItem>, IReadOnlyList<InputPathFacts>>? collectFacts = null,
-        IPrepareImport? import = null, ISyncPathFacts? slotPathFacts = null)
+        IPrepareImport? import = null, ISlotPathFacts? slotPathFacts = null)
     {
         Tools = tools;
         Prober = prober;
@@ -44,7 +42,6 @@ public sealed class SingleMuxService
         this.pathFacts = pathFacts;
         this.collectFacts = collectFacts;
         this.slotPathFacts = slotPathFacts;
-        this.draft = slotPathFacts is null ? null : new SingleMuxDraft(slotPathFacts);
         this.import = import ?? (pathFacts is null ? null : new PrepareImportUseCase(prober, InputReader, pathFacts));
     }
 

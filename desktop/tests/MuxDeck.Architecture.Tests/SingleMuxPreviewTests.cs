@@ -35,14 +35,28 @@ public sealed class SingleMuxPreviewTests : IDisposable
         await model.CancelAndWaitAsync();
     }
 
-    private SingleMuxViewModel Create()
+    [Fact]
+    public async Task Each_view_model_creates_an_independent_draft()
     {
-        var service = new SingleMuxService(
-            new ToolConfiguration(Path.Combine(root, "tools"), Path.Combine(root, "logs"), Path.Combine(root, "cache")),
+        var service = CreateService();
+        var first = new SingleMuxViewModel(service, new TrackColumnLayout());
+        var second = new SingleMuxViewModel(service, new TrackColumnLayout());
+
+        first.VideoPath = Path.Combine(root, "a.mkv");
+        first.OutputFileName = "a.mkv";
+
+        Assert.Equal("", second.VideoPath);
+        Assert.Equal("", second.OutputFileName);
+        Assert.Equal(0, second.DraftRevision);
+        await first.CancelAndWaitAsync();
+    }
+
+    private SingleMuxViewModel Create() => new(CreateService(), new TrackColumnLayout());
+
+    private SingleMuxService CreateService() =>
+        new(new ToolConfiguration(Path.Combine(root, "tools"), Path.Combine(root, "logs"), Path.Combine(root, "cache")),
             new NoProbe(), _ => throw new NotSupportedException(), pathFacts: SystemPathFacts.Instance,
             collectFacts: SystemPathFacts.Instance.Collect, slotPathFacts: SystemPathFacts.Instance);
-        return new SingleMuxViewModel(service, new TrackColumnLayout());
-    }
 
     private sealed class NoProbe : IProbeMedia
     {

@@ -7,17 +7,11 @@ namespace MuxDeck.Infrastructure;
 /// <summary>
 /// 路径事实的唯一实现：同步收集供同步拖入反馈使用，异步端口直接包装同一同步实现。
 /// </summary>
-public sealed class SystemPathFacts : IPathFacts, ISyncPathFacts
+public sealed class SystemPathFacts : IPathFacts, ISlotPathFacts
 {
     public static SystemPathFacts Instance { get; } = new();
 
     public IReadOnlyList<InputPathFacts> Collect(IReadOnlyList<InputItem> items) => [.. items.Select(Collect)];
-
-    IReadOnlyList<InputPathFacts> ISyncPathFacts.Collect(IReadOnlyList<InputItem> items, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return CollectForFixedSlot(items);
-    }
 
     public InputPathFacts Collect(InputItem item)
     {
@@ -65,7 +59,15 @@ public sealed class SystemPathFacts : IPathFacts, ISyncPathFacts
         }
     }
 
-    public Task<EquatableArray<InputPathFacts>> CollectSlotAsync(IReadOnlyList<InputItem> items, CancellationToken cancellationToken = default)
+    IReadOnlyList<InputPathFacts> ISlotPathFacts.Collect(IReadOnlyList<InputItem> items,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return CollectForFixedSlot(items);
+    }
+
+    Task<EquatableArray<InputPathFacts>> ISlotPathFacts.CollectAsync(IReadOnlyList<InputItem> items,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(new EquatableArray<InputPathFacts>([.. CollectForFixedSlot(items)]));

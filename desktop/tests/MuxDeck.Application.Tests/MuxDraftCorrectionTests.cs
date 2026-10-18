@@ -19,7 +19,7 @@ public sealed class MuxDraftCorrectionTests
     {
         var facts = new FakeFacts();
         facts.Add(Fact("C:/in/v.mkv", ".mkv"));
-        var draft = new MuxDraft(syncPathFacts: facts);
+        var draft = new MuxDraft(facts);
 
         var prepared = draft.Prepare(DraftOperation.Video, [Candidate("C:/in/v.mkv")], []);
         Assert.True(prepared.Succeeded);
@@ -33,7 +33,7 @@ public sealed class MuxDraftCorrectionTests
     {
         var facts = new FakeFacts();
         facts.Add(Fact("C:/in/missing.mkv", ".mkv", exists: false));
-        var draft = new MuxDraft(facts, facts);
+        var draft = new MuxDraft(facts);
 
         var sync = draft.Prepare(DraftOperation.Video, [Candidate("C:/in/missing.mkv")], []);
         var asyncResult = await draft.PrepareAsync(DraftOperation.Video, [Candidate("C:/in/missing.mkv")], [],
@@ -53,7 +53,7 @@ public sealed class MuxDraftCorrectionTests
         var facts = new FakeFacts();
         facts.Add(new("C:\\a://b.ass", true, "C:\\a\\b.ass", ".ass", "C:\\a",
             InputLocationKind.LocalFile, true, false, false, null));
-        var draft = new MuxDraft(syncPathFacts: facts);
+        var draft = new MuxDraft(facts);
 
         var result = draft.Prepare(DraftOperation.Subtitles, [],
             [new(SubtitleSlot.Sc, Candidate("C:\\a://b.ass"))]);
@@ -69,7 +69,7 @@ public sealed class MuxDraftCorrectionTests
         var facts = new FakeFacts();
         facts.Add(new("//?/C:/a.ass", true, "\\\\?\\C:\\a.ass", ".ass", "\\\\?\\C:\\",
             InputLocationKind.LocalFile, true, false, false, null));
-        var draft = new MuxDraft(syncPathFacts: facts);
+        var draft = new MuxDraft(facts);
 
         var result = draft.Prepare(DraftOperation.Subtitles, [],
             [new(SubtitleSlot.Sc, Candidate("//?/C:/a.ass"))]);
@@ -92,7 +92,7 @@ public sealed class MuxDraftCorrectionTests
     {
         var facts = new FakeFacts();
         facts.Add(new(path, fullyQualified, path, extension, "C:\\in", kind, exists, false, invalidChars, null));
-        var draft = new MuxDraft(syncPathFacts: facts);
+        var draft = new MuxDraft(facts);
 
         var result = draft.Prepare(DraftOperation.Subtitles, [], [new(SubtitleSlot.Sc, Candidate(path, kind))]);
 
@@ -106,7 +106,7 @@ public sealed class MuxDraftCorrectionTests
         var facts = new FakeFacts();
         facts.Add(new("C:\\bad\0.ass", true, "C:\\bad\0.ass", "", "", InputLocationKind.LocalFile,
             false, false, false, "路径无效或不可访问：bad"));
-        var draft = new MuxDraft(syncPathFacts: facts);
+        var draft = new MuxDraft(facts);
 
         var result = draft.Prepare(DraftOperation.Subtitles, [],
             [new(SubtitleSlot.Sc, Candidate("C:\\bad\0.ass"))]);
@@ -122,7 +122,7 @@ public sealed class MuxDraftCorrectionTests
     {
         var facts = new FakeFacts();
         facts.Add(new("C:/fonts", true, "C:/fonts", "", "C:/fonts", kind, false, true, false, null));
-        var draft = new MuxDraft(syncPathFacts: facts);
+        var draft = new MuxDraft(facts);
 
         var result = draft.Prepare(DraftOperation.FontsDirectory,
             [Candidate("C:/fonts", kind)], []);
@@ -136,7 +136,7 @@ public sealed class MuxDraftCorrectionTests
     {
         var facts = new FakeFacts();
         facts.Add(new("C:/fonts", true, "C:/fonts", "", "C:/fonts", InputLocationKind.LocalDirectory, false, false, false, null));
-        var draft = new MuxDraft(syncPathFacts: facts);
+        var draft = new MuxDraft(facts);
 
         var result = draft.Prepare(DraftOperation.FontsDirectory,
             [Candidate("C:/fonts", InputLocationKind.LocalDirectory)], []);
@@ -150,7 +150,7 @@ public sealed class MuxDraftCorrectionTests
     {
         var facts = new FakeFacts();
         facts.Add(Fact("C:/in/v.avi", ".avi"));
-        var draft = new MuxDraft(syncPathFacts: facts);
+        var draft = new MuxDraft(facts);
 
         var result = draft.Prepare(DraftOperation.Video, [Candidate("C:/in/v.avi")], []);
 
@@ -163,7 +163,7 @@ public sealed class MuxDraftCorrectionTests
     [Fact]
     public void Unknown_slot_values_return_invalid_slot_without_throwing()
     {
-        var draft = new MuxDraft(syncPathFacts: new FakeFacts());
+        var draft = new MuxDraft(new FakeFacts());
         var invalid = (SubtitleSlot)99;
 
         Assert.Equal(DraftCodes.InvalidSlot, draft.SetSubtitlePath(invalid, "C:/in/a.ass").ErrorCode);
@@ -180,7 +180,7 @@ public sealed class MuxDraftCorrectionTests
     [Fact]
     public void Slot_check_precedes_missing_path_and_lock_precedes_slot()
     {
-        var draft = new MuxDraft(syncPathFacts: new FakeFacts());
+        var draft = new MuxDraft(new FakeFacts());
         Assert.Equal(DraftCodes.MissingPath, draft.SetSubtitleIncluded(SubtitleSlot.Sc, true).ErrorCode);
         Assert.Equal(DraftCodes.InvalidSlot, draft.SetSubtitleIncluded((SubtitleSlot)99, true).ErrorCode);
 
@@ -193,7 +193,7 @@ public sealed class MuxDraftCorrectionTests
     [Fact]
     public void ToSpec_orders_subtitles_before_audio_and_clears_external_subtitle_source_id()
     {
-        var draft = new MuxDraft(syncPathFacts: new FakeFacts());
+        var draft = new MuxDraft(new FakeFacts());
         Assert.True(draft.AddExternalTrack(Track("audio", "C:/in/a.mka", TrackKind.Audio, 7, "音频")).Succeeded);
         Assert.True(draft.AddExternalTrack(Track("sub", "C:/in/other.ass", TrackKind.Subtitle, 1, "字幕")).Succeeded);
         draft.SetSubtitlePath(SubtitleSlot.Sc, "C:/in/sc.ass");
@@ -209,7 +209,7 @@ public sealed class MuxDraftCorrectionTests
     [Fact]
     public void Conflict_snapshot_includes_excluded_tracks_and_slots()
     {
-        var draft = new MuxDraft(syncPathFacts: new FakeFacts());
+        var draft = new MuxDraft(new FakeFacts());
         draft.SetSubtitlePath(SubtitleSlot.Sc, "C:/in/sc.ass");
         draft.SetSubtitleIncluded(SubtitleSlot.Sc, false);
         Assert.True(draft.AddExternalTrack(Track("sub", "C:/in/other.ass", TrackKind.Subtitle, 1, "字幕")).Succeeded);
@@ -227,7 +227,7 @@ public sealed class MuxDraftCorrectionTests
     [Fact]
     public void Different_path_with_the_same_track_id_is_not_a_conflict()
     {
-        var draft = new MuxDraft(syncPathFacts: new FakeFacts());
+        var draft = new MuxDraft(new FakeFacts());
         Assert.True(draft.AddExternalTrack(Track("a1", "C:/in/a.mka", TrackKind.Audio, 7, "音频")).Succeeded);
         Assert.True(draft.AddExternalTrack(Track("a2", "C:/in/other.mka", TrackKind.Audio, 7, "音频")).Succeeded);
         Assert.Equal(2, draft.ExternalTracks.Count);
@@ -236,7 +236,7 @@ public sealed class MuxDraftCorrectionTests
     [Fact]
     public void Same_path_and_track_id_conflicts_across_identities()
     {
-        var draft = new MuxDraft(syncPathFacts: new FakeFacts());
+        var draft = new MuxDraft(new FakeFacts());
         Assert.True(draft.AddExternalTrack(Track("a1", "C:/in/a.mka", TrackKind.Audio, 7, "音频")).Succeeded);
         Assert.Equal(DraftCodes.Duplicate,
             draft.AddExternalTrack(Track("a2", "C:/in/a.mka", TrackKind.Audio, 7, "音频")).ErrorCode);
@@ -245,7 +245,7 @@ public sealed class MuxDraftCorrectionTests
     [Fact]
     public void Subtitle_with_the_same_path_conflicts_regardless_of_track_id()
     {
-        var draft = new MuxDraft(syncPathFacts: new FakeFacts());
+        var draft = new MuxDraft(new FakeFacts());
         Assert.True(draft.AddExternalTrack(Track("s1", "C:/in/other.ass", TrackKind.Subtitle, 1, "字幕")).Succeeded);
         Assert.Equal(DraftCodes.Duplicate,
             draft.AddExternalTrack(Track("s2", "C:/in/other.ass", TrackKind.Subtitle, 2, "字幕")).ErrorCode);
@@ -256,7 +256,7 @@ public sealed class MuxDraftCorrectionTests
     [Fact]
     public void Import_defaults_only_the_first_subtitle_in_a_batch()
     {
-        var draft = new MuxDraft(syncPathFacts: new FakeFacts());
+        var draft = new MuxDraft(new FakeFacts());
 
         Assert.True(draft.CommitImport(new(null, null,
         [
@@ -275,7 +275,7 @@ public sealed class MuxDraftCorrectionTests
     [InlineData(false, false, false)]
     public void Import_audio_default_requires_source_flag_and_default(bool hasFlag, bool isDefault, bool expected)
     {
-        var draft = new MuxDraft(syncPathFacts: new FakeFacts());
+        var draft = new MuxDraft(new FakeFacts());
         Assert.True(draft.CommitImport(new(null, null,
             [Import("a1", "C:/in/a.mka", TrackKind.Audio, 7, hasFlag, isDefault)])).Succeeded);
         Assert.Equal(expected, draft.ExternalTracks[0].Flags.IsDefault);
@@ -284,7 +284,7 @@ public sealed class MuxDraftCorrectionTests
     [Fact]
     public void Excluded_slot_still_suppresses_imported_subtitle_default()
     {
-        var draft = new MuxDraft(syncPathFacts: new FakeFacts());
+        var draft = new MuxDraft(new FakeFacts());
         draft.SetSubtitlePath(SubtitleSlot.Sc, "C:/in/sc.ass");
         draft.SetSubtitleIncluded(SubtitleSlot.Sc, false);
 
@@ -297,7 +297,7 @@ public sealed class MuxDraftCorrectionTests
     [Fact]
     public void Excluded_external_subtitle_still_suppresses_imported_subtitle_default()
     {
-        var draft = new MuxDraft(syncPathFacts: new FakeFacts());
+        var draft = new MuxDraft(new FakeFacts());
         Assert.True(draft.AddExternalTrack(Track("old", "C:/in/old.ass", TrackKind.Subtitle, 1, "字幕")).Succeeded);
         draft.SetExternalIncluded("old", false);
 
@@ -314,7 +314,7 @@ public sealed class MuxDraftCorrectionTests
     {
         var facts = new FakeFacts();
         facts.Add(Fact("C:/new/v.mkv", ".mkv"));
-        var draft = new MuxDraft(syncPathFacts: facts);
+        var draft = new MuxDraft(facts);
         Assert.True(draft.AddExternalTrack(Track("old", "C:/in/a.mka", TrackKind.Audio, 7, "音频")).Succeeded);
         var before = draft.Snapshot();
         var revision = draft.DraftRevision;
@@ -336,7 +336,7 @@ public sealed class MuxDraftCorrectionTests
         var facts = new FakeFacts();
         facts.Add(Fact("C:/old/v.mkv", ".mkv"));
         facts.Add(Fact("C:/new/v.mkv", ".mkv"));
-        var draft = new MuxDraft(syncPathFacts: facts);
+        var draft = new MuxDraft(facts);
         draft.SetVideoPath("C:/old/v.mkv");
         var revision = draft.DraftRevision;
 
@@ -351,6 +351,106 @@ public sealed class MuxDraftCorrectionTests
         Assert.Equal("C:/new/v.mkv", draft.VideoPath);
         Assert.Equal("C:/fonts", draft.FontsDirectory);
         Assert.Single(draft.ExternalTracks);
+    }
+
+    // ---------- ReplaceExternalTrack ----------
+
+    [Fact]
+    public void Replace_external_track_updates_path_and_source_id_and_keeps_identity_metadata()
+    {
+        var draft = new MuxDraft(new FakeFacts());
+        var original = new DraftExternalTrackSnapshot("a1", "C:/in/a.mka", TrackKind.Audio, new TrackId(2),
+            "原名", new LanguageTag("eng"), new TrackFlags(true, true)) { IsIncluded = false };
+        Assert.True(draft.AddExternalTrack(original).Succeeded);
+        var revision = draft.DraftRevision;
+        var changed = 0;
+        draft.Changed += (_, _) => changed++;
+
+        Assert.True(draft.ReplaceExternalTrack("a1",
+            new DraftExternalTrackSnapshot("ignored", "C:/in/b.mka", TrackKind.Audio, new TrackId(7),
+                "新名", new LanguageTag("jpn"), new TrackFlags(false, false))).Succeeded);
+
+        var track = Assert.Single(draft.ExternalTracks);
+        Assert.Equal("a1", track.Identity);
+        Assert.Equal("C:/in/b.mka", track.Path);
+        Assert.Equal(new TrackId(7), track.SourceTrackId);
+        Assert.Equal("原名", track.Name);
+        Assert.Equal(new LanguageTag("eng"), track.Language);
+        Assert.Equal(new TrackFlags(true, true), track.Flags);
+        Assert.False(track.IsIncluded);
+        Assert.Equal(revision + 1, draft.DraftRevision);
+        Assert.Equal(1, changed);
+    }
+
+    [Fact]
+    public void Replace_external_track_rejects_same_path_and_track_id()
+    {
+        var draft = new MuxDraft(new FakeFacts());
+        Assert.True(draft.AddExternalTrack(Track("a1", "C:/in/a.mka", TrackKind.Audio, 2, "音频")).Succeeded);
+        Assert.True(draft.AddExternalTrack(Track("a2", "C:/in/b.mka", TrackKind.Audio, 3, "音频")).Succeeded);
+        var before = draft.Snapshot();
+        var revision = draft.DraftRevision;
+
+        var result = draft.ReplaceExternalTrack("a1",
+            Track("ignored", "C:/in/b.mka", TrackKind.Audio, 3, "音频"));
+
+        Assert.Equal(DraftCodes.Duplicate, result.ErrorCode);
+        Assert.Equal(revision, draft.DraftRevision);
+        Assert.Equal(before, draft.Snapshot());
+    }
+
+    [Fact]
+    public void Replace_external_track_conflicts_with_subtitle_slot_path()
+    {
+        var draft = new MuxDraft(new FakeFacts());
+        draft.SetSubtitlePath(SubtitleSlot.Sc, "C:/in/sc.ass");
+        Assert.True(draft.AddExternalTrack(Track("a1", "C:/in/a.mka", TrackKind.Audio, 2, "音频")).Succeeded);
+        var revision = draft.DraftRevision;
+
+        var result = draft.ReplaceExternalTrack("a1",
+            Track("ignored", "C:/in/sc.ass", TrackKind.Audio, 2, "音频"));
+
+        Assert.Equal(DraftCodes.Duplicate, result.ErrorCode);
+        Assert.Equal(revision, draft.DraftRevision);
+    }
+
+    [Fact]
+    public void Replace_external_track_reports_locked_and_missing_identity()
+    {
+        var draft = new MuxDraft(new FakeFacts());
+        Assert.True(draft.AddExternalTrack(Track("a1", "C:/in/a.mka", TrackKind.Audio, 2, "音频")).Succeeded);
+        var replacement = Track("ignored", "C:/in/b.mka", TrackKind.Audio, 3, "音频");
+
+        Assert.Equal(DraftCodes.ExternalTrackMissing, draft.ReplaceExternalTrack("missing", replacement).ErrorCode);
+        draft.SetLocked(true);
+        Assert.Equal(DraftCodes.Locked, draft.ReplaceExternalTrack("a1", replacement).ErrorCode);
+    }
+
+    // ---------- SetSubtitleIncludedRaw ----------
+
+    [Fact]
+    public void Raw_inclusion_toggle_matches_the_legacy_empty_slot_behavior()
+    {
+        // 621ee8b 的 Track_field_change_increments_revision_exactly_once("included")
+        // 在空 SC 槽位直接切换行纳入时断言修订号 +1；原始入口不检查缺路径。
+        var draft = new MuxDraft(new FakeFacts());
+        var revision = draft.DraftRevision;
+
+        Assert.True(draft.SetSubtitleIncludedRaw(SubtitleSlot.Sc, false).Succeeded);
+        Assert.False(draft.Sc.IsIncluded);
+        Assert.Equal(revision + 1, draft.DraftRevision);
+
+        Assert.True(draft.SetSubtitleIncludedRaw(SubtitleSlot.Sc, false).Succeeded);
+        Assert.Equal(revision + 1, draft.DraftRevision);
+    }
+
+    [Fact]
+    public void Raw_inclusion_toggle_reports_locked_and_unknown_slot()
+    {
+        var draft = new MuxDraft(new FakeFacts());
+        Assert.Equal(DraftCodes.InvalidSlot, draft.SetSubtitleIncludedRaw((SubtitleSlot)99, false).ErrorCode);
+        draft.SetLocked(true);
+        Assert.Equal(DraftCodes.Locked, draft.SetSubtitleIncludedRaw(SubtitleSlot.Sc, false).ErrorCode);
     }
 
     // ---------- 辅助 ----------
@@ -368,7 +468,7 @@ public sealed class MuxDraftCorrectionTests
     private static InputPathFacts Fact(string path, string extension, bool exists = true) =>
         new(path, true, path, extension, "C:/in", InputLocationKind.LocalFile, exists, false, false, null);
 
-    private sealed class FakeFacts : ISyncPathFacts, IPathFacts
+    private sealed class FakeFacts : ISlotPathFacts
     {
         private readonly Dictionary<string, InputPathFacts> items = new(StringComparer.Ordinal);
 

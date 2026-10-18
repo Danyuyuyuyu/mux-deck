@@ -52,7 +52,7 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         tools = service.Tools;
         TrackColumns = columns;
         // 草稿是唯一数据源；ViewModel 只保留展示投影与文件探测等视图状态。
-        draft = service.Draft;
+        draft = service.CreateDraft();
         draft.Changed += (_, _) => OnDraftChanged();
         draft.EditabilityChanged += (_, _) => NotifyEditability();
         StartCommand = new(StartAsync, () => CanStart, ReportCommandError);

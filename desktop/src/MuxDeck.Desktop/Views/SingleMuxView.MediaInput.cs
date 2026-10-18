@@ -32,7 +32,8 @@ public partial class SingleMuxView
                 if (plan.Video is not null || plan.Fonts is not null || plan.Tracks.Count != 1 || (plan.Tracks[0].Media.Type == "audio") != replacing.IsAudio)
                 { model.ReportInteractionMessage("更换文件必须只包含一条同类型轨道；多音轨文件请通过添加入口导入。"); return; }
                 if (!await Interactions.ConfirmTrackAsync(owner, replacing.InputPath, plan.Tracks[0].Path) || !Current()) return;
-                model.ReplaceImportedTrack(replacing, plan.Tracks[0]); model.ReportInteractionMessage("已更换轨道文件，元数据保持。", NotificationKind.Success);
+                if (model.ReplaceImportedTrack(replacing, plan.Tracks[0]))
+                    model.ReportInteractionMessage("已更换轨道文件，元数据保持。", NotificationKind.Success);
             }
             else
             {

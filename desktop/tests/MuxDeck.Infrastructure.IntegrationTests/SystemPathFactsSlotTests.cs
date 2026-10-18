@@ -51,7 +51,7 @@ public sealed class SystemPathFactsSlotTests : IDisposable
     {
         var directory = Path.Combine(root, "输出");
         Directory.CreateDirectory(directory);
-        var draft = new MuxDraft(syncPathFacts: SystemPathFacts.Instance);
+        var draft = new MuxDraft(SystemPathFacts.Instance);
         draft.SetOutputDirectory(directory);
         var revision = draft.DraftRevision;
 
@@ -69,7 +69,7 @@ public sealed class SystemPathFactsSlotTests : IDisposable
     {
         var directory = Path.Combine(root, "当前输出");
         Directory.CreateDirectory(directory);
-        var draft = new MuxDraft(syncPathFacts: SystemPathFacts.Instance);
+        var draft = new MuxDraft(SystemPathFacts.Instance);
         draft.SetOutputDirectory(directory + Path.DirectorySeparatorChar);
         var revision = draft.DraftRevision;
 
@@ -120,7 +120,7 @@ public sealed class SystemPathFactsSlotTests : IDisposable
         Assert.Equal(legacy.FileExists, facts.FileExists);
         Assert.Equal(legacy.ContainsInvalidPathChars, facts.ContainsInvalidPathChars);
 
-        var draft = new MuxDraft(syncPathFacts: SystemPathFacts.Instance);
+        var draft = new MuxDraft(SystemPathFacts.Instance);
         var result = draft.Prepare(DraftOperation.Subtitles, [], [new(SubtitleSlot.Sc, new DraftCandidate(item))]);
         Assert.Equal(LegacyCode(item), result.ErrorCode);
     }

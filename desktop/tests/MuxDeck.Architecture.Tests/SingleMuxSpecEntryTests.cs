@@ -58,7 +58,7 @@ public sealed class SingleMuxSpecEntryTests : IDisposable
 
     private (MuxRequest Request, MuxJobSpec Spec) State(string state)
     {
-        var draft = new MuxDraft(pathFacts: SystemPathFacts.Instance);
+        var draft = new MuxDraft(SystemPathFacts.Instance);
         draft.SetVideoPath(Video);
         draft.SetFontsDirectory(Fonts);
         draft.SetOutputDirectory(Output);
@@ -80,11 +80,11 @@ public sealed class SingleMuxSpecEntryTests : IDisposable
                 "", new LanguageTag("und"), new TrackFlags(false, false)));
             subtitles.Add(new(Other, "", "und", false, false));
         }
-        void AddAudio()
+        void AddAudio(int id = 2)
         {
-            draft.AddExternalTrack(new DraftExternalTrackSnapshot("audio", Audio, TrackKind.Audio, new TrackId(2),
+            draft.AddExternalTrack(new DraftExternalTrackSnapshot("audio-" + id, Audio, TrackKind.Audio, new TrackId(id),
                 "", new LanguageTag("und"), new TrackFlags(false, false)));
-            audios.Add(new(Audio, 2, "", "und", false, false));
+            audios.Add(new(Audio, id, "", "und", false, false));
         }
 
         switch (state)
@@ -98,7 +98,7 @@ public sealed class SingleMuxSpecEntryTests : IDisposable
                 subtitles.RemoveAt(1);
                 break;
             case "external-audio": AddAudio(); break;
-            case "multi-audio-container": AddAudio(); break;
+            case "multi-audio-container": AddAudio(2); AddAudio(3); break;
             case "other-subtitle": AddSc(); AddOtherSubtitle(); break;
             case "custom-output":
                 AddSc(); outputName = "自定义 成品.mkv"; draft.SetOutputFileName(outputName);

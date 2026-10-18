@@ -22,7 +22,10 @@ internal static class DraftText
         DraftErrorKind.InvalidPath => InputAcceptanceError.InvalidPath,
         DraftErrorKind.WrongType => InputAcceptanceError.WrongType,
         DraftErrorKind.MissingPath => InputAcceptanceError.MissingPath,
-        _ => InputAcceptanceError.MissingPath
+        // 外加轨道缺失在旧接纳枚举中没有独立值，按缺路径处理。
+        DraftErrorKind.ExternalTrackMissing => InputAcceptanceError.MissingPath,
+        DraftErrorKind.None => throw new ArgumentOutOfRangeException(nameof(error), error, "成功结果没有错误码。"),
+        _ => throw new ArgumentOutOfRangeException(nameof(error), error, "未知的草稿错误码。")
     };
 
     public static string Describe(DraftEntry entry, InputOperation operation, DraftErrorKind error,

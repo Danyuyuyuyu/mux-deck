@@ -141,21 +141,28 @@ public sealed partial class SingleMuxViewModel
         if (!CanEdit || !externalOrder.Contains(row)) return;
         if (row.Slot is { } slot) { RemoveSubtitle(slot); return; }
         row.PropertyChanged -= SubtitlePropertyChanged;
-        draft.RemoveExternalTrack(row.Id);
+        // 草稿拒绝时保留行与路径，避免界面与唯一数据源分叉。
+        if (!draft.RemoveExternalTrack(row.Id).Succeeded) return;
         externalOrder.Remove(row); row.InputPath = ""; RebuildTracks(); UpdateInputs();
     }
-    public void ReplaceImportedTrack(TrackRowViewModel row, ImportedTrack replacement)
+    public bool ReplaceImportedTrack(TrackRowViewModel row, ImportedTrack replacement)
     {
-        if (!CanEdit || !externalOrder.Contains(row) || row.Slot is not null) return;
+        if (!CanEdit || !externalOrder.Contains(row) || row.Slot is not null) return false;
         var index = externalOrder.IndexOf(row);
         var outcome = draft.ReplaceExternalTrack(row.Id, new DraftTrackState(row.Id, replacement.Path,
             row.IsAudio ? TrackKind.Audio : TrackKind.Subtitle, new TrackId(replacement.Media.Id), row.Name,
             new LanguageTag(row.Language ?? ""), new TrackFlags(row.IsDefault, row.IsForced)) { IsIncluded = row.IsIncluded });
-        if (!outcome.Succeeded) return;
+        if (!outcome.Succeeded)
+        {
+            ReportInteractionMessage(DraftText.Describe(DraftEntry.Import, InputOperation.Audio,
+                outcome.Error, outcome.Reason, outcome.Detail));
+            return false;
+        }
         var updated = new TrackRowViewModel { Id = row.Id, OriginTrackId = replacement.Media.Id, Type = row.Type, Codec = replacement.Media.Codec, CodecId = replacement.Media.CodecId, AudioChannels = replacement.Media.AudioChannels, LegacyLanguage = replacement.Media.Language, LanguageIetf = replacement.Media.LanguageIetf, Language = row.Language ?? "", Name = row.Name, IsDefault = row.IsDefault, IsForced = row.IsForced, IsIncluded = row.IsIncluded, IsEditable = true, Source = "外加文件", Policy = "新增" };
         updated.InputPath = replacement.Path; updated.SetEditGuard(() => CanEdit); updated.PropertyChanged += SubtitlePropertyChanged;
         row.PropertyChanged -= SubtitlePropertyChanged; externalOrder[index] = updated;
         if (ReferenceEquals(SelectedTrack, row)) SelectedTrack = updated;
         RebuildTracks(); UpdateInputs();
+        return true;
     }
 }

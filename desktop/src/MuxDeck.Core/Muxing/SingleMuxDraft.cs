@@ -93,9 +93,9 @@ public sealed class SingleMuxDraft
 {
     private readonly MuxDraft inner;
 
-    public SingleMuxDraft(ISyncPathFacts pathFacts)
+    public SingleMuxDraft(ISlotPathFacts slotFacts)
     {
-        inner = new MuxDraft(syncPathFacts: pathFacts);
+        inner = new MuxDraft(slotFacts);
         inner.Changed += (_, revision) => Changed?.Invoke(this, revision);
         inner.EditabilityChanged += (_, _) => EditabilityChanged?.Invoke(this, EventArgs.Empty);
     }

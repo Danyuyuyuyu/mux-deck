@@ -118,8 +118,7 @@ public sealed record DraftSnapshot(string VideoPath, SubtitleSlotSnapshot Sc, Su
 /// </summary>
 public sealed class MuxDraft
 {
-    private readonly IPathFacts? pathFacts;
-    private readonly ISyncPathFacts? syncPathFacts;
+    private readonly ISlotPathFacts slotFacts;
     private readonly List<MutableTrack> external = [];
     private readonly Dictionary<SubtitleSlot, MutableSubtitle> slots = new()
     {
@@ -133,17 +132,9 @@ public sealed class MuxDraft
     private string videoPath = "", fontsDirectory = "", outputDirectory = "", outputFileName = "";
     private bool isLocked;
 
-    /// <summary>异步端口用于 PrepareAsync/CommitAsync；同步端口用于 ViewModel 的同步入口，二者至少装配一个。</summary>
-    public MuxDraft(IPathFacts? pathFacts = null, ISyncPathFacts? syncPathFacts = null)
-    {
-        if (pathFacts is null && syncPathFacts is null)
-            throw new ArgumentException("草稿至少需要一个路径事实端口。", nameof(pathFacts));
-        this.pathFacts = pathFacts;
-        this.syncPathFacts = syncPathFacts;
-    }
-
-    private IPathFacts AsyncFacts => pathFacts ?? throw new InvalidOperationException("草稿未装配异步路径事实端口。");
-    private ISyncPathFacts SyncFacts => syncPathFacts ?? throw new InvalidOperationException("草稿未装配同步路径事实端口。");
+    /// <summary>固定槽位事实端口；同步入口用 Collect，异步入口用 CollectAsync，二者共享同一实现。</summary>
+    public MuxDraft(ISlotPathFacts slotFacts) =>
+        this.slotFacts = slotFacts ?? throw new ArgumentNullException(nameof(slotFacts));
 
     /// <summary>草稿内容变化通知，参数是变化后的修订号；锁变化与同值赋值都不触发。</summary>
     public event EventHandler<long>? Changed;
@@ -383,7 +374,7 @@ public sealed class MuxDraft
         var items = ItemsFor(operation, candidates, assignments);
         var actual = facts is not null
             ? new EquatableArray<InputPathFacts>(facts.ToArray())
-            : await AsyncFacts.CollectSlotAsync(items, cancellationToken).ConfigureAwait(false);
+            : await slotFacts.CollectAsync(items, cancellationToken).ConfigureAwait(false);
         var current = await CollectCurrentAsync(operation, cancellationToken).ConfigureAwait(false);
         return InspectCore(operation, candidates, assignments, actual, current);
     }
@@ -396,7 +387,7 @@ public sealed class MuxDraft
         ArgumentNullException.ThrowIfNull(assignments);
         if (isLocked) return new(false, DraftCodes.Locked);
         var items = ItemsFor(operation, candidates, assignments);
-        var actual = new EquatableArray<InputPathFacts>(SyncFacts.Collect(items).ToArray());
+        var actual = new EquatableArray<InputPathFacts>(slotFacts.Collect(items).ToArray());
         return InspectCore(operation, candidates, assignments, actual, CollectCurrentSync(operation));
     }
 
@@ -602,8 +593,7 @@ public sealed class MuxDraft
     private bool SamePathWithFacts(string left, string right, InputLocationKind kind)
     {
         if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) return left == right;
-        if (syncPathFacts is null) return SamePath(left, right);
-        var facts = SyncFacts.Collect(new[] { new InputItem(left, kind), new InputItem(right, kind) });
+        var facts = slotFacts.Collect(new[] { new InputItem(left, kind), new InputItem(right, kind) });
         return facts.Count == 2 && facts.All(fact => string.IsNullOrWhiteSpace(fact.FailureDetail)) &&
             SamePath(facts[0].FullPath, facts[1].FullPath);
     }
@@ -646,7 +636,7 @@ public sealed class MuxDraft
             var currentSlots = KnownSlots().Where(slot => !string.IsNullOrWhiteSpace(PathFor(slot))).ToArray();
             if (currentSlots.Length > 0)
             {
-                var currentFacts = await AsyncFacts.CollectSlotAsync(
+                var currentFacts = await slotFacts.CollectAsync(
                     currentSlots.Select(slot => new InputItem(PathFor(slot), InputLocationKind.LocalFile)).ToArray(),
                     cancellationToken).ConfigureAwait(false);
                 for (var index = 0; index < currentSlots.Length; index++)
@@ -659,7 +649,7 @@ public sealed class MuxDraft
         }
         var currentRaw = CurrentSingleRaw(operation);
         if (string.IsNullOrWhiteSpace(currentRaw)) return new(currentRaw, "", true, subtitlePaths);
-        var currentSingle = await AsyncFacts.CollectSlotAsync(
+        var currentSingle = await slotFacts.CollectAsync(
             new[] { new InputItem(currentRaw, operation == DraftOperation.Video ? InputLocationKind.LocalFile : InputLocationKind.LocalDirectory) },
             cancellationToken).ConfigureAwait(false);
         var currentAvailable = currentSingle.Count == 1 && string.IsNullOrWhiteSpace(currentSingle[0].FailureDetail);
@@ -674,7 +664,7 @@ public sealed class MuxDraft
             var currentSlots = KnownSlots().Where(slot => !string.IsNullOrWhiteSpace(PathFor(slot))).ToArray();
             if (currentSlots.Length > 0)
             {
-                var currentFacts = SyncFacts.Collect(
+                var currentFacts = slotFacts.Collect(
                     currentSlots.Select(slot => new InputItem(PathFor(slot), InputLocationKind.LocalFile)).ToArray());
                 for (var index = 0; index < currentSlots.Length; index++)
                 {
@@ -686,7 +676,7 @@ public sealed class MuxDraft
         }
         var currentRaw = CurrentSingleRaw(operation);
         if (string.IsNullOrWhiteSpace(currentRaw)) return new(currentRaw, "", true, subtitlePaths);
-        var currentSingle = SyncFacts.Collect(
+        var currentSingle = slotFacts.Collect(
             new[] { new InputItem(currentRaw, operation == DraftOperation.Video ? InputLocationKind.LocalFile : InputLocationKind.LocalDirectory) });
         var currentAvailable = currentSingle.Count == 1 && string.IsNullOrWhiteSpace(currentSingle[0].FailureDetail);
         return new(currentRaw, currentAvailable ? currentSingle[0].FullPath : "", currentAvailable, subtitlePaths);

@@ -778,18 +778,25 @@ public sealed class MuxDraftTests
     private static DraftExternalTrackSnapshot OtherSubtitle(string identity, string path) =>
         new(identity, path, TrackKind.Subtitle, null, "", new LanguageTag("und"), new TrackFlags(false, false));
 
-    private sealed class FakePathFacts : IPathFacts
+    private sealed class FakePathFacts : ISlotPathFacts
     {
         public Dictionary<string, InputPathFacts> Items { get; } = new(StringComparer.Ordinal);
         public Exception? Exception { get; set; }
+
+        public IReadOnlyList<InputPathFacts> Collect(IReadOnlyList<InputItem> items,
+            CancellationToken cancellationToken = default) => CollectCore(items);
+
         public Task<EquatableArray<InputPathFacts>> CollectAsync(IReadOnlyList<InputItem> items, CancellationToken cancellationToken = default) =>
+            Exception is { } exception && exception is not (ArgumentException or IOException or NotSupportedException or UnauthorizedAccessException)
+                ? throw exception
+                : Task.FromResult(new EquatableArray<InputPathFacts>([.. CollectCore(items)]));
+
+        private IReadOnlyList<InputPathFacts> CollectCore(IReadOnlyList<InputItem> items) =>
             Exception is { } exception
-                ? exception is ArgumentException or IOException or NotSupportedException or UnauthorizedAccessException
-                    ? Task.FromResult(new EquatableArray<InputPathFacts>([.. items.Select(item =>
-                        new InputPathFacts(item.Path, true, item.Path, Path.GetExtension(item.Path), "", item.Kind,
-                            false, false, false, exception.Message))]))
-                    : throw exception
-                : Task.FromResult(new EquatableArray<InputPathFacts>([.. items.Select(Item)]));
+                ? [.. items.Select(item =>
+                    new InputPathFacts(item.Path, true, item.Path, Path.GetExtension(item.Path), "", item.Kind,
+                        false, false, false, exception.Message))]
+                : [.. items.Select(Item)];
 
         private InputPathFacts Item(InputItem item)
         {
