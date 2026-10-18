@@ -134,7 +134,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 
 #### 2a 轨道与命名已迁入 Domain
 
-- `src/MuxDeck.Domain/TrackPolicy.cs` 是 SC/TC 默认轨、源 A/V 保留和来源纳入投影的唯一规则位置。调用方提供槽位存在、轨道类型和外加纳入选择；旧空草稿仍先显示 SC 默认，实际组合变化后按槽位重算。编辑守卫、修改时机和草稿修订暂留 Desktop，随 4b 迁移。
+- `src/MuxDeck.Domain/TrackPolicy.cs` 是 SC/TC 默认轨、源 A/V 保留、来源纳入投影与导入默认旗标的唯一规则位置。调用方提供槽位存在、轨道类型和外加纳入选择；旧空草稿仍先显示 SC 默认，实际组合变化后按槽位重算。4b-2 后编辑守卫、修改时机与草稿修订由 Application `MuxDraft` 持有，Desktop 只投影。新增 `ImportedSubtitleIsDefault`（仅当前没有任何字幕行时默认）与 `ImportedAudioIsDefault`（源声明默认且为默认）供导入提交复用。
 - `LanguageRules.cs` 负责基于不含扩展名的文件名推断语言，以及旧封装 QC 的传统/IETF 标签匹配。传统/IETF 原字符串保留，IETF 仅为 null 时才允许匹配回退；语言推断保留旧标签边界、优先顺序和大小写处理。
 - `OutputNaming.cs` 负责默认后缀、自定义名称与默认名拼接。`ResolvePreview` 在无文件名且无源视频时返回 null；“源文件名”占位与 `源文件名.muxed.mkv` 的界面补全由 Desktop 用 Domain `DefaultFileName` 完成，Domain 不含中文文案。Desktop 预览将空白视为自动命名；旧服务仅将 null 视为自动命名，空白仍由原校验拒绝。路径拆分、文件存在性、合法文件名校验和落位均留在调用边界。
 - 原位置只调用上述 Domain 规则；规则不使用文件、目录、进程、当前时间或 ID 生成 API。Domain 单元测试注明对应的既有 Smoke 场景，架构测试逐个检查三个规则类型并保留全命名空间护栏。
@@ -143,7 +143,7 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 
 - `src/MuxDeck.Domain/InputRules.cs` 是媒体/字体扩展名、固定槽位类型与数量、候选来源类型、完整路径事实校验、规范化路径比较、去重及单字体目录的唯一规则位置；自动导入中的源视频数量、字幕/音频探测类型和已加入轨道身份也由该规则判定。
 - `MuxDeck.Core.Muxing.MediaFileTypes` 与旧 `SingleMuxService.IsFont` 仅提取扩展名并调用 Domain，保留现有调用方。Core 按运行平台决定路径大小写策略，Desktop 仍按 Windows 大小写无关策略比较。
-- `Infrastructure/SystemPathFacts.cs` 同时提供批量事实（同步拖入反馈与 `PrepareImportUseCase`）和固定槽位事实（`CollectForFixedSlot` / `ISyncPathFacts`）。固定槽位按旧 `ValidateCandidate` 先 `GetFullPath` 再裁剪末尾分隔符，存在性、扩展名与非法字符基于裁剪路径；原始 `Path` 仍用于完整路径与设备前缀判定。`MediaImport.cs` 只负责 ViewModel 状态投影。规范化键先在边界收集，再交给 Domain 比较；Domain 不使用 `System.IO`，不查询文件或目录。
+- `Infrastructure/SystemPathFacts.cs` 同时提供批量事实（同步拖入反馈与 `PrepareImportUseCase`）和固定槽位事实（`CollectForFixedSlot` / `ISlotPathFacts`）。固定槽位按旧 `ValidateCandidate` 先 `GetFullPath` 再裁剪末尾分隔符，存在性、扩展名与非法字符基于裁剪路径；原始 `Path` 仍用于完整路径与设备前缀判定。`ISlotPathFacts` 的同步 `Collect` 带可选取消令牌以满足端口护栏，实现先检查取消再收集；`MuxDraft` 同步入口不额外传令牌。`MediaImport.cs` 只负责 ViewModel 状态投影。规范化键先在边界收集，再交给 Domain 比较；Domain 不使用 `System.IO`，不查询文件或目录。
 - 固定槽位仍只接纳 MKV/MP4 与 ASS，自动导入保留原有广泛视频/音频/ASS/SRT/字体入口。两者的设备路径与规范化细节差异保持原行为，不统一或扩大允许范围。
 - 4b-2 已将固定槽位准备/提交移入 Application `MuxDraft`（同步与异步共用同一校验核心），编辑锁与修订号由草稿持有；Desktop 通过 Core 过渡门面投影。SC/TC 去重比较最终槽位集合；同音频容器按真实 Track ID 区分，字幕按文件身份去重。Domain 规则测试与副作用架构检查覆盖这些边界。
 
@@ -219,7 +219,7 @@ tests/MuxDeck.Infrastructure.IntegrationTests 只直接引用 Infrastructure，�
 
 组件卸载以当前配置目录为管理边界：手动复制的组件也计为 Mux Deck 来源，不使用安装归属记录。Core `ComponentDirectories` 只生成固定直接子目录的计划并检查边界/链接，`ComponentUninstaller` 重新验证后逐项删除并记录日志，与安装器共用 Application `OperationCoordinator` 的租约。AFS 的随包 Python 随主目录删除，独立 `fonttools` 保留并单独管理；重装可复用已验证的独立后端。Desktop 保存待确认计划、卸载任务和错误；MainWindow 结合单任务、导入与真实工具探测忙碌态禁止删除，关闭等待收尾。完整边界与证据见[组件卸载任务](../tasks/component-uninstall.md)。
 
-单任务交互由 `ViewModels/SingleMuxViewModel.cs` 持有；4b-2 后草稿（`MuxDraft`，经 Core 过渡门面 `SingleMuxDraft`）是唯一数据源，VM 不再保存路径字段、修订计数或接纳校验副本。`StartAsync` 用 `draft.ToSpec(tools)` 调用 `SingleMuxService.RunSpecAsync`；VM 仍包含 `CancelAndWaitAsync`、`RunTask`、`IsRunning`、`CanEdit`、`Tracks`、`SelectedTrack`、`Log`、`Result` 与 `StatusText`。`TrackRowViewModel` 是投影：SC/TC 与外加行的对象身份保持不变，行编辑写回草稿，草稿变化只更新已有行；固定槽位行用结构化 `Slot` 标识，源行用 `SourceRetained` 表达保留策略。`MainWindowViewModel` 继续负责导航和工具环境摘要。UI 不承担 QC，也不构造 AFS 或 mkvmerge 参数。
+单任务交互由 `ViewModels/SingleMuxViewModel.cs` 持有；4b-2 后草稿（`MuxDraft`，经 Core 过渡门面 `SingleMuxDraft`，4b-3 删除）是唯一数据源，VM 构造时通过 `SingleMuxService.CreateDraft()` 获取独立实例，不再保存路径字段、修订计数或接纳校验副本。`StartAsync` 用 `draft.ToSpec(tools)` 调用 `SingleMuxService.RunSpecAsync`；VM 仍包含 `CancelAndWaitAsync`、`RunTask`、`IsRunning`、`CanEdit`、`Tracks`、`SelectedTrack`、`Log`、`Result` 与 `StatusText`。`TrackRowViewModel` 是投影：SC/TC 与外加行的对象身份保持不变，行编辑写回草稿，草稿变化只更新已有行；固定槽位行用结构化 `Slot` 标识，源行用 `SourceRetained` 表达保留策略。`MainWindowViewModel` 继续负责导航和工具环境摘要。UI 不承担 QC，也不构造 AFS 或 mkvmerge 参数。
 
 第一轮任务 A 的状态和接纳接口仍位于同一 ViewModel 及 `ViewModels/InputAcceptance.cs`；4b-2 后校验、计划与修订由 Application `MuxDraft` 持有，Desktop 只负责同步收集、投影与中文文案映射（`DraftText` 按入口/操作/错误码/原因集中映射），不解析 `Detail`：
 

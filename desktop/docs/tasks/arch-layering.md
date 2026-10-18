@@ -20,7 +20,7 @@
 ## 依赖顺序
 
 ```text
-1a → 1b → 2a / 2b / 2c（可并行）→ 3a → 3b → 3c → 3d → 3e → 4a-1 → 4a-2 → 4a-3 → 4b-1 → 4b-2 → 4c → 4d → 5
+1a → 1b → 2a / 2b / 2c（可并行）→ 3a → 3b → 3c → 3d → 3e → 4a-1 → 4a-2 → 4a-3 → 4b-1 → 4b-2 → 4b-3 → 4c → 4d → 5
 ```
 
 高风险步骤为 **3c**（流水线改写）与 **4b-2**（草稿会话接 VM），推送前须经用户确认，分别要求真实工具链对照与 UI 截图对照。4b-1 只新增模型与测试，不接 VM，可直接推主分支。
@@ -233,7 +233,7 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 
 #### 4b 计划调整（2026-10-15，用户已批准）
 
-用户在本步实施前批准拆分与范围收紧；本节先记录，再按 4b-1、4b-2 两步实施。
+用户在本步实施前批准拆分与范围收紧；本节先记录，再按 4b-1、4b-2 两步实施。4b-2 审查修正时用户批准追加 4b-3 草稿契约化步骤（先写计划，未实施）。
 
 **拆分与推送方式**
 
@@ -301,26 +301,92 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 
 **范围与用户批准**：按方案 A 接入草稿，ViewModel 对外接纳 API 保持同步；27 条草稿特征测试的断言、Smoke 与 XAML 不改。用户批准的三个范围调整：① `AddExternalTrack` 判重复复用 `InputRules.ImportedTrackConflicts`（同路径且已有轨道为字幕或同轨号），保留身份相同的重复拒绝；② `OutputNaming.ResolvePreview` 在无文件名且无源视频时返回 null，“源文件名”占位移到 Desktop，默认名拼接公开为 Domain `DefaultFileName`；③ 删除静态 `MediaInputError`、`SingleMuxService.DefaultCollectFacts` / `DefaultPathFacts`，两份特征测试只显式装配端口。
 
-**草稿补齐**：新增 `ISyncPathFacts` 与 `MuxDraft.Prepare/Commit`；同步与异步入口只收集事实，共用 `InspectCore` 校验，不保留第二份判定。`SystemPathFacts` 新增固定槽位收集：按旧 `ValidateCandidate` 先 `GetFullPath` 再 `TrimEndingDirectorySeparator`，存在性/扩展名/非法字符基于裁剪路径；原始 `Path` 仍用于完整路径与设备前缀判定。拒绝结果增加 `DraftReason`，区分非本地、目录/文件类型、非绝对路径、非法语法、不可访问、目录/文件缺失与扩展名不支持。所有槽位方法对枚举外值返回 `InvalidSlot`，顺序为编辑锁 → 槽位 → 缺路径。`ToSpec` 按 SC → TC → 外加字幕 → 外加音频输出，字幕 `SourceTrackId` 为 null；`ToConflictSpec` 保留已排除轨道与有路径槽位。导入提交先做视频确认与全部冲突检查，再单批写入；字幕默认只在当前没有任何字幕行（含已排除与 SC/TC）时设置，音频为 `HasDefaultFlag && IsDefault`。现有错误码不变。
+**草稿补齐**：新增 `ISlotPathFacts` 与 `MuxDraft.Prepare/Commit`；同步与异步入口只收集事实，共用 `InspectCore` 校验，不保留第二份判定。`SystemPathFacts` 新增固定槽位收集：按旧 `ValidateCandidate` 先 `GetFullPath` 再 `TrimEndingDirectorySeparator`，存在性/扩展名/非法字符基于裁剪路径；原始 `Path` 仍用于完整路径与设备前缀判定。拒绝结果增加 `DraftReason`，区分非本地、目录/文件类型、非绝对路径、非法语法、不可访问、目录/文件缺失与扩展名不支持。所有槽位方法对枚举外值返回 `InvalidSlot`，顺序为编辑锁 → 槽位 → 缺路径。`ToSpec` 按 SC → TC → 外加字幕 → 外加音频输出，字幕 `SourceTrackId` 为 null；`ToConflictSpec` 保留已排除轨道与有路径槽位。导入提交先做视频确认与全部冲突检查，再单批写入；字幕默认只在当前没有任何字幕行（含已排除与 SC/TC）时设置，音频为 `HasDefaultFlag && IsDefault`。现有错误码不变。
 
-> 实现说明：ViewModel 不能直接依赖 `MuxDeck.Application`（架构护栏）。新增 Core 过渡门面 `MuxDeck.Core.Muxing.SingleMuxDraft`，把 Application `MuxDraft` 的状态与结果映射为 Core DTO；草稿仍是唯一数据源，门面不保存第二份状态，第 5 步随 Core 删除。未修改或放宽任何架构测试。
+> **过渡债务，由 4b-3 删除**：ViewModel 不能直接依赖 `MuxDeck.Application`（架构护栏）。新增 Core 过渡门面 `MuxDeck.Core.Muxing.SingleMuxDraft`，把 Application `MuxDraft` 的状态与结果映射为 Core DTO；草稿仍是唯一数据源，门面不保存第二份状态。审查修正后门面改为每次 `CreateDraft()` 新建独立实例，不缓存单例；4b-3 用 Contracts 草稿接口替换并删除该门面及重复 DTO。未修改或放宽任何架构测试。
 
 **ViewModel 接线**：删除 VM 路径字段、`draftRevision`、`ChangeConfiguration`、`ValidateCandidate` / `PrepareInput` / `SamePath`；`DraftRevision` 直接读草稿。`CanEdit` 的三个来源任一变化同步 `SetLocked`；订阅 `Changed` / `EditabilityChanged` 投影，ScTrack/TcTrack 与外加行对象身份不变，行编辑写回草稿、投影不再回写。`StartAsync` 使用 `draft.ToSpec(tools)` 与 `SingleMuxService.RunSpecAsync`，任务日志仍经 `ToLegacyRequest` 生成。导入提交、移除、替换全部走草稿；冲突快照使用 `ToConflictSpec`。错误文案集中到 `DraftText`，按（入口、操作、错误码、原因）映射；通知与成功副作用保持。
 
 **遗留 1–5**：`InclusionBox` 改用结构化 `SourceRetained`，Policy 文字不变；固定槽位行新增 `Slot`，删除 `Id is "SC" or "TC"` 文本判断（含 `SingleMuxView.axaml.cs` 代码隐藏）；`ImportedTrack` 与 `ImportedTrackSpec` / `MediaTrack` 的互转收口到该记录；`OutputNaming` 去掉 Domain 占位并由 VM 用 `draft.VideoBaseName` 与 `DefaultFileName("源文件名")` 补全；删除静态 `MediaInputError`、`DefaultCollectFacts`、`DefaultPathFacts` 与拖入反馈不可达回退分支。
 
-**本地验证**：locked restore 通过；Release 构建 0 警告 / 0 错误；`dotnet test` 976/976（Domain 298、Application 251、Core 57、Architecture 277、Infrastructure 93；基线 921 全部保留，新增 55：Application 31、Architecture 15、Infrastructure 9）。27 条草稿特征测试与 26 条导入特征测试用例数不变；两份特征测试只改 `Create` 工厂；`MuxDraftTests` 仅改 1.7 的重复断言；`OutputNamingTests` 仅改第 13 条预期。受控 13 套件 659/659（28/57/89/176/38/24/25/23/31/37/41/26/64）。`--ui-integration` 39/39；三份 task.log 的请求 payload 在归一化运行目录后与基线逐字相同。`compare-smoke-text.py 621ee8b <工作区>` 为 base=485 head=485 missing=0 new=0；`git diff --stat 621ee8b -- desktop/tests/MuxDeck.Smoke 'desktop/**/*.axaml'` 为空。Application / Desktop 中无 `.Wait(` / `GetResult()`，无阻塞式 Task `.Result`（`Model.Result` 是 VM 的结果属性）。
+**本地验证（含审查修正）**：locked restore 通过；Release 构建 0 警告 / 0 错误；`dotnet test` 985/985（Domain 298、Application 257、Core 57、Architecture 280、Infrastructure 93；基线 921 全部保留，累计新增 64：首轮 55 + 审查修正 9）。27 条草稿特征测试与 26 条导入特征测试用例数不变；首轮只改两份特征测试 `Create`、`MuxDraftTests` 1.7 与 `OutputNamingTests` 第 13 条；审查修正的现有测试改动仅 `MuxDraftTests.FakePathFacts`。受控 13 套件 659/659（28/57/89/176/38/24/25/23/31/37/41/26/64）。`--ui-integration` 39/39；三份 task.log 的请求 payload 在归一化运行目录后与基线逐字相同（含审查修正后的最终运行）。`compare-smoke-text.py 621ee8b <工作区>` 为 base=485 head=485 missing=0 new=0；`git diff --stat 621ee8b -- desktop/tests/MuxDeck.Smoke 'desktop/**/*.axaml'` 为空。Application / Desktop 中无 `.Wait(` / `GetResult()`，无阻塞式 Task `.Result`（`Model.Result` 是 VM 的结果属性）。
 
-**截图对照**：ImageMagick 未安装，`magick compare -metric AE` 无法执行，标为 BLOCKED；改用 Pillow 对 38 张对应 PNG 计算逐像素 AE。全部差异经裁剪定位在运行目录路径文本（含 `real-<guid>` / `ui-<guid>`）与日志时间戳区域，未发现布局、文案或控件差异；裁剪图保存在 `artifacts/arch-corrections/4b/diff-crops/`，基线与 manifest 在 `artifacts/arch-corrections/4b/baseline/`。
+**截图对照**：ImageMagick 未安装，`magick compare -metric AE` 无法执行，标为 BLOCKED；改用 Pillow 对 38 张对应 PNG 计算逐像素 AE（算法：逐像素比较 RGB，任一通道不同即计数，相当于 `magick compare -metric AE -fuzz 0`）。审查修正后两种尺寸已重跑；38 组中 AE=0 为 0 组，38 组全部非零。逐组文件名、AE 与外接框见下方“审查修正—截图 AE 汇总”。全部差异经裁剪定位在运行目录路径文本（含 `real-<guid>` / `ui-<guid>`）与日志时间戳区域，未发现布局、文案或控件差异；裁剪图保存在 `artifacts/arch-corrections/4b/diff-crops/`，基线与 manifest 在 `artifacts/arch-corrections/4b/baseline/`，完整 AE 表在 `artifacts/arch-corrections/4b/screenshot-ae-review.txt`。
 
 **反向验证**（临时改回旧写法后恢复）：① 1.1 同步入口回退到异步端口：Expected 同步返回 `MissingPath`，Actual 抛出“未装配异步路径事实端口”；② 1.2 改用 `FullPath` 判完整路径：Expected `MUX_DRAFT_INVALID_PATH`，Actual `null`；③ 1.3 固定槽位回退批量事实：Expected 裁剪后路径，Actual 保留末尾分隔符；当前路径回退原始值：Expected 修订号 1，Actual 2；④ 1.4 去掉原因：Expected `UnsupportedSubtitleExtension`，Actual `None`；⑤ 1.5 去掉槽位守卫：Expected `InvalidSlot`，Actual `KeyNotFoundException`；⑥ 1.6 恢复加入顺序：Expected 外加字幕在音频前，Actual 音频在前；⑦ 1.7 恢复只比轨号：Expected 不同路径同轨号成功，Actual 拒绝；⑧ 1.8 字幕默认恒为 true：Expected 第二条 `false`，Actual `true`；⑨ 1.9 去掉提交前冲突检查：Expected `MUX_DRAFT_DUPLICATE`，Actual `null`；⑩ 冲突快照换成 `ToSpec`：Expected 再导入被拒，Actual 成功；⑪ 删除 Desktop 占位补全：Expected `源文件名.muxed.mkv`，Actual 空串。
 
 **推送**：`review/4b` 已推送（`a1e1f50` 草稿补齐、`73c2643` VM 接线与删除）；Desktop 工作流只监听 `main` 与 `v2/avalonia-rewrite`，`review/*` 推送不触发 CI，按计划停下等审查，未快进主分支。
 
+**审查修正（2026-10-18，基于 `5a616ac`）**
+
+1. **草稿实例归属**：删除 `SingleMuxService.Draft` 与缓存字段；改为 `CreateDraft()` 每次新建 `SingleMuxDraft`，未装配固定槽位事实端口时抛出 `InvalidOperationException("SingleMuxService 未装配固定槽位事实端口。")`；VM 构造时调用一次。新增 Architecture 测试 `Each_view_model_creates_an_independent_draft`。反向验证：临时改回缓存单例，Expected 第二个 VM 路径 `""` / Actual 为第一个 VM 的路径。
+2. **失败不静默**：`ReplaceImportedTrack` 改为返回 bool，草稿拒绝时用 `DraftText` 已有导入文案提示且不改行/选择；`SingleMuxView.MediaInput.cs` 仅在返回 true 时提示成功；`RemoveExternalTrack` 检查草稿结果，失败时不移除行、不清 `InputPath`。新增 `Rejected_replacement_keeps_row_selection_and_does_not_report_success` 与 `Rejected_removal_keeps_the_row_and_path`。反向验证：忽略替换结果 Expected `False` / Actual `True`；忽略移除结果 Expected 行仍在 / Actual 集合为空。
+3. **端口合并**：新增 `ISlotPathFacts`（`Collect` / `CollectAsync`），删除旧的同步端口；`IPathFacts` 恢复 621ee8b 原样（`git diff 621ee8b -- .../IPathFacts.cs` 为空）。`SystemPathFacts` 显式实现两个固定槽位方法；`MuxDraft` 只保留 `MuxDraft(ISlotPathFacts)`（null 抛 `ArgumentNullException`），无默认实现与回退比较；`SingleMuxService` 参数名保持 `slotPathFacts`，类型改为 `ISlotPathFacts`。按用户批准，`Collect` 增加可选 `CancellationToken` 以满足现有端口护栏；`SystemPathFacts` 同步实现先 `ThrowIfCancellationRequested()` 再走 `CollectForFixedSlot`。现有测试仅改 `MuxDraftTests.FakePathFacts`（声明改为 `ISlotPathFacts`、新增同步 `Collect` 与异步共用私有方法，事实/异常/断言不变）。旧的同步端口名与旧收集方法名在代码和文档中均已清除。
+4. **补测试**：`ReplaceExternalTrack` 覆盖成功保留身份/名称/语言/旗标/纳入并修订 +1、与外加轨同路径同轨号冲突、与 SC/TC 同路径冲突、锁定、身份缺失；`SetSubtitleIncludedRaw` 覆盖空槽位切换（依据 621ee8b 的 `Track_field_change_increments_revision_exactly_once("included")`：空 SC 行直接切换纳入修订 +1）、同值不增、锁定、未知槽位。反向验证：恢复替换时覆盖元数据，Expected `原名` / Actual `新名`；给 Raw 入口加缺路径检查，Expected 成功 / Actual 失败。
+5. **多音轨请求行**：`multi-audio-container` 改为同容器轨号 2、3 两条音轨，旧请求 `Audios` 也写两条；新入口请求行与旧路径逐字相同。反向验证：临时让 `ToLegacyRequest` 丢掉第二条音轨，Expected 含第二条 `audio.mka` / Actual 仅第一条。
+6. **DraftText**：`DraftText.ToError` 为每个 `DraftErrorKind` 写显式分支；`None` 与未知值抛 `ArgumentOutOfRangeException`，不再默认归为 `MissingPath`（`ExternalTrackMissing` 显式映射为 `MissingPath`，因旧接纳枚举没有独立值）。
+7. **文档**：本节、`skeleton.md`、执行顺序、进度表与 4c 范围已同步；4b-3 仅写计划，未实施。
+
+**审查修正—截图 AE 汇总**：38 组，AE=0 共 0 组，非零 38 组；算法为逐像素比较 RGB、任一通道不同即计数（等价 `magick compare -metric AE -fuzz 0`）。ImageMagick 未安装，原生命令 BLOCKED。
+
+```text
+single-mux/ui-round1/cancelling-1040x760.png        AE=5875  bbox=(121, 532, 919, 755)
+single-mux/ui-round1/cancelling-1280x900.png        AE=7297  bbox=(121, 672, 1159, 895)
+single-mux/ui-round1/empty-1040x760.png             AE=4025  bbox=(121, 743, 742, 755)
+single-mux/ui-round1/empty-1280x900.png             AE=4025  bbox=(121, 883, 742, 895)
+single-mux/ui-round1/failure-1040x760.png           AE=8617  bbox=(121, 554, 982, 755)
+single-mux/ui-round1/failure-1280x900.png           AE=10435 bbox=(121, 694, 1222, 895)
+single-mux/ui-round1/long-path-1040x760.png         AE=4025  bbox=(121, 743, 742, 755)
+single-mux/ui-round1/long-path-1280x900.png         AE=4025  bbox=(121, 883, 742, 895)
+single-mux/ui-round1/multi-track-1040x760.png       AE=5875  bbox=(121, 534, 919, 755)
+single-mux/ui-round1/multi-track-1280x900.png       AE=7297  bbox=(121, 674, 1159, 895)
+single-mux/ui-round1/normal-1040x760.png            AE=5875  bbox=(121, 534, 919, 755)
+single-mux/ui-round1/normal-1280x900.png            AE=7297  bbox=(121, 674, 1159, 895)
+single-mux/ui-round1/running-1040x760.png           AE=6367  bbox=(121, 532, 919, 755)
+single-mux/ui-round1/running-1280x900.png           AE=7957  bbox=(121, 672, 1159, 895)
+single-mux/ui-round1/success-with-warnings-1040x760.png AE=7680 bbox=(121, 405, 881, 755)
+single-mux/ui-round1/success-with-warnings-1280x900.png AE=8672 bbox=(121, 545, 1041, 895)
+single-mux/ui-round1/track-inspector-1040x760.png   AE=8632  bbox=(121, 493, 1025, 755)
+single-mux/ui-round1/track-inspector-1280x900.png  AE=9851  bbox=(121, 493, 1265, 895)
+single-mux/ui-round1/track-row-pressed-1280x900.png AE=9612 bbox=(121, 20, 1215, 895)
+single-mux/real-ui/conflict-failure-1280x900.png    AE=11328 bbox=(121, 611, 1181, 893)
+single-mux/real-ui/sc-tc-running-1280x900.png       AE=6211  bbox=(121, 543, 1012, 893)
+single-mux/real-ui/sc-tc-success-1040x760.png       AE=3779  bbox=(121, 405, 850, 753)
+single-mux/real-ui/sc-tc-success-1280x900.png       AE=4552  bbox=(121, 545, 983, 893)
+single-mux/real-ui/single-ass-running-1280x900.png  AE=5084  bbox=(121, 672, 1159, 893)
+single-mux/real-ui/single-ass-success-1040x760.png  AE=3779  bbox=(121, 405, 850, 753)
+single-mux/real-ui/single-ass-success-1280x900.png  AE=4770  bbox=(121, 545, 1012, 893)
+single-mux/real-ui/tc-only-running-1280x900.png     AE=5993  bbox=(121, 543, 983, 893)
+single-mux/real-ui/tc-only-success-1040x760.png     AE=3779  bbox=(121, 405, 850, 753)
+single-mux/real-ui/tc-only-success-1280x900.png     AE=4677  bbox=(121, 545, 996, 893)
+workbench/workbench-1040x760.png                    AE=5221  bbox=(121, 534, 919, 755)
+workbench/workbench-1280x900.png                    AE=6873  bbox=(121, 674, 1159, 895)
+input-feedback/error-1280.png                       AE=2128  bbox=(121, 674, 629, 893)
+input-feedback/long-inspector-1040.png              AE=5765  bbox=(121, 493, 1025, 753)
+input-feedback/long-inspector-1280.png              AE=6606  bbox=(121, 493, 1265, 893)
+input-feedback/overlay-1280.png                     AE=344   bbox=(121, 883, 200, 893)
+input-feedback/success-1280.png                     AE=2128  bbox=(121, 674, 629, 893)
+media-drop/automatic-tracks.png                     AE=5579  bbox=(121, 674, 1158, 895)
+ui-integration/ui-integration.png                   AE=4552  bbox=(121, 545, 983, 893)
+```
+
+差异均落在运行目录路径文本（`real-<guid>` / `ui-<guid>` / 输出路径）、日志时间戳及包含路径的通知文本区域；未发现布局、控件或业务文案差异。裁剪图见 `artifacts/arch-corrections/4b/diff-crops/`。
+
+#### 4b-3 草稿契约化计划（2026-10-18，用户已批准，未开始）
+
+- 在 `MuxDeck.Contracts`（文件放在 `src/MuxDeck.Application/Contracts/`）定义草稿会话接口及其数据：槽位、操作、错误码、原因、结果、计划、快照、导入记录。
+- 由 Application `MuxDraft` 实现该接口。
+- 删除 Core `SingleMuxDraft` 及其重复的枚举与 DTO。
+- Desktop 对外 VM API（`SubtitleSlot`、`InputAcceptanceError` 等 Smoke 依赖）保持不变；VM 构造签名不变，第 5 步再改为由装配直接注入。
+- 数据满足 Contracts 护栏：record/enum、只用 `EquatableArray`、无可变集合或 setter、只依赖 System/Domain/Contracts；计划归属校验不生成 ID、不暴露内部对象。
+- 不改架构测试；撞到护栏就停下报告。
+- 验证要求与 4b-2 相同，推送到 `review/4b-3`。
+
 ### 4c 拆分 ViewModel（大）
 
 - 拆出 `VideoSummaryViewModel`、`TrackListViewModel`、`TrackInspectorViewModel`、`OutputSettingsViewModel`、`RunPanelViewModel`、`ResultDetailsViewModel`。
 - `SingleMuxViewModel` 保留为页面组合 ViewModel，暂时转发旧属性；XAML 绑定与 `UiSingleMuxContractChecks` 按区域逐块迁移。
+- 轨道行的增删和替换只经草稿；`Changed` 时按身份对账并保留行对象身份；源媒体元数据由 VM 按身份缓存；修订号通知不能早于行准备好。
 
 ### 4d 结果与关闭（中）
 
@@ -399,6 +465,7 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 | **4a-3** | `IPrepareImport` 接管接纳与校验；Domain SRT 时间轴和 ASS 用法规则由导入与 `RunSingleMuxUseCase` 共用；字幕只经 `MuxInputReader` 读取，Core `SubtitleText` 删除；装配显式共享端口；847/847 单元、受控 13/13（659/659）、真实 integration 121/121、media-drop-real 37/37；`compare-smoke-text.py 761eb99` 缺失 0 |
 | **4b-1** | Application `MuxDraft` 测试覆盖：同值赋值不增修订号、一次接纳批次只增一次、准备→提交、运行中锁定拒绝、`ToSpec()` 快照与后续修改隔离；另用 `MuxDraft` 构造提交 1 的 8 种草稿状态，`ToSpec()` 与冻结的 `MuxJobSpec` 逐个相等；旧 VM 草稿行为特征测试冻结通过；不接 VM、不改 XAML/Smoke/生产装配；只新增用例，受控计数不变；可直接推主分支 |
 | **4b-2** | ViewModel 中不再有 SC/TC 默认规则等业务代码，改为订阅 `MuxDraft` 后投影；草稿遗留 1–5 项处理完成；留在 `MuxDeck.Architecture.Tests` 的 26 条导入特征测试只改批准的调用入口并提供新旧逐条对照；静态 `MediaInputError` 与 `DefaultCollectFacts`/`DefaultPathFacts` 删除；UI、接纳、工作台、输入反馈、自动导入套件等于基准；1040×760 与 1280×900 截图与基线逐张对照无差异（差异须逐项说明）；本地 `--ui-integration` 等于基准；先推 `review/4b`，**推送主分支前经用户确认** |
+| **4b-3** | 未开始（计划已批准）：Contracts 草稿会话接口与数据、`MuxDraft` 实现、删除 Core `SingleMuxDraft` 与重复 DTO；Desktop VM API 与构造签名不变；不改架构测试，撞护栏停下报告；验证同 4b-2，推 `review/4b-3` |
 | **4c** | `SingleMuxViewModel` 只做组合与过渡转发；六个区域 ViewModel 的绑定均为编译绑定且构建通过；可访问名称不变；全部 UI 套件等于基准 |
 | **4d** | 结果详情直接展示结构化检查项、诊断与失败阶段，代码中不再对检查文本做字符串匹配；`MainWindow` 关闭只等待 `IOperationCoordinator.ShutdownAsync()`；关闭等待相关用例通过；两尺寸截图检查 |
 | **5** | `MuxDeck.Core`、旧模型、转换类与旧入口删除；架构测试无过渡例外；全部受控与真实套件等于基准（计数变化逐项说明）；`skeleton.md` “迁移前现状”改写为现状、两份 README 与 `verification.md` 已更新 |
@@ -421,7 +488,8 @@ Smoke 替身按文件迁移边界：`ComponentChecks.cs`、`ComponentCompletionC
 | [3e · 292f2af](https://github.com/Danyuyuyuyu/mux-deck/commit/292f2afd8441188bae47f09fbb86b255d311cea1) | 已完成，已推送，[Desktop CI 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38535828389)，head_sha=292f2af | locked restore 11/11；Release 0 警告 / 0 错误；test 777/777；受控 13/13、656/656；真实卸载 17/17 | 内存租约与 IManageComponents 已接入；原 717 保留，新增 60；Desktop/Smoke/ADR/护栏零改动；组件搬迁按批准留到 4a；见下方实际验证。 |
 | [4a-3 · `6483ddb`](https://github.com/Danyuyuyuyu/mux-deck/commit/6483ddb) + [缩进修正 · `756dca6`](https://github.com/Danyuyuyuyu/mux-deck/commit/756dca6) + [计数订正 · `61ed271`](https://github.com/Danyuyuyuyu/mux-deck/commit/61ed2712f395c3b498a416b1afa7cd2b890380db) | 已完成并合入 `v2/avalonia-rewrite`，[Desktop CI #38729598219 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38729598219)，head_sha=`61ed2712f395c3b498a416b1afa7cd2b890380db`；审查分支 `review/4a-3` 保留 | Release 0/0；test 847/847（本轮新增 14）；受控 13/13、659/659（卸载 UI 64）；integration 121/121；media-drop-real 37/37；Smoke 文案对照 missing 0 | ASS 用法迁移、共享 `MuxInputReader`/`SystemPathFacts`、Application 替身端口用例；另含 ASS 校验块缩进修正与受控计数订正；详见下方 4a-3 实施与实际验证。 |
 | [4b-1 · `5b43413`](https://github.com/Danyuyuyuyu/mux-deck/commit/5b43413) + [草稿模型 · `73ace12`](https://github.com/Danyuyuyuyu/mux-deck/commit/73ace12) + [补录 · `fc0e183`](https://github.com/Danyuyuyuyu/mux-deck/commit/fc0e183) + [助手同步 · `8902ee4`](https://github.com/Danyuyuyuyu/mux-deck/commit/8902ee4) + [CI 补录 · `f7942e8`](https://github.com/Danyuyuyuyu/mux-deck/commit/f7942e8) | 已完成，已推送 `v2/avalonia-rewrite`；[Desktop CI #38738041658 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38738041658)，head_sha=`fc0e183`（含 `5b43413` 与 `73ace12`）；[Desktop CI #38738711883 通过](https://github.com/Danyuyuyuyu/mux-deck/actions/runs/38738711883)，head_sha=`f7942e82011a643b5a14ea7be54087b1194ce119` | locked restore 11/11；Release 0 警告 / 0 错误；test 891/891（Domain 298、Application 198、Core 57、Architecture 260、Infrastructure 78；原 847 全部保留，本步新增 44：特征测试 27 + 草稿测试 17）；受控 13/13、659/659，逐套件与基准一致；反向验证 3 条 | Application `MuxDraft` 草稿会话模型与 `SingleMuxViewModel` 草稿行为特征测试；未接 VM、未改 XAML/Smoke、未碰 `MediaInputError` 与 `DefaultCollectFacts`；为新端口事实 `ContainsInvalidPathChars` 顺带改了 Domain `InputPathFacts` 与 Infrastructure `SystemPathFacts`；与冻结值只差槽位名称（简体/繁体 vs SC/TC），4b-2 处理；详见下方 4b-1 实施与实际验证。 |
-| 4b-2 | 已完成，已推 `review/4b`（`a1e1f50` 草稿补齐 + `73c2643` VM 接线与删除），待审查后合入 | locked restore；Release 0 警告 / 0 错误；test 976/976（Domain 298、Application 251、Core 57、Architecture 277、Infrastructure 93；基线 921 保留，新增 55）；受控 13/13、659/659；`--ui-integration` 39/39，请求 payload 归一后与基线一致；`compare-smoke-text.py` missing 0 / new 0；Smoke 与 XAML diff 为空；截图 AE 差异仅运行路径/时间戳（magick 未安装，BLOCKED，Pillow 等价证据与裁剪图已留档） | 草稿成为唯一数据源；同步 Prepare/Commit 与异步共用核心；原始 Path 判定、固定槽位事实、结构化原因、无效槽位、ToSpec 顺序、导入冲突/默认/原子提交；Core 过渡门面保持 ViewModel 不依赖 Application；删除旧 VM 接纳与静态默认；遗留 1–5 完成；详见 4b-2 实施与实际验证。 |
+| 4b-2 | 已完成审查修正，待追加提交后继续推 `review/4b` | locked restore；Release 0 警告 / 0 错误；test 985/985（Domain 298、Application 257、Core 57、Architecture 280、Infrastructure 93；基线 921 保留，累计新增 64）；受控 13/13、659/659；`--ui-integration` 39/39，请求 payload 归一后与基线一致；`compare-smoke-text.py` missing 0 / new 0；Smoke 与 XAML diff 为空；审查修正后 38 组截图 AE=0 为 0 组，逐组 bbox 见记录（magick 未安装，BLOCKED，Pillow 等价证据） | 草稿成为唯一数据源；`CreateDraft()` 每次新建实例；替换/移除失败不静默；`ISlotPathFacts` 合并端口；多音轨请求行；DraftText 显式错误映射；Core 门面为过渡债务，4b-3 删除；遗留 1–5 完成。 |
+| 4b-3 | 未开始 | | Contracts 草稿契约化计划已写入 4b-3 小节，等待实施。 |
 | 4c | 未开始 | | |
 | 4d | 未开始 | | |
 | 5 | 未开始 | | |
