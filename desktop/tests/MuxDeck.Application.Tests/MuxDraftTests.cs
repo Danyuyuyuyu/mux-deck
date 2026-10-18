@@ -594,7 +594,17 @@ public sealed class MuxDraftTests
 
         Assert.True(draft.AddExternalTrack(Audio("a1", "C:/in/a.mka", trackId: 7)).Succeeded);
         Assert.Equal(DraftCodes.Duplicate, draft.AddExternalTrack(Audio("a1", "C:/in/a.mka")).ErrorCode);
-        Assert.Equal(DraftCodes.Duplicate, draft.AddExternalTrack(Audio("a2", "C:/in/other.mka", trackId: 7)).ErrorCode);
+        // 不同路径、同轨号不再算冲突（与导入规则一致）；身份相同的重复添加仍被拒绝。
+        Assert.True(draft.AddExternalTrack(Audio("a2", "C:/in/other.mka", trackId: 7)).Succeeded);
+        Assert.Equal(2, draft.ExternalTracks.Count);
+    }
+
+    [Fact]
+    public void Same_path_and_track_id_still_conflicts_across_identities()
+    {
+        var draft = new MuxDraft(Facts());
+        Assert.True(draft.AddExternalTrack(Audio("a1", "C:/in/a.mka", trackId: 7)).Succeeded);
+        Assert.Equal(DraftCodes.Duplicate, draft.AddExternalTrack(Audio("a2", "C:/in/a.mka", trackId: 7)).ErrorCode);
         Assert.Single(draft.ExternalTracks);
     }
 

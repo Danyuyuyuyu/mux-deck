@@ -7,11 +7,17 @@ namespace MuxDeck.Infrastructure;
 /// <summary>
 /// 路径事实的唯一实现：同步收集供同步拖入反馈使用，异步端口直接包装同一同步实现。
 /// </summary>
-public sealed class SystemPathFacts : IPathFacts
+public sealed class SystemPathFacts : IPathFacts, ISyncPathFacts
 {
     public static SystemPathFacts Instance { get; } = new();
 
     public IReadOnlyList<InputPathFacts> Collect(IReadOnlyList<InputItem> items) => [.. items.Select(Collect)];
+
+    IReadOnlyList<InputPathFacts> ISyncPathFacts.Collect(IReadOnlyList<InputItem> items, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return CollectForFixedSlot(items);
+    }
 
     public InputPathFacts Collect(InputItem item)
     {
@@ -31,6 +37,38 @@ public sealed class SystemPathFacts : IPathFacts
     {
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(new EquatableArray<InputPathFacts>([.. Collect(items)]));
+    }
+
+    /// <summary>
+    /// 固定槽位接纳事实：与旧 ValidateCandidate 一致，先 GetFullPath 再裁剪末尾分隔符，
+    /// 存在性、扩展名与非法字符都基于裁剪后的路径；异常集合以旧 catch 为准。
+    /// </summary>
+    public IReadOnlyList<InputPathFacts> CollectForFixedSlot(IReadOnlyList<InputItem> items) =>
+        [.. items.Select(CollectForFixedSlot)];
+
+    public InputPathFacts CollectForFixedSlot(InputItem item)
+    {
+        // 完整路径判定在旧代码中位于 GetFullPath 之前，失败回退时也要保留原判定。
+        var fullyQualified = Path.IsPathFullyQualified(item.Path);
+        try
+        {
+            var normalized = Path.TrimEndingDirectorySeparator(Path.GetFullPath(item.Path));
+            var directory = item.Kind == InputLocationKind.LocalDirectory
+                ? normalized : Path.GetDirectoryName(normalized) ?? "";
+            return new(item.Path, fullyQualified, normalized, Path.GetExtension(normalized), directory,
+                item.Kind, File.Exists(normalized), Directory.Exists(normalized),
+                normalized.IndexOfAny(Path.GetInvalidPathChars()) >= 0, null);
+        }
+        catch (Exception exception) when (exception is ArgumentException or IOException or NotSupportedException or UnauthorizedAccessException)
+        {
+            return new(item.Path, fullyQualified, item.Path, "", "", item.Kind, false, false, false, exception.Message);
+        }
+    }
+
+    public Task<EquatableArray<InputPathFacts>> CollectSlotAsync(IReadOnlyList<InputItem> items, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(new EquatableArray<InputPathFacts>([.. CollectForFixedSlot(items)]));
     }
 
     private static string NormalizeDirectory(string path)
