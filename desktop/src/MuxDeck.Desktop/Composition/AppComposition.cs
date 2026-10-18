@@ -51,7 +51,8 @@ public static class AppComposition
             new RunSingleMuxUseCase(inputReader, new ToolReadiness(runner), prober,
                 new AfsSubsetter(runner), new MkvmergeMuxer(runner), new MkvextractExtractor(runner),
                 new MediaReferenceBuilder(runner), new MuxEvidenceReader(), new NoOverwritePublisher(), workspaces),
-            inputReader: inputReader, pathFacts: pathFacts, collectFacts: pathFacts.Collect, import: import);
+            inputReader: inputReader, pathFacts: pathFacts, collectFacts: pathFacts.Collect, import: import,
+            slotPathFacts: pathFacts);
     }
 
     public static SingleMuxViewModel CreateSingle(SingleMuxService service, UserPreferencesStore? preferences = null) =>

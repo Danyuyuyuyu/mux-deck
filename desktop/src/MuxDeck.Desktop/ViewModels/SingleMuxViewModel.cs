@@ -13,12 +13,13 @@ public sealed partial class SingleMuxViewModel : ObservableObject
 {
     private readonly SingleMuxService service;
     private readonly IProbeMedia prober;
+    private readonly SingleMuxDraft draft;
     private ToolConfiguration tools;
     private readonly Queue<string> logLines = new();
     private CancellationTokenSource? runCancellation;
     private CancellationTokenSource? probeCancellation;
     private readonly List<Task> probeTasks = [];
-    private string videoPath = "", scSubtitle = "", tcSubtitle = "", fontsDirectory = "", outputDirectory = "", outputFileName = "";
+    private bool projectingRows;
     private string log = "选择视频和至少一份 UTF-8 ASS，然后指定字体与输出目录。";
     private string statusText = "待开始", stageText = "尚未运行", probeText = "选择视频后显示源轨道。";
     private bool isRunning, isProbing, isClosing;
@@ -29,9 +30,8 @@ public sealed partial class SingleMuxViewModel : ObservableObject
     private MuxResult? result;
     private readonly ObservableCollection<TrackRowViewModel> sourceTracks = [], externalTracks = [];
     private readonly List<TrackRowViewModel> externalOrder = [];
-    private long draftRevision, submittedRevision, resultRevision;
-    private int configurationDepth;
-    private bool configurationChanged, isCancelling;
+    private long submittedRevision, resultRevision;
+    private bool isCancelling;
     private string interactionMessage = "", progressMessage = "";
     private VideoProbeState probeState;
     private MuxStage? progressStage;
@@ -51,6 +51,10 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         prober = service.Prober;
         tools = service.Tools;
         TrackColumns = columns;
+        // 草稿是唯一数据源；ViewModel 只保留展示投影与文件探测等视图状态。
+        draft = service.Draft;
+        draft.Changed += (_, _) => OnDraftChanged();
+        draft.EditabilityChanged += (_, _) => NotifyEditability();
         StartCommand = new(StartAsync, () => CanStart, ReportCommandError);
         CancelCommand = new(CancelAsync, () => CanCancel, ReportCommandError);
         SourceTracks = new(sourceTracks);
@@ -68,18 +72,57 @@ public sealed partial class SingleMuxViewModel : ObservableObject
     private async Task<MediaProbe> ProbeMediaAsync(string path, CancellationToken token) =>
         LegacyMuxContractConverter.ToLegacyProbe(await prober.ProbeAsync(path, tools, token).ConfigureAwait(false));
 
-    public TrackRowViewModel ScTrack { get; } = new() { Id = "SC", Type = "字幕", Codec = "ASS", Source = "外加 · 简体", Language = "zh-Hans", Name = "SC", IsDefault = TrackPolicy.InitialScDefault, IsEditable = true, Policy = "新增", Detail = "子集化后新增 ASS；固定语言 zh-Hans。轨道名称、默认与强制旗标可编辑。" };
-    public TrackRowViewModel TcTrack { get; } = new() { Id = "TC", Type = "字幕", Codec = "ASS", Source = "外加 · 繁体", Language = "zh-Hant", Name = "TC", IsDefault = TrackPolicy.InitialTcDefault, IsEditable = true, Policy = "新增", Detail = "子集化后新增 ASS；固定语言 zh-Hant。仅选择繁体时默认启用默认旗标。" };
-    public string VideoPath { get => videoPath; set { if (!CanEdit || !Set(ref videoPath, value)) return; sourceProbe = null; SelectedTrack = null; RebuildTracks(false); Raise(nameof(ResolvedOutputFileName)); NotifyVideoSummary(); MarkDraftChanged(); UpdateInputs(); _ = ProbeVideoAsync(); } }
-    public string ScSubtitle { get => scSubtitle; set => SetSubtitlePath(SubtitleSlot.Sc, value); }
-    public string TcSubtitle { get => tcSubtitle; set => SetSubtitlePath(SubtitleSlot.Tc, value); }
+    public TrackRowViewModel ScTrack { get; } = new() { Id = "SC", Slot = SubtitleSlot.Sc, Type = "字幕", Codec = "ASS", Source = "外加 · 简体", Language = "zh-Hans", Name = "SC", IsDefault = TrackPolicy.InitialScDefault, IsEditable = true, Policy = "新增", Detail = "子集化后新增 ASS；固定语言 zh-Hans。轨道名称、默认与强制旗标可编辑。" };
+    public TrackRowViewModel TcTrack { get; } = new() { Id = "TC", Slot = SubtitleSlot.Tc, Type = "字幕", Codec = "ASS", Source = "外加 · 繁体", Language = "zh-Hant", Name = "TC", IsDefault = TrackPolicy.InitialTcDefault, IsEditable = true, Policy = "新增", Detail = "子集化后新增 ASS；固定语言 zh-Hant。仅选择繁体时默认启用默认旗标。" };
+    public string VideoPath
+    {
+        get => draft.VideoPath;
+        set
+        {
+            if (!CanEdit || draft.VideoPath == value) return;
+            if (!draft.SetVideoPath(value).Succeeded) return;
+            sourceProbe = null; SelectedTrack = null; RebuildTracks(false);
+            Raise(nameof(VideoPath)); Raise(nameof(ResolvedOutputFileName)); NotifyVideoSummary(); UpdateInputs();
+            _ = ProbeVideoAsync();
+        }
+    }
+    public string ScSubtitle { get => draft.PathFor(DraftSlot.Sc); set => SetSubtitlePath(SubtitleSlot.Sc, value); }
+    public string TcSubtitle { get => draft.PathFor(DraftSlot.Tc); set => SetSubtitlePath(SubtitleSlot.Tc, value); }
     // 目录值变化同步菜单可用性和提交条件。
-    public string FontsDirectory { get => fontsDirectory; set { if (CanEdit && Set(ref fontsDirectory, value)) { Raise(nameof(HasFontsDirectory)); MarkDraftChanged(); UpdateInputs(); } } }
-    public string OutputDirectory { get => outputDirectory; set { if (CanEdit && Set(ref outputDirectory, value)) { Raise(nameof(HasOutputDirectory)); MarkDraftChanged(); UpdateInputs(); } } }
-    public string OutputFileName { get => outputFileName; set { if (!CanEdit || !Set(ref outputFileName, value)) return; Raise(nameof(ResolvedOutputFileName)); MarkDraftChanged(); UpdateInputs(); } }
-    public string ResolvedOutputFileName => OutputNaming.ResolvePreview(OutputFileName,
-        string.IsNullOrWhiteSpace(VideoPath) ? null : Path.GetFileNameWithoutExtension(VideoPath));
-    public bool IsRunning { get => isRunning; private set { if (!Set(ref isRunning, value)) return; NotifyEditability(); CancelCommand.NotifyCanExecuteChanged(); } }
+    public string FontsDirectory
+    {
+        get => draft.FontsDirectory;
+        set
+        {
+            if (!CanEdit || draft.FontsDirectory == value) return;
+            if (!draft.SetFontsDirectory(value).Succeeded) return;
+            Raise(nameof(FontsDirectory)); Raise(nameof(HasFontsDirectory)); UpdateInputs();
+        }
+    }
+    public string OutputDirectory
+    {
+        get => draft.OutputDirectory;
+        set
+        {
+            if (!CanEdit || draft.OutputDirectory == value) return;
+            if (!draft.SetOutputDirectory(value).Succeeded) return;
+            Raise(nameof(OutputDirectory)); Raise(nameof(HasOutputDirectory)); UpdateInputs();
+        }
+    }
+    public string OutputFileName
+    {
+        get => draft.OutputFileName;
+        set
+        {
+            if (!CanEdit || draft.OutputFileName == value) return;
+            if (!draft.SetOutputFileName(value).Succeeded) return;
+            Raise(nameof(OutputFileName)); Raise(nameof(ResolvedOutputFileName)); UpdateInputs();
+        }
+    }
+    // 占位文案只属于界面；Domain 在无源视频时返回 null。
+    public string ResolvedOutputFileName => OutputNaming.ResolvePreview(OutputFileName, draft.VideoBaseName)
+        ?? OutputNaming.DefaultFileName("源文件名");
+    public bool IsRunning { get => isRunning; private set { if (!Set(ref isRunning, value)) return; UpdateDraftLock(); CancelCommand.NotifyCanExecuteChanged(); } }
     public bool IsProbing { get => isProbing; private set => Set(ref isProbing, value); }
     private int activeToolProbes;
     public bool HasActiveToolProbes => Volatile.Read(ref activeToolProbes) > 0;
@@ -97,7 +140,7 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         set
         {
             if (!Set(ref componentUninstalling, value)) return;
-            NotifyEditability();
+            UpdateDraftLock();
             Raise(nameof(ActionBarSummary));
         }
     }
@@ -149,7 +192,7 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         return $"{seconds / 3600:00}:{seconds / 60 % 60:00}:{seconds % 60:00}";
     }
     public VideoProbeState ProbeState { get => probeState; private set { if (Set(ref probeState, value)) { Raise(nameof(VideoSummaryLine)); NotifyState(); } } }
-    public long DraftRevision => draftRevision;
+    public long DraftRevision => draft.DraftRevision;
     public long? ResultRevision => Result is null ? null : resultRevision;
     public bool IsResultHistorical => Result is not null && (resultRevision != DraftRevision || IsRunning);
     public string ResultLabel => Result is null ? "尚无结果" : IsResultHistorical ? "上次结果" : "当前配置结果";
@@ -305,67 +348,130 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         Raise(nameof(CanEdit)); Raise(nameof(CanEditSelectedTrack));
         foreach (var row in externalOrder.Concat(new[] { ScTrack, TcTrack }).Distinct()) row.NotifyEditability(); UpdateInputs();
     }
+
+    // 三个锁定来源任一变化都同步草稿锁；草稿的 EditabilityChanged 负责通知行与输入条件。
+    private void UpdateDraftLock() => draft.SetLocked(!CanEdit);
     private void NotifyVideoSummary()
     {
         foreach (var name in new[] { nameof(VideoFileName), nameof(VideoFullPath), nameof(VideoDimensions), nameof(VideoCodec), nameof(VideoDurationNanoseconds), nameof(MediaSummary), nameof(SourceAttachments), nameof(SourceAttachmentCount), nameof(SourceTrackCount), nameof(HasVideo), nameof(VideoDisplayName), nameof(DisplayDuration), nameof(DisplayMediaSummary), nameof(VideoSummaryLine), nameof(SourceGroupTitle), nameof(HasSourceAttachments), nameof(SourceAttachmentSummary), nameof(SelectedTrackFilePath) }) Raise(name);
     }
-    private void MarkDraftChanged()
+    private void OnDraftChanged()
     {
-        if (configurationDepth > 0) { configurationChanged = true; return; }
-        draftRevision++;
+        SyncRowsFromDraft();
         Raise(nameof(DraftRevision)); NotifyState();
         // 旧视图也不再把新草稿显示为已成功；完整结果和任务日志仍保留。
         if (IsResultHistorical) StatusText = "草稿已修改 · 上次结果：" + FormatStatus(Result!);
     }
-    private void ChangeConfiguration(Action change)
+
+    // 行是展示投影：草稿变化时只同步已有行，结构增删由调用入口负责，避免重建对象身份。
+    private void SyncRowsFromDraft()
     {
-        configurationDepth++;
-        try { change(); }
-        finally
+        projectingRows = true;
+        try
         {
-            configurationDepth--;
-            if (configurationDepth == 0 && configurationChanged) { configurationChanged = false; MarkDraftChanged(); }
+            SyncSlotRow(ScTrack, draft.Sc);
+            SyncSlotRow(TcTrack, draft.Tc);
+            foreach (var row in externalOrder)
+            {
+                var track = draft.ExternalTracks.FirstOrDefault(item => item.Identity == row.Id);
+                if (track is null) continue;
+                row.InputPath = track.Path;
+                row.Name = track.Name;
+                row.IsDefault = track.Flags.IsDefault;
+                row.IsForced = track.Flags.IsForced;
+                row.IsIncluded = track.IsIncluded;
+            }
         }
+        finally { projectingRows = false; }
     }
+
+    private static void SyncSlotRow(TrackRowViewModel row, DraftSlotState snapshot)
+    {
+        row.InputPath = snapshot.Path;
+        row.Name = snapshot.Name;
+        row.IsDefault = snapshot.IsDefault;
+        row.IsForced = snapshot.IsForced;
+        row.IsIncluded = snapshot.IsIncluded;
+    }
+
     private void SubtitlePropertyChanged(object? sender, PropertyChangedEventArgs args)
     {
-        if (args.PropertyName is nameof(TrackRowViewModel.Name) or nameof(TrackRowViewModel.IsDefault) or nameof(TrackRowViewModel.IsForced) or nameof(TrackRowViewModel.IsIncluded))
-        { MarkDraftChanged(); UpdateInputs(); }
+        if (projectingRows) return;
+        if (args.PropertyName is not (nameof(TrackRowViewModel.Name) or nameof(TrackRowViewModel.IsDefault)
+            or nameof(TrackRowViewModel.IsForced) or nameof(TrackRowViewModel.IsIncluded))) return;
+        if (sender is TrackRowViewModel row)
+        {
+            if (row.Slot is { } slot)
+            {
+                var target = Map(slot);
+                var outcome = args.PropertyName switch
+                {
+                    nameof(TrackRowViewModel.Name) => draft.SetSubtitleName(target, row.Name),
+                    nameof(TrackRowViewModel.IsDefault) => draft.SetSubtitleDefault(target, row.IsDefault),
+                    nameof(TrackRowViewModel.IsForced) => draft.SetSubtitleForced(target, row.IsForced),
+                    _ => draft.SetSubtitleIncludedRaw(target, row.IsIncluded)
+                };
+                if (!outcome.Succeeded) SyncRowsFromDraft();
+            }
+            else
+            {
+                var outcome = args.PropertyName switch
+                {
+                    nameof(TrackRowViewModel.Name) => draft.SetExternalName(row.Id, row.Name),
+                    nameof(TrackRowViewModel.IsDefault) => draft.SetExternalDefault(row.Id, row.IsDefault),
+                    nameof(TrackRowViewModel.IsForced) => draft.SetExternalForced(row.Id, row.IsForced),
+                    _ => draft.SetExternalIncluded(row.Id, row.IsIncluded)
+                };
+                if (!outcome.Succeeded) SyncRowsFromDraft();
+            }
+        }
+        UpdateInputs();
     }
+
     private TrackRowViewModel SlotTrack(SubtitleSlot slot) => slot == SubtitleSlot.Sc ? ScTrack : TcTrack;
-    private string SlotPath(SubtitleSlot slot) => slot == SubtitleSlot.Sc ? ScSubtitle : TcSubtitle;
+    private string SlotPath(SubtitleSlot slot) => draft.PathFor(Map(slot));
+    private static DraftSlot Map(SubtitleSlot slot) => slot switch
+    {
+        SubtitleSlot.Sc => DraftSlot.Sc,
+        SubtitleSlot.Tc => DraftSlot.Tc,
+        // 保留未知值交给草稿报 InvalidSlot。
+        _ => DraftSlot.Unknown
+    };
+
     private void SetSubtitlePath(SubtitleSlot slot, string value)
     {
         if (!CanEdit || SlotPath(slot) == value) return;
-        ChangeConfiguration(() =>
+        var hadSubtitle = !string.IsNullOrWhiteSpace(SlotPath(slot));
+        if (!draft.SetSubtitlePath(Map(slot), value).Succeeded) return;
+        var row = SlotTrack(slot);
+        row.InputPath = value;
+        // 同槽替换（含移除）后所选轨道身份不变，面板路径要跟随真实 InputPath 刷新。
+        if (ReferenceEquals(SelectedTrack, row)) Raise(nameof(SelectedTrackFilePath));
+        if (hadSubtitle != !string.IsNullOrWhiteSpace(value))
         {
-            var hadSubtitle = !string.IsNullOrWhiteSpace(SlotPath(slot));
-            if (slot == SubtitleSlot.Sc) Set(ref scSubtitle, value, nameof(ScSubtitle)); else Set(ref tcSubtitle, value, nameof(TcSubtitle));
-            SlotTrack(slot).InputPath = value;
-            // 同槽替换（含移除）后所选轨道身份不变，面板路径要跟随真实 InputPath 刷新。
-            if (ReferenceEquals(SelectedTrack, SlotTrack(slot))) Raise(nameof(SelectedTrackFilePath));
-            if (hadSubtitle != !string.IsNullOrWhiteSpace(value))
-            {
-                if (hadSubtitle) externalOrder.Remove(SlotTrack(slot)); else externalOrder.Add(SlotTrack(slot));
-                SlotTrack(slot).IsIncluded = true;
-                ApplySubtitleDefaults();
-            }
-            MarkDraftChanged(); RebuildTracks(); UpdateInputs();
-        });
+            if (hadSubtitle) externalOrder.Remove(row); else externalOrder.Add(row);
+        }
+        Raise(slot == SubtitleSlot.Sc ? nameof(ScSubtitle) : nameof(TcSubtitle));
+        RebuildTracks(); UpdateInputs();
     }
     public InputAcceptanceResult RemoveSubtitle(SubtitleSlot slot)
     {
-        if (!CanEdit) return Reject(InputAcceptanceError.Locked, "当前正在运行、取消清理或关闭等待，不能修改输入。");
-        if (!InputRules.IsSubtitleSlot((int)slot)) return Reject(InputAcceptanceError.InvalidSlot, "字幕槽位必须是 SC 或 TC。");
+        if (!CanEdit) return Reject(InputAcceptanceError.Locked, DraftText.Describe(DraftEntry.Remove, InputOperation.Subtitles, DraftErrorKind.Locked, DraftFailureReason.None, null));
+        if (!InputRules.IsSubtitleSlot((int)slot))
+            return Reject(InputAcceptanceError.InvalidSlot, DraftText.Describe(DraftEntry.Remove, InputOperation.Subtitles, DraftErrorKind.InvalidSlot, DraftFailureReason.None, null));
         SetSubtitlePath(slot, "");
         return AcceptMessage("已移除 " + slot.ToString().ToUpperInvariant() + " 字幕。");
     }
     public InputAcceptanceResult SetSubtitleIncluded(SubtitleSlot slot, bool included)
     {
-        if (!CanEdit) return Reject(InputAcceptanceError.Locked, "当前不能修改字幕启用状态。");
-        if (!InputRules.IsSubtitleSlot((int)slot)) return Reject(InputAcceptanceError.InvalidSlot, "字幕槽位必须是 SC 或 TC。");
-        if (string.IsNullOrWhiteSpace(SlotPath(slot))) return Reject(InputAcceptanceError.MissingPath, "该槽位尚未添加 ASS。");
-        SlotTrack(slot).IsIncluded = included;
+        if (!CanEdit) return Reject(InputAcceptanceError.Locked, DraftText.Describe(DraftEntry.SetIncluded, InputOperation.Subtitles, DraftErrorKind.Locked, DraftFailureReason.None, null));
+        if (!InputRules.IsSubtitleSlot((int)slot))
+            return Reject(InputAcceptanceError.InvalidSlot, DraftText.Describe(DraftEntry.SetIncluded, InputOperation.Subtitles, DraftErrorKind.InvalidSlot, DraftFailureReason.None, null));
+        var outcome = draft.SetSubtitleIncluded(Map(slot), included);
+        if (!outcome.Succeeded)
+            return Reject(DraftText.ToError(outcome.Error),
+                DraftText.Describe(DraftEntry.SetIncluded, InputOperation.Subtitles, outcome.Error, outcome.Reason, outcome.Detail));
+        UpdateInputs();
         return AcceptMessage(included ? "字幕已加入本次输出。" : "字幕暂不加入；路径、名称与旗标已保留。");
     }
 
@@ -375,107 +481,82 @@ public sealed partial class SingleMuxViewModel : ObservableObject
     public InputAcceptanceResult PrepareOutputDirectory(IReadOnlyList<InputCandidate> candidates) => PrepareInput(InputOperation.OutputDirectory, candidates, []);
     private InputAcceptanceResult Reject(InputAcceptanceError error, string message) { ReportInteractionMessage(message); return new(error, message); }
     private InputAcceptanceResult AcceptMessage(string message) { ReportInteractionMessage(message, NotificationKind.Success); return new(InputAcceptanceError.None, message); }
-    private static bool SamePath(string left, string right)
+
+    private static DraftOperationKind Operation(InputOperation operation) => operation switch
     {
-        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) return left == right;
-        try { return InputRules.SameNormalizedPath(Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)), ignoreCase: true); }
-        catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException) { return false; }
-    }
-    private InputAcceptanceResult? ValidateCandidate(InputCandidate candidate, InputOperation operation, out InputCandidate normalized)
-    {
-        normalized = candidate;
-        var folder = operation is InputOperation.FontsDirectory or InputOperation.OutputDirectory;
-        var kindError = InputRules.CheckCandidateKind(candidate.LocationKind, folder);
-        if (kindError == InputKindError.NonLocal) return Reject(InputAcceptanceError.NonLocal, "只接受系统提供的本地文件或文件夹；URL 和纯文本路径不受支持。");
-        if (kindError == InputKindError.WrongType) return Reject(InputAcceptanceError.WrongType, folder ? "请选择单个本地文件夹。" : "这里只接受本地文件。");
-        var path = candidate.Path;
-        // 接纳使用 Windows 绝对路径；旧直接属性赋值仍允许 Smoke 的内部假路径。
-        if (!InputRules.AcceptsFixedSlotPath(path, path is not null && Path.IsPathFullyQualified(path)))
-            return Reject(InputAcceptanceError.InvalidPath, "需要完整的 Windows 本地路径。");
-        try
-        {
-            path = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
-            if (!InputRules.AcceptsNormalizedPathSyntax(path, path.IndexOfAny(Path.GetInvalidPathChars()) >= 0)) return Reject(InputAcceptanceError.InvalidPath, "路径含有无效字符或数据流标记。");
-            if (folder ? !Directory.Exists(path) : !File.Exists(path)) return Reject(InputAcceptanceError.MissingPath, folder ? "文件夹不存在或不可访问。" : "文件不存在或不可访问。");
-            if (!folder)
-            {
-                var extension = Path.GetExtension(path);
-                if (!InputRules.AcceptsFixedSlotExtension(extension, operation == InputOperation.Video))
-                    return Reject(InputAcceptanceError.WrongType, operation == InputOperation.Video ? "视频仅支持 MKV/MP4。" : "字幕仅支持 ASS。");
-            }
-        }
-        catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException or UnauthorizedAccessException)
-        { return Reject(InputAcceptanceError.InvalidPath, "路径无效或不可访问：" + ex.Message); }
-        normalized = candidate with { Path = path };
-        return null;
-    }
+        InputOperation.Video => DraftOperationKind.Video,
+        InputOperation.Subtitles => DraftOperationKind.Subtitles,
+        InputOperation.FontsDirectory => DraftOperationKind.FontsDirectory,
+        _ => DraftOperationKind.OutputDirectory
+    };
+
+    private static DraftCandidateItem Candidate(InputCandidate candidate) =>
+        new(candidate.Path, candidate.LocationKind);
+
     private InputAcceptanceResult PrepareInput(InputOperation operation, IReadOnlyList<InputCandidate> candidates, IReadOnlyList<SubtitleAssignment> assignments)
     {
-        if (!CanEdit) return Reject(InputAcceptanceError.Locked, "当前正在运行、取消清理或关闭等待，不能接纳输入。");
-        var normalizedCandidates = new List<InputCandidate>();
-        var normalizedAssignments = new List<SubtitleAssignment>();
-        var requiresConfirmation = false;
-        if (operation == InputOperation.Subtitles)
-        {
-            if (!InputRules.AcceptsSelectionCount(assignments.Count, subtitleSlots: true)) return Reject(InputAcceptanceError.InvalidCount, "一次接纳 1–2 个 ASS，并明确分配到 SC/TC。");
-            foreach (var assignment in assignments)
-            {
-                if (!InputRules.IsSubtitleSlotAvailable((int)assignment.Slot, normalizedAssignments.Select(a => (int)a.Slot))) return Reject(InputAcceptanceError.InvalidSlot, "每个 SC/TC 槽位只能分配一次。");
-                var error = ValidateCandidate(assignment.Candidate, operation, out var candidate);
-                if (error is not null) return error;
-                normalizedAssignments.Add(assignment with { Candidate = candidate });
-                requiresConfirmation |= InputRules.RequiresReplacement(SlotPath(assignment.Slot), SamePath(SlotPath(assignment.Slot), candidate.Path));
-            }
-            // 与最终槽位集合比较；整组交换合法，不能拿将被替换的旧槽位误报重复。
-            var finalSc = normalizedAssignments.FirstOrDefault(a => a.Slot == SubtitleSlot.Sc)?.Candidate.Path ?? ScSubtitle;
-            var finalTc = normalizedAssignments.FirstOrDefault(a => a.Slot == SubtitleSlot.Tc)?.Candidate.Path ?? TcSubtitle;
-            if (InputRules.SubtitlePathsConflict(finalSc, finalTc, SamePath(finalSc, finalTc))) return Reject(InputAcceptanceError.Duplicate, "同一 ASS 路径不能同时分配到 SC 和 TC。");
-        }
-        else
-        {
-            if (!InputRules.AcceptsSelectionCount(candidates.Count, subtitleSlots: false)) return Reject(InputAcceptanceError.InvalidCount, operation == InputOperation.Video ? "一次只能接纳一个 MKV/MP4 视频。" : "一次只能接纳一个文件夹。");
-            var error = ValidateCandidate(candidates[0], operation, out var candidate);
-            if (error is not null) return error;
-            normalizedCandidates.Add(candidate);
-            requiresConfirmation = operation == InputOperation.Video && InputRules.RequiresReplacement(VideoPath, SamePath(VideoPath, candidate.Path));
-        }
-        return new(InputAcceptanceError.None, requiresConfirmation ? "将替换已有输入，请明确确认。" : "候选有效，等待提交。",
-            new(this, operation, DraftRevision, normalizedCandidates, normalizedAssignments, requiresConfirmation));
+        if (!CanEdit) return Reject(InputAcceptanceError.Locked, DraftText.Describe(DraftEntry.Prepare, operation, DraftErrorKind.Locked, DraftFailureReason.None, null));
+        var prepared = draft.Prepare(Operation(operation),
+            candidates.Select(Candidate).ToArray(),
+            assignments.Select(assignment => new DraftSlotAssignment(Map(assignment.Slot), Candidate(assignment.Candidate))).ToArray());
+        if (!prepared.Succeeded)
+            return Reject(DraftText.ToError(prepared.Error),
+                DraftText.Describe(DraftEntry.Prepare, operation, prepared.Error, prepared.Reason, prepared.Detail));
+        var message = prepared.RequiresConfirmation ? "将替换已有输入，请明确确认。" : "候选有效，等待提交。";
+        return new(InputAcceptanceError.None, message, new InputAcceptancePlan(this, operation, prepared.Plan!));
     }
+
     public InputAcceptanceResult CommitInput(InputAcceptancePlan plan, bool replacementsConfirmed = false)
     {
-        if (!CanEdit) return Reject(InputAcceptanceError.Locked, "当前正在运行、取消清理或关闭等待，不能提交输入。");
-        if (!ReferenceEquals(plan.Owner, this) || plan.DraftRevision != DraftRevision) return Reject(InputAcceptanceError.Stale, "候选确认期间草稿已变化，请重新分配和确认。");
-        // 选择器和确认框可能迟到；提交时重新检查全组存在性、重复和编辑锁。
-        var validation = PrepareInput(plan.Operation, plan.Candidates, plan.Assignments);
-        if (!validation.Succeeded) return validation;
-        if (validation.Plan!.RequiresReplacementConfirmation && !replacementsConfirmed) return Reject(InputAcceptanceError.ConfirmationRequired, "替换已有视频或字幕需要明确确认。");
-        ChangeConfiguration(() =>
-        {
-            if (plan.Operation == InputOperation.Subtitles)
-            {
-                foreach (var assignment in plan.Assignments)
-                    if (!SamePath(SlotPath(assignment.Slot), assignment.Candidate.Path)) SetSubtitlePath(assignment.Slot, assignment.Candidate.Path);
-            }
-            else
-            {
-                var path = plan.Candidates[0].Path;
-                switch (plan.Operation)
-                {
-                    case InputOperation.Video: if (!SamePath(VideoPath, path)) VideoPath = path; break;
-                    case InputOperation.FontsDirectory: if (!SamePath(FontsDirectory, path)) FontsDirectory = path; break;
-                    case InputOperation.OutputDirectory: if (!SamePath(OutputDirectory, path)) OutputDirectory = path; break;
-                }
-            }
-        });
+        if (!CanEdit) return Reject(InputAcceptanceError.Locked,
+            DraftText.Describe(DraftEntry.Commit, plan?.Operation ?? InputOperation.Video, DraftErrorKind.Locked, DraftFailureReason.None, null));
+        if (!ReferenceEquals(plan.Owner, this) || plan.DraftRevision != DraftRevision)
+            return Reject(InputAcceptanceError.Stale,
+                DraftText.Describe(DraftEntry.Commit, plan.Operation, DraftErrorKind.Stale, DraftFailureReason.None, null));
+        // 选择器和确认框可能迟到；提交时重新收集事实并跑同一校验核心。
+        var videoBefore = draft.VideoPath;
+        var fontsBefore = draft.FontsDirectory;
+        var outputBefore = draft.OutputDirectory;
+        var revisionBefore = DraftRevision;
+        var outcome = draft.Commit(plan.DraftPlan, replacementsConfirmed);
+        if (!outcome.Succeeded)
+            return Reject(DraftText.ToError(outcome.Error),
+                DraftText.Describe(DraftEntry.Commit, plan.Operation, outcome.Error, outcome.Reason, outcome.Detail));
+        // 同值提交不重建、不重复探测；旧 SetSubtitlePath/直接属性赋值同样视为无害。
+        if (DraftRevision != revisionBefore) SyncAfterCommit(plan, videoBefore, fontsBefore, outputBefore);
         return AcceptMessage(plan.Operation == InputOperation.FontsDirectory ? "字体目录已设置，封装时检查；尚未扫描或预检。" : "输入已接纳。");
     }
-    private void ApplySubtitleDefaults()
+
+    private void SyncAfterCommit(InputAcceptancePlan plan, string videoBefore, string fontsBefore, string outputBefore)
     {
-        // 只在输入组合改变时应用简繁约定，之后的显式旗标修改保留到提交快照。
-        var defaults = TrackPolicy.SubtitleDefaults(!string.IsNullOrWhiteSpace(ScSubtitle), !string.IsNullOrWhiteSpace(TcSubtitle));
-        ScTrack.IsDefault = defaults.Sc;
-        TcTrack.IsDefault = defaults.Tc;
+        switch (plan.Operation)
+        {
+            case InputOperation.Subtitles:
+                foreach (var assignment in plan.Assignments)
+                {
+                    var row = SlotTrack(assignment.Slot);
+                    row.InputPath = draft.PathFor(Map(assignment.Slot));
+                    if (ReferenceEquals(SelectedTrack, row)) Raise(nameof(SelectedTrackFilePath));
+                    var present = !string.IsNullOrWhiteSpace(row.InputPath);
+                    if (present && !externalOrder.Contains(row)) externalOrder.Add(row);
+                    if (!present) externalOrder.Remove(row);
+                }
+                Raise(nameof(ScSubtitle)); Raise(nameof(TcSubtitle));
+                RebuildTracks();
+                break;
+            case InputOperation.Video when draft.VideoPath != videoBefore:
+                sourceProbe = null; SelectedTrack = null; RebuildTracks(false);
+                Raise(nameof(VideoPath)); Raise(nameof(ResolvedOutputFileName)); NotifyVideoSummary();
+                _ = ProbeVideoAsync();
+                break;
+            case InputOperation.FontsDirectory when draft.FontsDirectory != fontsBefore:
+                Raise(nameof(FontsDirectory)); Raise(nameof(HasFontsDirectory));
+                break;
+            case InputOperation.OutputDirectory when draft.OutputDirectory != outputBefore:
+                Raise(nameof(OutputDirectory)); Raise(nameof(HasOutputDirectory));
+                break;
+        }
+        UpdateInputs();
     }
     private void RebuildTracks(bool selectFallback = true)
     {
@@ -486,7 +567,8 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         {
             foreach (var track in sourceProbe.Tracks)
             {
-                var row = new TrackRowViewModel { Id = track.Id.ToString(), Type = track.Type switch { "video" => "视频", "audio" => "音频", "subtitles" => "字幕", _ => track.Type }, Codec = track.Codec, Source = "源视频 · 内封", Language = track.LanguageIetf ?? track.Language, LegacyLanguage = track.Language, LanguageIetf = track.LanguageIetf, CodecId = track.CodecId, PixelDimensions = track.PixelDimensions, AudioChannels = track.AudioChannels, Name = track.Name, IsDefault = track.IsDefault, IsForced = track.IsForced, HasDefaultFlag = track.HasDefaultFlag, HasForcedFlag = track.HasForcedFlag, Policy = TrackPolicy.RetainsSource(track.Type switch { "video" => TrackKind.Video, "audio" => TrackKind.Audio, "subtitles" => TrackKind.Subtitle, _ => TrackKind.Unknown }) ? "保留" : "移除", Detail = $"{track.PixelDimensions ?? ""} { (track.AudioChannels is { } channels ? channels + " 声道" : "") } {track.CodecId}".Trim() };
+                var sourceRetained = TrackPolicy.RetainsSource(track.Type switch { "video" => TrackKind.Video, "audio" => TrackKind.Audio, "subtitles" => TrackKind.Subtitle, _ => TrackKind.Unknown });
+                var row = new TrackRowViewModel { Id = track.Id.ToString(), Type = track.Type switch { "video" => "视频", "audio" => "音频", "subtitles" => "字幕", _ => track.Type }, Codec = track.Codec, Source = "源视频 · 内封", Language = track.LanguageIetf ?? track.Language, LegacyLanguage = track.Language, LanguageIetf = track.LanguageIetf, CodecId = track.CodecId, PixelDimensions = track.PixelDimensions, AudioChannels = track.AudioChannels, Name = track.Name, IsDefault = track.IsDefault, IsForced = track.IsForced, HasDefaultFlag = track.HasDefaultFlag, HasForcedFlag = track.HasForcedFlag, SourceRetained = sourceRetained, Policy = sourceRetained ? "保留" : "移除", Detail = $"{track.PixelDimensions ?? ""} { (track.AudioChannels is { } channels ? channels + " 声道" : "") } {track.CodecId}".Trim() };
                 row.SetEditGuard(() => false);
                 sourceTracks.Add(row); Tracks.Add(row);
             }
@@ -593,13 +675,8 @@ public sealed partial class SingleMuxViewModel : ObservableObject
     public Task StartAsync()
     {
         if (!CanStart) return Task.CompletedTask;
-        var subtitles = new List<SubtitleInput>();
-        if (!string.IsNullOrWhiteSpace(ScSubtitle) && ScTrack.IsIncluded) subtitles.Add(new(ScSubtitle, ScTrack.Name, ScTrack.Language, ScTrack.IsDefault, ScTrack.IsForced));
-        if (!string.IsNullOrWhiteSpace(TcSubtitle) && TcTrack.IsIncluded) subtitles.Add(new(TcSubtitle, TcTrack.Name, TcTrack.Language, TcTrack.IsDefault, TcTrack.IsForced));
-        subtitles.AddRange(externalOrder.Where(t => t.IsIncluded && t.IsSubtitle && t.Id is not ("SC" or "TC")).Select(t => new SubtitleInput(t.InputPath, t.Name, t.Language, t.IsDefault, t.IsForced)));
-        var request = new MuxRequest(VideoPath, subtitles.ToArray(), FontsDirectory, OutputDirectory, string.IsNullOrWhiteSpace(OutputFileName) ? null : OutputFileName)
-        { Audios = externalOrder.Where(t => t.IsIncluded && t.IsAudio).Select(t => new AudioInput(t.InputPath, t.OriginTrackId, t.Name, t.Language, t.IsDefault, t.IsForced)).ToArray() };
-        // 此处构造本次不可变快照，执行中即使导航切页也不会改变提交参数。
+        // 草稿直接生成规格，执行中即使导航切页也不会改变已提交参数。
+        var spec = draft.ToSpec(tools);
         IsRunning = true;
         submittedRevision = DraftRevision;
         isCancelling = false; Raise(nameof(IsCancelling));
@@ -609,14 +686,14 @@ public sealed partial class SingleMuxViewModel : ObservableObject
         Percent = 0;
         IsIndeterminate = true;
         runCancellation = new();
-        RunTask = RunCoreAsync(request, tools, runCancellation);
+        RunTask = RunCoreAsync(spec, tools, runCancellation);
         return RunTask;
     }
-    private async Task RunCoreAsync(MuxRequest request, ToolConfiguration configuration, CancellationTokenSource cancellation)
+    private async Task RunCoreAsync(MuxJobSpec spec, ToolConfiguration configuration, CancellationTokenSource cancellation)
     {
         try
         {
-            AppendLog("开始封装：" + Path.GetFileName(request.VideoPath));
+            AppendLog("开始封装：" + Path.GetFileName(spec.VideoPath));
             var progress = new UiProgress(value =>
             {
                 if (!IsRunning || cancellation.IsCancellationRequested || !ReferenceEquals(runCancellation, cancellation)) return;
@@ -626,7 +703,7 @@ public sealed partial class SingleMuxViewModel : ObservableObject
                 Percent = Math.Clamp(value.Percent ?? 0, 0, 100);
                 AppendLog(value.Message);
             });
-            Result = await Task.Run(() => service.RunAsync(request, configuration, progress, cancellation.Token));
+            Result = await Task.Run(() => service.RunSpecAsync(spec, configuration, progress, cancellation.Token));
             StatusText = FormatStatus(Result);
             StageText = Result.Status == MuxStatus.Succeeded ? "完成" : StatusText;
             IsIndeterminate = false;
@@ -651,7 +728,7 @@ public sealed partial class SingleMuxViewModel : ObservableObject
     public async Task CancelAndWaitAsync()
     {
         isClosing = true;
-        Raise(nameof(IsClosing)); NotifyEditability();
+        Raise(nameof(IsClosing)); UpdateDraftLock();
         probeCancellation?.Cancel();
         outputProbeCancellation?.Cancel();
         importCancellation.Cancel();

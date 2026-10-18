@@ -11,29 +11,41 @@ namespace MuxDeck.Core.Muxing;
 public sealed class SingleMuxService
 {
     private readonly Func<ITaskWorkspaceFactory, IRunSingleMux> createRun;
+    private readonly IPathFacts? pathFacts;
+    private readonly Func<IReadOnlyList<InputItem>, IReadOnlyList<InputPathFacts>>? collectFacts;
+    private readonly IPrepareImport? import;
+    private readonly ISyncPathFacts? slotPathFacts;
+    private readonly SingleMuxDraft? draft;
     public ToolConfiguration Tools { get; }
     public IProbeMedia Prober { get; }
     public IMuxInputReader InputReader { get; }
-    public IPathFacts PathFacts { get; }
-    // 拖入反馈的同步入口：与异步端口同一份事实实现，由装配注入（默认取 Infrastructure 的实现）。
-    public Func<IReadOnlyList<InputItem>, IReadOnlyList<InputPathFacts>> CollectFacts { get; }
-    public static Func<IReadOnlyList<InputItem>, IReadOnlyList<InputPathFacts>> DefaultCollectFacts { get; } = SystemPathFacts.Instance.Collect;
-    public static IPathFacts DefaultPathFacts { get; } = SystemPathFacts.Instance;
-    // 导入用例以契约形式交付给视图层；默认实现由基础设施端口组装，装配可覆盖。
-    public IPrepareImport Import { get; }
-    // 仅为 4a-3 特征测试冻结的三参旧构造保留默认端口；生产对象图必须由 Composition 显式装配。
+    public IPathFacts PathFacts => pathFacts ?? throw new InvalidOperationException("SingleMuxService 未装配异步路径端口。");
+    // 拖入反馈的同步入口：与异步端口同一份事实实现，由装配显式注入。
+    public Func<IReadOnlyList<InputItem>, IReadOnlyList<InputPathFacts>> CollectFacts =>
+        collectFacts ?? throw new InvalidOperationException("SingleMuxService 未装配同步批量事实入口。");
+    // 固定槽位接纳使用裁剪后的完整路径语义；不能与拖入反馈的批量事实混用。
+    public ISyncPathFacts SlotPathFacts =>
+        slotPathFacts ?? throw new InvalidOperationException("SingleMuxService 未装配固定槽位事实端口。");
+    // 导入用例以契约形式交付给视图层；默认实现只由调用方注入的端口组装。
+    public IPrepareImport Import => import ?? throw new InvalidOperationException("SingleMuxService 未装配导入用例。");
+    // ViewModel 的草稿门面：仍由 SlotPathFacts 收集固定槽位事实，不向视图暴露 Application 类型。
+    public SingleMuxDraft Draft => draft ?? throw new InvalidOperationException("SingleMuxService 未装配固定槽位事实端口。");
+    // 三参旧构造仅供只运行 RunAsync 的过渡测试；任何端口未装配时在使用处明确失败。
     public SingleMuxService(ToolConfiguration tools, IProbeMedia prober,
         Func<ITaskWorkspaceFactory, IRunSingleMux> createRun,
         IMuxInputReader? inputReader = null, IPathFacts? pathFacts = null,
-        Func<IReadOnlyList<InputItem>, IReadOnlyList<InputPathFacts>>? collectFacts = null, IPrepareImport? import = null)
+        Func<IReadOnlyList<InputItem>, IReadOnlyList<InputPathFacts>>? collectFacts = null,
+        IPrepareImport? import = null, ISyncPathFacts? slotPathFacts = null)
     {
         Tools = tools;
         Prober = prober;
         this.createRun = createRun;
         InputReader = inputReader ?? new MuxInputReader();
-        PathFacts = pathFacts ?? DefaultPathFacts;
-        CollectFacts = collectFacts ?? DefaultCollectFacts;
-        Import = import ?? new PrepareImportUseCase(prober, InputReader, PathFacts);
+        this.pathFacts = pathFacts;
+        this.collectFacts = collectFacts;
+        this.slotPathFacts = slotPathFacts;
+        this.draft = slotPathFacts is null ? null : new SingleMuxDraft(slotPathFacts);
+        this.import = import ?? (pathFacts is null ? null : new PrepareImportUseCase(prober, InputReader, pathFacts));
     }
 
     public async Task<MediaProbe> ProbeAsync(string videoPath, CancellationToken cancellationToken = default) =>
@@ -45,20 +57,37 @@ public sealed class SingleMuxService
     public async Task<MuxResult> RunAsync(MuxRequest request, ToolConfiguration tools, IProgress<MuxProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        var configuration = tools;
+        // 在首次回调和等待前固定旧请求集合，后续调用方修改不影响本次任务与日志。
+        request = request with { Subtitles = request.Subtitles?.ToArray()!, Audios = request.Audios?.ToArray()! };
+        var spec = LegacyMuxContractConverter.ToRunSpec(request, tools);
+        return await ExecuteAsync(spec, tools, () => LegacyMuxContractConverter.NormalizeRequestForLog(request),
+            progress, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>新入口：直接执行草稿规格；日志仍经旧请求转换生成，保证“请求 …”一行逐字不变。</summary>
+    public Task<MuxResult> RunSpecAsync(MuxJobSpec spec, IProgress<MuxProgress>? progress = null,
+        CancellationToken cancellationToken = default) => RunSpecAsync(spec, Tools, progress, cancellationToken);
+
+    public Task<MuxResult> RunSpecAsync(MuxJobSpec spec, ToolConfiguration tools, IProgress<MuxProgress>? progress = null,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(spec, tools,
+            () => LegacyMuxContractConverter.NormalizeRequestForLog(LegacyMuxContractConverter.ToLegacyRequest(spec)),
+            progress, cancellationToken);
+
+    private async Task<MuxResult> ExecuteAsync(MuxJobSpec spec, ToolConfiguration configuration,
+        Func<MuxRequest> createLogRequest, IProgress<MuxProgress>? progress, CancellationToken cancellationToken)
+    {
         var legacyWorkspace = new LegacyTaskWorkspaceFactory();
         try
         {
-            // 在首次回调和等待前固定旧请求集合，后续调用方修改不影响本次任务与日志。
-            request = request with { Subtitles = request.Subtitles?.ToArray()!, Audios = request.Audios?.ToArray()! };
-            var spec = LegacyMuxContractConverter.ToRunSpec(request, configuration);
+            MuxRequest? logRequest = null;
             var useCase = createRun(legacyWorkspace);
             var result = await useCase.RunAsync(spec, new LegacyProgress(value =>
             {
                 if (value.StepCode == "INPUT_VALIDATED")
                 {
-                    var snapshot = LegacyMuxContractConverter.NormalizeRequestForLog(request);
-                    legacyWorkspace.Write("请求 " + System.Text.Json.JsonSerializer.Serialize(snapshot));
+                    logRequest ??= createLogRequest();
+                    legacyWorkspace.Write("请求 " + System.Text.Json.JsonSerializer.Serialize(logRequest));
                     return;
                 }
                 var converted = LegacyMuxContractConverter.ToLegacyProgress(value);

@@ -3,6 +3,7 @@ using MuxDeck.Contracts;
 using MuxDeck.Core.Muxing;
 using MuxDeck.Desktop.ViewModels;
 using MuxDeck.Domain;
+using MuxDeck.Infrastructure;
 using Xunit;
 
 namespace MuxDeck.Architecture.Tests;
@@ -481,7 +482,9 @@ public sealed class SingleMuxDraftCharacterizationTests : IDisposable
         prober = customProber ?? MediaProber();
         var model = new SingleMuxViewModel(new SingleMuxService(
             new ToolConfiguration(ToolsDirectory, LogsDirectory, CacheDirectory),
-            prober, _ => runner), new TrackColumnLayout());
+            prober, _ => runner, pathFacts: SystemPathFacts.Instance,
+            collectFacts: SystemPathFacts.Instance.Collect, slotPathFacts: SystemPathFacts.Instance),
+            new TrackColumnLayout());
         if (withInputs)
         {
             model.VideoPath = VideoPath;

@@ -4,6 +4,7 @@ using MuxDeck.Contracts;
 using MuxDeck.Core.Muxing;
 using MuxDeck.Desktop.ViewModels;
 using MuxDeck.Domain;
+using MuxDeck.Infrastructure;
 using Xunit;
 
 namespace MuxDeck.Architecture.Tests;
@@ -34,24 +35,24 @@ public sealed class ImportCharacterizationTests : IDisposable
 
     [Fact]
     public void Rejects_empty_selection() =>
-        Assert.Equal("拖入本地视频、音频、ASS/SRT 或字体目录。", SingleMuxViewModel.MediaInputError([]));
+        Assert.Equal("拖入本地视频、音频、ASS/SRT 或字体目录。", MediaInputError([]));
 
     [Fact]
     public void Rejects_non_local_input() =>
         Assert.Equal("仅接受系统本地文件或文件夹，URL / 文本路径不受支持。",
-            SingleMuxViewModel.MediaInputError([new("http://example.com/a.ass", InputCandidateKind.NonLocal)]));
+            MediaInputError([new("http://example.com/a.ass", InputCandidateKind.NonLocal)]));
 
     [Fact]
     public void Requires_absolute_path() =>
         Assert.Equal("需要完整的本地路径。",
-            SingleMuxViewModel.MediaInputError([new("a.ass", InputCandidateKind.LocalFile)]));
+            MediaInputError([new("a.ass", InputCandidateKind.LocalFile)]));
 
     [Fact]
     public void Reports_missing_path()
     {
         var path = Path.Combine(root, "missing.ass");
         Assert.Equal("路径不存在或不可访问：" + path,
-            SingleMuxViewModel.MediaInputError([new(path, InputCandidateKind.LocalFile)]));
+            MediaInputError([new(path, InputCandidateKind.LocalFile)]));
     }
 
     [Fact]
@@ -59,7 +60,7 @@ public sealed class ImportCharacterizationTests : IDisposable
     {
         var path = Write("a.txt", "x");
         Assert.Equal("不支持此文件类型：a.txt；支持视频、音频、ASS/SRT 和字体。",
-            SingleMuxViewModel.MediaInputError([new(path, InputCandidateKind.LocalFile)]));
+            MediaInputError([new(path, InputCandidateKind.LocalFile)]));
     }
 
     [Fact]
@@ -67,7 +68,7 @@ public sealed class ImportCharacterizationTests : IDisposable
     {
         var path = Write("dup.ass", ValidAss);
         Assert.Equal("同一文件不能重复导入。",
-            SingleMuxViewModel.MediaInputError([new(path, InputCandidateKind.LocalFile), new(path, InputCandidateKind.LocalFile)]));
+            MediaInputError([new(path, InputCandidateKind.LocalFile), new(path, InputCandidateKind.LocalFile)]));
     }
 
     [Fact]
@@ -76,7 +77,7 @@ public sealed class ImportCharacterizationTests : IDisposable
         var first = NewDirectory("fonts-a");
         var second = NewDirectory("fonts-b");
         Assert.Equal("一次只能设置一个字体目录。",
-            SingleMuxViewModel.MediaInputError([new(first, InputCandidateKind.LocalDirectory), new(second, InputCandidateKind.LocalDirectory)]));
+            MediaInputError([new(first, InputCandidateKind.LocalDirectory), new(second, InputCandidateKind.LocalDirectory)]));
     }
 
     // ---------- PrepareMediaInputAsync：锁定 ----------
@@ -293,6 +294,10 @@ public sealed class ImportCharacterizationTests : IDisposable
 
     private static MediaProbeResult Probe(params MediaTrackInfo[] tracks) => new("probe", [.. tracks], [], null);
 
+    // 静态入口已删除；26 条特征测试只把调用入口换成实例方法，断言文字与用例数不变。
+    private string? MediaInputError(params InputCandidate[] candidates) =>
+        Create(new FakeProber()).ValidateMediaInput(candidates);
+
     private static Task<MediaImportResult> Prepare(SingleMuxViewModel model, params string[] paths) =>
         model.PrepareMediaInputAsync([.. paths.Select(path => new InputCandidate(path, InputCandidateKind.LocalFile))]);
 
@@ -332,7 +337,9 @@ public sealed class ImportCharacterizationTests : IDisposable
     private SingleMuxViewModel Create(IProbeMedia prober) =>
         new SingleMuxViewModel(new SingleMuxService(
             new ToolConfiguration(Path.Combine(root, "tools"), Path.Combine(root, "logs"), Path.Combine(root, "cache")),
-            prober, _ => throw new NotSupportedException()), new TrackColumnLayout());
+            prober, _ => throw new NotSupportedException(), pathFacts: SystemPathFacts.Instance,
+            collectFacts: SystemPathFacts.Instance.Collect, slotPathFacts: SystemPathFacts.Instance),
+            new TrackColumnLayout());
 
     private sealed class FakeProber : IProbeMedia
     {

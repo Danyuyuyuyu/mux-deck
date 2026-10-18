@@ -321,7 +321,7 @@ public partial class SingleMuxView : UserControl
     {
         if (Model?.SelectedTrack is { IsEditable: true } row)
         {
-            if (row.Id is "SC" or "TC") Pick(InputOperation.Subtitles, row.Id == "SC" ? SubtitleSlot.Sc : SubtitleSlot.Tc);
+            if (row.Slot is { } slot) Pick(InputOperation.Subtitles, slot);
             else PickMedia(row.IsAudio ? InputOperation.Audio : InputOperation.Subtitles, row);
         }
     }

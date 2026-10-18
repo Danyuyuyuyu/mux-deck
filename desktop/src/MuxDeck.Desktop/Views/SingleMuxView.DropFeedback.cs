@@ -40,7 +40,8 @@ public partial class SingleMuxView
         if (acceptingInput) return "正在处理输入，当前不能接纳新的输入。";
         if (Model?.CanEdit != true) return "当前任务已锁定，等待任务或清理结束。";
         if (DropIsBlocked(args)) return "详情面板或确认窗口不接纳文件，请拖到可见工作区。";
-        return Model is { } model ? model.ValidateMediaInput(candidates) : SingleMuxViewModel.MediaInputError(candidates);
+        // 上一行已排除 null，这里不可达的回退分支已删除。
+        return Model.ValidateMediaInput(candidates);
     }
     private void WindowDragOver(object? sender, DragEventArgs args)
     {

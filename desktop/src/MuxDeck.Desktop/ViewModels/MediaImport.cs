@@ -4,7 +4,32 @@ using MuxDeck.Domain;
 
 namespace MuxDeck.Desktop.ViewModels;
 
-public sealed record ImportedTrack(string Path, MediaTrack Media, string Language);
+/// <summary>导入轨道在 Desktop 的投影；与契约规格的互转只在这里维护。</summary>
+public sealed record ImportedTrack(string Path, MediaTrack Media, string Language)
+{
+    internal static ImportedTrack From(ImportedTrackSpec spec) =>
+        new(spec.Path, ToLegacy(spec.Track), spec.Language.Value);
+
+    internal ImportedTrackSpec ToSpec() => new(Path,
+        new MediaTrackInfo(new TrackId(Media.Id), Kind(Media.Type), Media.Type, Media.Codec, Media.CodecId,
+            new LanguageTag(Media.Language), Media.LanguageIetf is null ? null : new LanguageTag(Media.LanguageIetf),
+            Media.Name, new TrackFlags(Media.IsDefault, Media.IsForced), Media.PixelDimensions, Media.AudioChannels,
+            Media.AudioSamplingFrequency, Media.HasDefaultFlag, Media.HasForcedFlag),
+        new LanguageTag(Language));
+
+    internal static MediaTrack ToLegacy(MediaTrackInfo track) => new(track.Id.Value, track.RawType, track.Codec,
+        track.CodecId, track.Language.Value, track.LanguageIetf?.Value, track.Name, track.Flags.IsDefault,
+        track.Flags.IsForced, track.PixelDimensions, track.AudioChannels, track.AudioSamplingFrequency,
+        track.HasDefaultFlag, track.HasForcedFlag);
+
+    private static TrackKind Kind(string type) => type switch
+    {
+        "video" => TrackKind.Video,
+        "audio" => TrackKind.Audio,
+        "subtitles" => TrackKind.Subtitle,
+        _ => TrackKind.Unknown
+    };
+}
 public sealed record MediaImportResult(bool Succeeded, string Message, MediaImportPlan? Plan = null);
 public sealed class MediaImportPlan
 {
@@ -26,9 +51,6 @@ public sealed partial class SingleMuxViewModel
     private IPrepareImport Import => service.Import;
 
     // 拖入反馈的同步路径与导入用例共用同一份 Domain 规则与同一份事实实现，这里只做错误码到文案的映射。
-    public static string? MediaInputError(IReadOnlyList<InputCandidate> candidates) =>
-        DescribeBatch(SingleMuxService.DefaultCollectFacts(Items(candidates)));
-
     public string? ValidateMediaInput(IReadOnlyList<InputCandidate> candidates) =>
         DescribeBatch(service.CollectFacts(Items(candidates)));
 
@@ -56,7 +78,8 @@ public sealed partial class SingleMuxViewModel
         try
         {
             var request = new ImportRequest(Guid.NewGuid(), revision,
-                [.. candidates.Select(candidate => new InputItem(candidate.Path, candidate.LocationKind))], CurrentSpec());
+                [.. candidates.Select(candidate => new InputItem(candidate.Path, candidate.LocationKind))],
+                draft.ToConflictSpec(tools));
             // 视图层必须回到原同步上下文，EndToolProbe 等回调会触达界面对象。
             var result = await Import.PrepareAsync(request, tools, importCancellation.Token);
             if (!CanEdit || revision != DraftRevision) return new(false, "识别期间任务或草稿已变化，整批输入保持原样。");
@@ -70,40 +93,42 @@ public sealed partial class SingleMuxViewModel
 
     private MediaImportPlan ToPlan(ImportPlan plan, long revision, IReadOnlyList<InputCandidate> candidates) =>
         new(this, revision, plan.VideoPath, plan.Fonts?.Directory,
-            plan.Tracks.Select(track => new ImportedTrack(track.Path, ToLegacyTrack(track.Track), track.Language.Value)), candidates);
-
-    // 冲突检查只需要已有外加轨道的身份；此处按当前草稿构造不可变快照。
-    private MuxJobSpec CurrentSpec()
-    {
-        var externals = externalOrder.Select(row => new ExternalTrackSpec(row.InputPath,
-            row.IsSubtitle ? TrackKind.Subtitle : TrackKind.Audio, new TrackId(row.OriginTrackId), row.Name,
-            new LanguageTag(row.Language ?? ""), new TrackFlags(row.IsDefault, row.IsForced))).ToArray();
-        return new(VideoPath, [.. externals], [], new FontSpec(FontsDirectory),
-            new OutputSpec(OutputDirectory, string.IsNullOrWhiteSpace(OutputFileName) ? null : OutputFileName), tools);
-    }
-
-    private static MediaTrack ToLegacyTrack(MediaTrackInfo track) => new(track.Id.Value, track.RawType, track.Codec, track.CodecId,
-        track.Language.Value, track.LanguageIetf?.Value, track.Name, track.Flags.IsDefault, track.Flags.IsForced,
-        track.PixelDimensions, track.AudioChannels, track.AudioSamplingFrequency, track.HasDefaultFlag, track.HasForcedFlag);
+            plan.Tracks.Select(ImportedTrack.From), candidates);
 
     public MediaImportResult CommitMediaInput(MediaImportPlan plan, bool videoReplacementConfirmed = false)
     {
-        if (!CanEdit || !ReferenceEquals(plan.Owner, this) || plan.Revision != DraftRevision) return new(false, "草稿已变化或任务已锁定，原输入保持。");
+        if (!CanEdit || !ReferenceEquals(plan.Owner, this) || plan.Revision != DraftRevision)
+            return new(false, "草稿已变化或任务已锁定，原输入保持。");
         if (ValidateMediaInput(plan.Candidates) is { } error) return new(false, error);
-        if (plan.Video is not null && InputRules.RequiresReplacement(VideoPath, SamePath(VideoPath, plan.Video)) && !videoReplacementConfirmed) return new(false, "更换已有视频需要确认，整批未接纳。");
-        ChangeConfiguration(() =>
+        var identities = plan.Tracks.Select(_ => "external-" + Guid.NewGuid().ToString("N")).ToArray();
+        var imported = plan.Tracks.Select((input, index) => new DraftTrackImport(identities[index], input.Path,
+            input.Media.Type == "audio" ? TrackKind.Audio : TrackKind.Subtitle, new TrackId(input.Media.Id),
+            input.Media.Name, new LanguageTag(input.Language), input.Media.HasDefaultFlag, input.Media.IsDefault,
+            input.Media.IsForced)).ToArray();
+        var videoBefore = draft.VideoPath;
+        var fontsBefore = draft.FontsDirectory;
+        var outcome = draft.CommitImport(new DraftImport(plan.Video, plan.Fonts, imported, videoReplacementConfirmed));
+        if (!outcome.Succeeded)
+            return new(false, DraftText.Describe(DraftEntry.Import, InputOperation.Audio, outcome.Error, outcome.Reason, outcome.Detail));
+
+        if (plan.Video is not null && draft.VideoPath != videoBefore)
         {
-            if (plan.Video is not null && !SamePath(VideoPath, plan.Video)) VideoPath = plan.Video;
-            if (plan.Fonts is not null && !SamePath(FontsDirectory, plan.Fonts)) FontsDirectory = plan.Fonts;
-            foreach (var input in plan.Tracks)
-            {
-                var t = input.Media;
-                var row = new TrackRowViewModel { Id = "external-" + Guid.NewGuid().ToString("N"), OriginTrackId = t.Id, Type = t.Type == "audio" ? "音频" : "字幕", Codec = t.Codec, CodecId = t.CodecId, Language = input.Language, LegacyLanguage = t.Language, LanguageIetf = t.LanguageIetf, Name = t.Name, IsEditable = true, Policy = "新增", Source = "外加文件", AudioChannels = t.AudioChannels, IsDefault = t.Type == "subtitles" ? !externalOrder.Any(r => r.IsSubtitle) : t.HasDefaultFlag && t.IsDefault, IsForced = t.IsForced };
-                row.InputPath = input.Path; row.SetEditGuard(() => CanEdit); row.PropertyChanged += SubtitlePropertyChanged;
-                externalOrder.Add(row); MarkDraftChanged();
-            }
-            RebuildTracks(); UpdateInputs();
-        });
+            sourceProbe = null; SelectedTrack = null; RebuildTracks(false);
+            Raise(nameof(VideoPath)); Raise(nameof(ResolvedOutputFileName)); NotifyVideoSummary(); _ = ProbeVideoAsync();
+        }
+        if (plan.Fonts is not null && draft.FontsDirectory != fontsBefore) { Raise(nameof(FontsDirectory)); Raise(nameof(HasFontsDirectory)); }
+        var computed = draft.ExternalTracks;
+        for (var index = 0; index < plan.Tracks.Count; index++)
+        {
+            var input = plan.Tracks[index];
+            var t = input.Media;
+            var identity = identities[index];
+            var flags = computed.First(track => track.Identity == identity).Flags;
+            var row = new TrackRowViewModel { Id = identity, OriginTrackId = t.Id, Type = t.Type == "audio" ? "音频" : "字幕", Codec = t.Codec, CodecId = t.CodecId, Language = input.Language, LegacyLanguage = t.Language, LanguageIetf = t.LanguageIetf, Name = t.Name, IsEditable = true, Policy = "新增", Source = "外加文件", AudioChannels = t.AudioChannels, IsDefault = flags.IsDefault, IsForced = t.IsForced };
+            row.InputPath = input.Path; row.SetEditGuard(() => CanEdit); row.PropertyChanged += SubtitlePropertyChanged;
+            externalOrder.Add(row);
+        }
+        RebuildTracks(); UpdateInputs();
         var added = new List<string>();
         if (plan.Video is not null) added.Add("视频");
         if (plan.Tracks.Count > 0) added.Add($"{plan.Tracks.Count} 条外加轨道");
@@ -114,18 +139,23 @@ public sealed partial class SingleMuxViewModel
     public void RemoveExternalTrack(TrackRowViewModel row)
     {
         if (!CanEdit || !externalOrder.Contains(row)) return;
-        if (row.Id is "SC" or "TC") { RemoveSubtitle(row.Id == "SC" ? SubtitleSlot.Sc : SubtitleSlot.Tc); return; }
+        if (row.Slot is { } slot) { RemoveSubtitle(slot); return; }
         row.PropertyChanged -= SubtitlePropertyChanged;
-        externalOrder.Remove(row); row.InputPath = ""; MarkDraftChanged(); RebuildTracks(); UpdateInputs();
+        draft.RemoveExternalTrack(row.Id);
+        externalOrder.Remove(row); row.InputPath = ""; RebuildTracks(); UpdateInputs();
     }
     public void ReplaceImportedTrack(TrackRowViewModel row, ImportedTrack replacement)
     {
-        if (!CanEdit || !externalOrder.Contains(row) || row.Id is "SC" or "TC") return;
+        if (!CanEdit || !externalOrder.Contains(row) || row.Slot is not null) return;
         var index = externalOrder.IndexOf(row);
-        var updated = new TrackRowViewModel { Id = row.Id, OriginTrackId = replacement.Media.Id, Type = row.Type, Codec = replacement.Media.Codec, CodecId = replacement.Media.CodecId, AudioChannels = replacement.Media.AudioChannels, LegacyLanguage = replacement.Media.Language, LanguageIetf = replacement.Media.LanguageIetf, Language = row.Language, Name = row.Name, IsDefault = row.IsDefault, IsForced = row.IsForced, IsIncluded = row.IsIncluded, IsEditable = true, Source = "外加文件", Policy = "新增" };
+        var outcome = draft.ReplaceExternalTrack(row.Id, new DraftTrackState(row.Id, replacement.Path,
+            row.IsAudio ? TrackKind.Audio : TrackKind.Subtitle, new TrackId(replacement.Media.Id), row.Name,
+            new LanguageTag(row.Language ?? ""), new TrackFlags(row.IsDefault, row.IsForced)) { IsIncluded = row.IsIncluded });
+        if (!outcome.Succeeded) return;
+        var updated = new TrackRowViewModel { Id = row.Id, OriginTrackId = replacement.Media.Id, Type = row.Type, Codec = replacement.Media.Codec, CodecId = replacement.Media.CodecId, AudioChannels = replacement.Media.AudioChannels, LegacyLanguage = replacement.Media.Language, LanguageIetf = replacement.Media.LanguageIetf, Language = row.Language ?? "", Name = row.Name, IsDefault = row.IsDefault, IsForced = row.IsForced, IsIncluded = row.IsIncluded, IsEditable = true, Source = "外加文件", Policy = "新增" };
         updated.InputPath = replacement.Path; updated.SetEditGuard(() => CanEdit); updated.PropertyChanged += SubtitlePropertyChanged;
         row.PropertyChanged -= SubtitlePropertyChanged; externalOrder[index] = updated;
         if (ReferenceEquals(SelectedTrack, row)) SelectedTrack = updated;
-        MarkDraftChanged(); RebuildTracks(); UpdateInputs();
+        RebuildTracks(); UpdateInputs();
     }
 }
