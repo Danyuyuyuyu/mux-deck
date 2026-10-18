@@ -136,16 +136,16 @@ Domain.Tests 只直接引用 Domain，Application.Tests 只直接引用 Applicat
 
 - `src/MuxDeck.Domain/TrackPolicy.cs` 是 SC/TC 默认轨、源 A/V 保留和来源纳入投影的唯一规则位置。调用方提供槽位存在、轨道类型和外加纳入选择；旧空草稿仍先显示 SC 默认，实际组合变化后按槽位重算。编辑守卫、修改时机和草稿修订暂留 Desktop，随 4b 迁移。
 - `LanguageRules.cs` 负责基于不含扩展名的文件名推断语言，以及旧封装 QC 的传统/IETF 标签匹配。传统/IETF 原字符串保留，IETF 仅为 null 时才允许匹配回退；语言推断保留旧标签边界、优先顺序和大小写处理。
-- `OutputNaming.cs` 负责默认后缀、自定义名称和无视频时的预览占位。Desktop 预览将空白视为自动命名；旧服务仅将 null 视为自动命名，空白仍由原校验拒绝。路径拆分、文件存在性、合法文件名校验和落位均留在调用边界。
+- `OutputNaming.cs` 负责默认后缀、自定义名称与默认名拼接。`ResolvePreview` 在无文件名且无源视频时返回 null；“源文件名”占位与 `源文件名.muxed.mkv` 的界面补全由 Desktop 用 Domain `DefaultFileName` 完成，Domain 不含中文文案。Desktop 预览将空白视为自动命名；旧服务仅将 null 视为自动命名，空白仍由原校验拒绝。路径拆分、文件存在性、合法文件名校验和落位均留在调用边界。
 - 原位置只调用上述 Domain 规则；规则不使用文件、目录、进程、当前时间或 ID 生成 API。Domain 单元测试注明对应的既有 Smoke 场景，架构测试逐个检查三个规则类型并保留全命名空间护栏。
 
 #### 2b 输入识别与接纳已迁入 Domain
 
 - `src/MuxDeck.Domain/InputRules.cs` 是媒体/字体扩展名、固定槽位类型与数量、候选来源类型、完整路径事实校验、规范化路径比较、去重及单字体目录的唯一规则位置；自动导入中的源视频数量、字幕/音频探测类型和已加入轨道身份也由该规则判定。
 - `MuxDeck.Core.Muxing.MediaFileTypes` 与旧 `SingleMuxService.IsFont` 仅提取扩展名并调用 Domain，保留现有调用方。Core 按运行平台决定路径大小写策略，Desktop 仍按 Windows 大小写无关策略比较。
-- `Infrastructure/SystemPathFacts.cs` 收集路径规范化/完整性/文件目录存在性事实，同步拖入反馈与 `PrepareImportUseCase` 的异步端口共用该实现；`MediaImport.cs` 只负责 ViewModel 状态投影。规范化键先在边界收集，再交给 Domain 比较；Domain 不使用 `System.IO`，不查询文件或目录。
+- `Infrastructure/SystemPathFacts.cs` 同时提供批量事实（同步拖入反馈与 `PrepareImportUseCase`）和固定槽位事实（`CollectForFixedSlot` / `ISyncPathFacts`）。固定槽位按旧 `ValidateCandidate` 先 `GetFullPath` 再裁剪末尾分隔符，存在性、扩展名与非法字符基于裁剪路径；原始 `Path` 仍用于完整路径与设备前缀判定。`MediaImport.cs` 只负责 ViewModel 状态投影。规范化键先在边界收集，再交给 Domain 比较；Domain 不使用 `System.IO`，不查询文件或目录。
 - 固定槽位仍只接纳 MKV/MP4 与 ASS，自动导入保留原有广泛视频/音频/ASS/SRT/字体入口。两者的设备路径与规范化细节差异保持原行为，不统一或扩大允许范围。
-- 准备/提交、编辑锁、迟到修订、替换确认、原拒绝文案和全批次原子更新仍留 Desktop，随 4b 迁移。SC/TC 去重比较最终槽位集合；同音频容器按真实 Track ID 区分，字幕按文件身份去重。Domain 规则测试与新增副作用架构检查覆盖这些边界。
+- 4b-2 已将固定槽位准备/提交移入 Application `MuxDraft`（同步与异步共用同一校验核心），编辑锁与修订号由草稿持有；Desktop 通过 Core 过渡门面投影。SC/TC 去重比较最终槽位集合；同音频容器按真实 Track ID 区分，字幕按文件身份去重。Domain 规则测试与副作用架构检查覆盖这些边界。
 
 #### 2c 诊断、QC 与 ASS 解析已迁入 Domain
 
@@ -219,15 +219,15 @@ tests/MuxDeck.Infrastructure.IntegrationTests 只直接引用 Infrastructure，�
 
 组件卸载以当前配置目录为管理边界：手动复制的组件也计为 Mux Deck 来源，不使用安装归属记录。Core `ComponentDirectories` 只生成固定直接子目录的计划并检查边界/链接，`ComponentUninstaller` 重新验证后逐项删除并记录日志，与安装器共用 Application `OperationCoordinator` 的租约。AFS 的随包 Python 随主目录删除，独立 `fonttools` 保留并单独管理；重装可复用已验证的独立后端。Desktop 保存待确认计划、卸载任务和错误；MainWindow 结合单任务、导入与真实工具探测忙碌态禁止删除，关闭等待收尾。完整边界与证据见[组件卸载任务](../tasks/component-uninstall.md)。
 
-单任务交互由 `ViewModels/SingleMuxViewModel.cs` 持有；它构造 `MuxRequest` 快照并调用 `SingleMuxService`，包含 `StartAsync`、`CancelAndWaitAsync`、`RunTask`、`IsRunning`、`CanEdit`、`Tracks`、`SelectedTrack`、`Log`、`Result` 与 `StatusText`。`TrackRowViewModel` 表示内封来源轨道与外加字幕的展示行；SC/TC 外加字幕各自显式维护名称、语言、default 和 forced，输入组合变更时只调用一次 Domain `TrackPolicy.SubtitleDefaults`；同槽替换、纳入切换和后续显式旗标编辑不重算默认值。`MainWindowViewModel` 继续负责导航和工具环境摘要。UI 不承担 QC，也不构造 AFS 或 mkvmerge 参数。
+单任务交互由 `ViewModels/SingleMuxViewModel.cs` 持有；4b-2 后草稿（`MuxDraft`，经 Core 过渡门面 `SingleMuxDraft`）是唯一数据源，VM 不再保存路径字段、修订计数或接纳校验副本。`StartAsync` 用 `draft.ToSpec(tools)` 调用 `SingleMuxService.RunSpecAsync`；VM 仍包含 `CancelAndWaitAsync`、`RunTask`、`IsRunning`、`CanEdit`、`Tracks`、`SelectedTrack`、`Log`、`Result` 与 `StatusText`。`TrackRowViewModel` 是投影：SC/TC 与外加行的对象身份保持不变，行编辑写回草稿，草稿变化只更新已有行；固定槽位行用结构化 `Slot` 标识，源行用 `SourceRetained` 表达保留策略。`MainWindowViewModel` 继续负责导航和工具环境摘要。UI 不承担 QC，也不构造 AFS 或 mkvmerge 参数。
 
-第一轮任务 A 的状态和接纳接口仍位于同一 ViewModel 及 `ViewModels/InputAcceptance.cs`；2b 已将其纯校验迁入 Domain `InputRules`，旧接口仅收集事实并调用规则，不放入 Core：
+第一轮任务 A 的状态和接纳接口仍位于同一 ViewModel 及 `ViewModels/InputAcceptance.cs`；4b-2 后校验、计划与修订由 Application `MuxDraft` 持有，Desktop 只负责同步收集、投影与中文文案映射（`DraftText` 按入口/操作/错误码/原因集中映射），不解析 `Detail`：
 
 - 摘要由 `VideoFileName`、`VideoFullPath`、`VideoDimensions`、`VideoCodec`、`VideoDurationNanoseconds`、`MediaSummary` 与 `ProbeState`/`ProbeText` 表达；未知字段为空，不猜容器。`SourceTracks` 和 `ExternalTracks` 是只读可观察分组；`SourceAttachmentCount`/`SourceAttachments` 用于附件数量和详情。旧 `Tracks` 仍含源轨、附件与外加字幕，以兼容当前视图。
 - 固定 `ScTrack`/`TcTrack` 的 `IsIncluded` 独立于路径、名称及旗标。禁用仍可查看；`SetSubtitleIncluded`、`RemoveSubtitle` 按槽位操作，提交只消费启用 ASS。同槽替换和启用切换保留名称/default/forced；添加或移除改变槽位组合时沿用 SC/TC 默认规则。两个槽位只订阅一次元数据变化，并在运行、取消清理和关闭等待时用模型守卫拒绝路径、元数据及启用变更。
-- 视图从系统文件数据构造 `InputCandidate`（本地文件、本地文件夹；URL/文本标为 `NonLocal`），先调用 `PrepareVideoInput`、`PrepareSubtitleInputs`、`PrepareFontsDirectory` 或 `PrepareOutputDirectory`。字幕分配用 `SubtitleAssignment(SubtitleSlot, InputCandidate)` 明确 SC/TC。准备阶段只校验并返回只读 `InputAcceptancePlan`，不修改配置。视频或已有字幕槽位的异路径替换通过 `RequiresReplacementConfirmation` 要求视图明示确认；取消直接丢弃计划。
-- 确认后 `CommitInput(plan, replacementsConfirmed)` 再核验 `CanEdit`、草稿修订，重新收集候选存在性与规范化事实，调用 Domain `InputRules` 检查类型/路径/数量/唯一性后一次提交。只接纳完整 Windows 路径；按规范化绝对路径和大小写比较，不识别硬链接/符号链接身份。批量重复按操作完成后的 SC/TC 集合比较，整组交换合法，同槽同路径无害。结果的 `Error`/`Message` 给出拒绝原因；失败仅更新 `InteractionMessage`，草稿和 Core 结果均保留。选择器、复制或平台动作异常可用 `ReportInteractionMessage` 表达。
-- `DraftRevision` 对参数、启用和外加元数据变化计数；一次接纳批次增加一次，同值赋值、导航、选择和展示不增加。`ResultRevision`、`IsResultHistorical`、`ResultLabel` 区分当前草稿与上次 Core 结果；配置变化保留 `Result`、诊断和日志，再次运行期间也保留上次结果至新结果返回。主区使用 `State`/`StateSummary`，进度使用 `ProgressStage`/`ProgressMessage` 与既有不定进度；详细 `Checks`/`Warnings`/原始 `Error` 从 `Result` 读取。`CanStart` 只表示提交条件齐全，最终验证仍归 Core。
+- 视图从系统文件数据构造 `InputCandidate`（本地文件、本地文件夹；URL/文本标为 `NonLocal`），先调用 `PrepareVideoInput`、`PrepareSubtitleInputs`、`PrepareFontsDirectory` 或 `PrepareOutputDirectory`。字幕分配用 `SubtitleAssignment(SubtitleSlot, InputCandidate)` 明确 SC/TC。准备阶段只校验并返回只读 `InputAcceptancePlan`（内部绑定草稿计划），不修改配置。视频或已有字幕槽位的异路径替换通过 `RequiresReplacementConfirmation` 要求视图明示确认；取消直接丢弃计划。
+- 确认后 `CommitInput(plan, replacementsConfirmed)` 再核验 `CanEdit`、草稿修订，由草稿重新收集候选与当前路径的固定槽位事实并跑同一校验核心；只接纳完整 Windows 路径，按裁剪后的规范化绝对路径和大小写比较，不识别硬链接/符号链接身份。批量重复按操作完成后的 SC/TC 集合比较，整组交换合法，同槽同路径无害。结果的 `Error`/`Message` 给出拒绝原因；失败仅更新 `InteractionMessage`，草稿和 Core 结果均保留。选择器、复制或平台动作异常可用 `ReportInteractionMessage` 表达。
+- `DraftRevision` 由草稿持有：对参数、启用和外加元数据变化计数；一次接纳批次增加一次，同值赋值、导航、选择和展示不增加。`ResultRevision`、`IsResultHistorical`、`ResultLabel` 区分当前草稿与上次 Core 结果；配置变化保留 `Result`、诊断和日志，再次运行期间也保留上次结果至新结果返回。主区使用 `State`/`StateSummary`，进度使用 `ProgressStage`/`ProgressMessage` 与既有不定进度；详细 `Checks`/`Warnings`/原始 `Error` 从 `Result` 读取。`CanStart` 只表示提交条件齐全，最终验证仍归 Core。
 
 单个封装最新结构见 [工作台重构任务](../tasks/single-mux-workbench.md)；三张旧稿保留为历史布局参考：
 
@@ -244,7 +244,7 @@ tests/MuxDeck.Infrastructure.IntegrationTests 只直接引用 Infrastructure，�
 - `DisplayDuration`/`DisplayMediaSummary`/`VideoSummaryLine` 是探测数据的展示投影，不改变 `MediaSummary` 或 Core 模型。同路径 `ProbeVideoAsync` 开始时撤下旧源数据，失败时保持源摘要/轨道/附件为空，外加字幕及设置保留；迟到保护和关闭等待沿用既有实现。
 - 验证入口 `--single-mux-round1` 保留任务 A 行为检查；`--single-mux-ui-round1` 使用新布局真实控件与模拟 DragDrop，核验面板开关/互斥/焦点/几何、真实可访问名称与两尺寸多状态截图；`--ui-integration` 使用当前新窗口与自动添加轨道入口，串行执行单 ASS、双 ASS、禁用首条字幕的真实 Core 小 fixture，核验产物、成品概览、冲突重试与输入哈希。报告/截图/隔离素材位于 `artifacts/single-mux-round1-b/<run-id>/`。多轨识别与真实 SRT/音频封装另由 `--media-drop` / `--media-drop-real` 验证，证据见[验证要求](verification.md#自动拖放与多轨封装2026-10-10)。headless 检查不替代原生桌面、DPI 与播放器验收。
 
-外加列表按首次添加顺序展示，`DisplayId` 为从 0 连续编号的展示投影，内部 `Id` 仍为 SC/TC；替换不改顺序，移除后重排，再添加位于末尾。空名称不填默认占位。`LanguageDisplay` 只转换展示名称，源行保留传统/BCP 47 两种原始代码与编码详情；传入 Core 的语言和旗标不变。Action Bar 只统计已知缺项，“已准备好”表示基本输入齐全，不代表预检完成。
+外加列表按首次添加顺序展示，`DisplayId` 为从 0 连续编号的展示投影；固定槽位行用结构化 `Slot` 标识，不再按 `Id` 文本判断，内部 `Id` 仍为 SC/TC 以保持对象身份；替换不改顺序，移除后重排，再添加位于末尾。空名称不填默认占位。`LanguageDisplay` 只转换展示名称，源行保留传统/BCP 47 两种原始代码与编码详情；传入 Core 的语言和旗标不变。Action Bar 只统计已知缺项，“已准备好”表示基本输入齐全，不代表预检完成。
 
 `Preferences/UserPreferencesStore.cs` 是 v2 界面偏好文件边界，生产 `App` 注入用户 LocalApplicationData/MuxDeck/v2/preferences.json；测试注入 artifacts 位置。`TrackColumnLayout` 独立于草稿，版本化加载、范围限制、损坏回退，异步串行原子保存；关闭窗口等最后一次保存，保存失败只影响偏好，不改变任务结果或阻止已安全停止的窗口关闭。
 
@@ -262,13 +262,13 @@ QC 返回 `TrackQcReport` 的结构化事实，经 `QC_SUBSET_FONTS`、`QC_TRACK
 
 ### 3d 旧入口转换
 
-`SingleMuxService` 仅固定旧 `MuxRequest` 集合快照、配置快照并调用用例；旧进度、检查顺序、错误文案与告警由 `LegacyMuxContractConverter` 转换。用例在输入校验完成、目标存在性检查之前发出 `INPUT_VALIDATED` 事实，旧服务直接用手上的旧请求快照写 `请求 …` 行，沿用原 JsonSerializer 默认格式及规范路径/输出名。用例自己的 `SPEC` 日志保持原样，日志工作区不反向解析规格，EquatableArray 不增加 JSON 反序列化支持。
+`SingleMuxService` 仅固定请求/规格快照、配置快照并调用用例；旧进度、检查顺序、错误文案与告警由 `LegacyMuxContractConverter` 转换。4b-2 新增 `RunSpecAsync(MuxJobSpec, …)`，ViewModel 直接提交草稿规格；`INPUT_VALIDATED` 时仍用 `ToLegacyRequest` 生成旧请求快照写 `请求 …` 行，沿用原 JsonSerializer 默认格式及规范路径/输出名，保证与旧入口逐字一致。静态 `DefaultCollectFacts` / `DefaultPathFacts` 已删除，端口由装配显式注入。用例自己的 `SPEC` 日志保持原样，日志工作区不反向解析规格，EquatableArray 不增加 JSON 反序列化支持。
 
 3d 历史累计测试 676：Domain 298 / Application 80 / Core 41 / Architecture 198 / Infrastructure 59；3c 的 675 项全部保留，新增旧入口 task.log 的请求行逐字、时序与集合隔离检查。该步 Desktop 和 Smoke 不改；UpdateWorkspace 后于 4a-1 删除。
 
 ## 单任务接口
 
-单任务入口封装子集化、封装、校验与成品落位的整条流程。界面和批量共用这一入口，参数组装与业务规则只有一份实现。目标入口为 `IRunSingleMux.RunAsync(MuxJobSpec, IProgress<JobProgress>?, CancellationToken)`，返回 `MuxJobResult`；迁移完成前为 `SingleMuxService.RunAsync(MuxRequest, …)`。
+单任务入口封装子集化、封装、校验与成品落位的整条流程。界面和批量共用这一入口，参数组装与业务规则只有一份实现。目标入口为 `IRunSingleMux.RunAsync(MuxJobSpec, IProgress<JobProgress>?, CancellationToken)`，返回 `MuxJobResult`；迁移完成前保留 `SingleMuxService.RunAsync(MuxRequest, …)` 兼容入口，4b-2 起 ViewModel 已改用 `RunSpecAsync(MuxJobSpec, …)`。
 
 - 输入是本次任务的不可变快照，包含所有影响结果的路径和选项。工具与工作目录配置随任务快照传入，运行中的任务不受后续配置修改影响，不在服务上保留可变配置（迁移前为 `SingleMuxService.UpdateWorkspace`）。
 - 输出包含明确的成功、失败或取消状态，成品位置、结构化检查结果与可定位的失败原因（见[契约](#契约)）。
