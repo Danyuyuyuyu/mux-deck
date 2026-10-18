@@ -18,7 +18,8 @@ public sealed class SystemPathFacts : IPathFacts
         string? failureDetail = null;
         var directoryInput = item.Kind == InputLocationKind.LocalDirectory
             ? item.Path : Path.GetDirectoryName(item.Path) ?? "";
-        var directory = Normalize(directoryInput, ref failureDetail);
+        // 旧 VM 只对候选路径本身调用 GetFullPath；所在目录失败时保留原始值，不算候选路径无效。
+        var directory = NormalizeDirectory(directoryInput);
         var normalized = Normalize(item.Path, ref failureDetail);
         // 旧实现是在 GetFullPath 规范化之后判断非法字符；这里对同一个规范化结果判断，保持等价。
         return new(item.Path, Path.IsPathFullyQualified(item.Path), normalized, Path.GetExtension(item.Path),
@@ -30,6 +31,12 @@ public sealed class SystemPathFacts : IPathFacts
     {
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(new EquatableArray<InputPathFacts>([.. Collect(items)]));
+    }
+
+    private static string NormalizeDirectory(string path)
+    {
+        string? ignored = null;
+        return Normalize(path, ref ignored);
     }
 
     private static string Normalize(string path, ref string? failureDetail)

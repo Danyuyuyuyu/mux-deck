@@ -443,8 +443,6 @@ public sealed class MuxDraft
         var actual = facts is not null
             ? new EquatableArray<InputPathFacts>(facts.ToArray())
             : await pathFacts.CollectAsync(items, cancellationToken).ConfigureAwait(false);
-        var failedCandidate = actual.FirstOrDefault(item => !string.IsNullOrWhiteSpace(item.FailureDetail));
-        if (failedCandidate is not null) return new(false, DraftCodes.InvalidPath, Detail: failedCandidate.FailureDetail);
 
         var currentSubtitlePaths = new Dictionary<SubtitleSlot, (string Path, bool Available)>();
         var currentSinglePath = "";
@@ -492,7 +490,8 @@ public sealed class MuxDraft
     {
         if (facts.Count != 1) return new(false, DraftCodes.InvalidCount);
         var expectsDirectory = operation != DraftOperation.Video;
-        if (ValidateFact(facts[0], expectsDirectory, operation == DraftOperation.Video) is { } error) return new(false, error);
+        if (ValidateFact(facts[0], expectsDirectory, operation == DraftOperation.Video) is { } error)
+            return new(false, error.Code, Detail: error.Detail);
         var candidate = candidates[0] with { Item = new InputItem(facts[0].FullPath, facts[0].Kind) };
         var samePath = currentPathAvailable && SamePath(currentPath, facts[0].FullPath);
         var requiresConfirmation = operation == DraftOperation.Video && InputRules.RequiresReplacement(currentRawPath, samePath);
@@ -513,7 +512,8 @@ public sealed class MuxDraft
             var assignment = assignments[index];
             if (!InputRules.IsSubtitleSlotAvailable((int)assignment.Slot, normalized.Select(item => (int)item.Slot)))
                 return new(false, DraftCodes.InvalidSlot);
-            if (ValidateFact(facts[index], expectsDirectory: false, isVideo: false) is { } error) return new(false, error);
+            if (ValidateFact(facts[index], expectsDirectory: false, isVideo: false) is { } error)
+                return new(false, error.Code, Detail: error.Detail);
             normalized.Add(new(assignment.Slot, assignment.Candidate with { Item = new InputItem(facts[index].FullPath, facts[index].Kind) }));
             var current = currentPaths.TryGetValue(assignment.Slot, out var normalizedCurrent)
                 ? normalizedCurrent : ("", true);
@@ -538,15 +538,20 @@ public sealed class MuxDraft
         return currentPaths.TryGetValue(slot, out var current) ? current : (PathFor(slot), true);
     }
 
-    private static string? ValidateFact(InputPathFacts fact, bool expectsDirectory, bool isVideo)
+    /// <summary>
+    /// 按旧 ValidateCandidate 的顺序判定单个候选：类型 → 完整路径 → 规范化失败 → 规范化路径语法 → 存在性 → 扩展名。
+    /// 规范化失败只影响候选本身；调用方先查槽位再查候选，保证错误码顺序与旧 PrepareInput 一致。
+    /// </summary>
+    private static (string Code, string? Detail)? ValidateFact(InputPathFacts fact, bool expectsDirectory, bool isVideo)
     {
         var kindError = InputRules.CheckCandidateKind(fact.Kind, expectsDirectory);
-        if (kindError == InputKindError.NonLocal) return DraftCodes.NonLocal;
-        if (kindError == InputKindError.WrongType) return DraftCodes.WrongType;
-        if (!InputRules.AcceptsFixedSlotPath(fact.FullPath, fact.IsFullyQualified)) return DraftCodes.InvalidPath;
-        if (!InputRules.AcceptsNormalizedPathSyntax(fact.FullPath, fact.ContainsInvalidPathChars)) return DraftCodes.InvalidPath;
-        if (expectsDirectory ? !fact.DirectoryExists : !fact.FileExists) return DraftCodes.MissingPath;
-        if (!expectsDirectory && !InputRules.AcceptsFixedSlotExtension(fact.Extension, isVideo)) return DraftCodes.WrongType;
+        if (kindError == InputKindError.NonLocal) return (DraftCodes.NonLocal, null);
+        if (kindError == InputKindError.WrongType) return (DraftCodes.WrongType, null);
+        if (!InputRules.AcceptsFixedSlotPath(fact.FullPath, fact.IsFullyQualified)) return (DraftCodes.InvalidPath, null);
+        if (!string.IsNullOrWhiteSpace(fact.FailureDetail)) return (DraftCodes.InvalidPath, fact.FailureDetail);
+        if (!InputRules.AcceptsNormalizedPathSyntax(fact.FullPath, fact.ContainsInvalidPathChars)) return (DraftCodes.InvalidPath, null);
+        if (expectsDirectory ? !fact.DirectoryExists : !fact.FileExists) return (DraftCodes.MissingPath, null);
+        if (!expectsDirectory && !InputRules.AcceptsFixedSlotExtension(fact.Extension, isVideo)) return (DraftCodes.WrongType, null);
         return null;
     }
 }
