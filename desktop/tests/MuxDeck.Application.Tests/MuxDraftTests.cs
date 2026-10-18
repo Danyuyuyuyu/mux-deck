@@ -375,9 +375,9 @@ public sealed class MuxDraftTests
     {
         var facts = Facts();
         facts.Items["C:/in/v.mkv"] = new("C:/in/v.mkv", true, "C:\\in\\v.mkv", ".mkv", "C:\\in",
-            InputLocationKind.LocalFile, true, false, false);
+            InputLocationKind.LocalFile, true, false, false, null);
         facts.Items["C:\\in\\v.mkv"] = new("C:\\in\\v.mkv", true, "C:\\in\\v.mkv", ".mkv", "C:\\in",
-            InputLocationKind.LocalFile, true, false, false);
+            InputLocationKind.LocalFile, true, false, false, null);
         var draft = new MuxDraft(facts);
         draft.SetVideoPath("C:/in/v.mkv");
         var prepared = await draft.PrepareAsync(DraftOperation.Video,
@@ -389,6 +389,70 @@ public sealed class MuxDraftTests
         Assert.True((await draft.CommitAsync(prepared.Plan!, cancellationToken: TestContext.Current.CancellationToken)).Succeeded);
         Assert.Equal(revision, draft.DraftRevision);
         Assert.Equal("C:/in/v.mkv", draft.VideoPath);
+    }
+
+    [Theory]
+    [InlineData("fonts")]
+    [InlineData("output")]
+    public async Task Commit_skips_same_normalized_directory_path(string field)
+    {
+        var facts = Facts();
+        var current = PathForKind(field);
+        var candidate = field == "fonts" ? "C:\\fonts" : "C:\\out";
+        facts.Items[current] = facts.Items[current] with { FullPath = candidate, Directory = candidate };
+        facts.Items[candidate] = facts.Items[current] with { Path = candidate, FullPath = candidate, Directory = candidate };
+        var draft = new MuxDraft(facts);
+        if (field == "fonts") draft.SetFontsDirectory(current); else draft.SetOutputDirectory(current);
+        var prepared = await draft.PrepareAsync(Operation(field), [Candidate(candidate, InputLocationKind.LocalDirectory)], [],
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(prepared.Succeeded);
+        var revision = draft.DraftRevision;
+        Assert.True((await draft.CommitAsync(prepared.Plan!, cancellationToken: TestContext.Current.CancellationToken)).Succeeded);
+        Assert.Equal(revision, draft.DraftRevision);
+    }
+
+    [Fact]
+    public async Task Subtitle_conflict_uses_normalized_current_slot_path()
+    {
+        var facts = Facts();
+        facts.Items["C:/in/sc.ass"] = facts.Items["C:/in/sc.ass"] with { FullPath = "C:\\in\\sc.ass" };
+        facts.Items["C:\\in\\sc.ass"] = facts.Items["C:/in/sc.ass"] with { Path = "C:\\in\\sc.ass", FullPath = "C:\\in\\sc.ass" };
+        var draft = new MuxDraft(facts);
+        draft.SetSubtitlePath(SubtitleSlot.Sc, "C:/in/sc.ass");
+        var prepared = await draft.PrepareAsync(DraftOperation.Subtitles, [],
+            [new(SubtitleSlot.Tc, Candidate("C:\\in\\sc.ass"))], cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(DraftCodes.Duplicate, prepared.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Subtitle_commit_skips_same_normalized_path()
+    {
+        var facts = Facts();
+        facts.Items["C:/in/sc.ass"] = facts.Items["C:/in/sc.ass"] with { FullPath = "C:\\in\\sc.ass" };
+        facts.Items["C:\\in\\sc.ass"] = facts.Items["C:/in/sc.ass"] with { Path = "C:\\in\\sc.ass", FullPath = "C:\\in\\sc.ass" };
+        var draft = new MuxDraft(facts);
+        draft.SetSubtitlePath(SubtitleSlot.Sc, "C:/in/sc.ass");
+        var prepared = await draft.PrepareAsync(DraftOperation.Subtitles, [],
+            [new(SubtitleSlot.Sc, Candidate("C:\\in\\sc.ass"))], cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(prepared.Succeeded);
+        Assert.False(prepared.RequiresConfirmation);
+        var revision = draft.DraftRevision;
+        Assert.True((await draft.CommitAsync(prepared.Plan!, cancellationToken: TestContext.Current.CancellationToken)).Succeeded);
+        Assert.Equal(revision, draft.DraftRevision);
+        Assert.Equal("C:/in/sc.ass", draft.Sc.Path);
+    }
+
+    [Fact]
+    public async Task Unavailable_current_path_facts_require_replacement_confirmation_but_do_not_reject_prepare()
+    {
+        var facts = Facts();
+        facts.Items["C:/in/v.mkv"] = facts.Items["C:/in/v.mkv"] with { FailureDetail = "当前路径事实不可用", FileExists = false };
+        var draft = new MuxDraft(facts);
+        draft.SetVideoPath("C:/in/v.mkv");
+        var prepared = await draft.PrepareAsync(DraftOperation.Video, [Candidate("C:/in/other.mkv")], [],
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(prepared.Succeeded);
+        Assert.True(prepared.RequiresConfirmation);
     }
 
     [Theory]
@@ -499,7 +563,7 @@ public sealed class MuxDraftTests
     {
         var facts = Facts();
         // 同一文件的另一种大小写写法：仅大小写不同也必须判为同一路径。
-        facts.Items["C:/IN/SC.ASS"] = new("C:/IN/SC.ASS", true, "C:/IN/SC.ASS", ".ass", "C:/IN", InputLocationKind.LocalFile, true, false, false);
+        facts.Items["C:/IN/SC.ASS"] = new("C:/IN/SC.ASS", true, "C:/IN/SC.ASS", ".ass", "C:/IN", InputLocationKind.LocalFile, true, false, false, null);
         var draft = new MuxDraft(facts);
         draft.SetSubtitlePath(SubtitleSlot.Sc, "C:/in/sc.ass");
 
@@ -525,10 +589,12 @@ public sealed class MuxDraftTests
         var draft = new MuxDraft(Facts());
         var revision = draft.DraftRevision;
         Assert.Equal(DraftCodes.ExternalTrackMissing, draft.SetExternalName("missing", "x").ErrorCode);
+        Assert.Equal(DraftCodes.ExternalTrackMissing, draft.RemoveExternalTrack("missing").ErrorCode);
         Assert.Equal(revision, draft.DraftRevision);
 
-        Assert.True(draft.AddExternalTrack(Audio("a1", "C:/in/a.mka")).Succeeded);
+        Assert.True(draft.AddExternalTrack(Audio("a1", "C:/in/a.mka", trackId: 7)).Succeeded);
         Assert.Equal(DraftCodes.Duplicate, draft.AddExternalTrack(Audio("a1", "C:/in/a.mka")).ErrorCode);
+        Assert.Equal(DraftCodes.Duplicate, draft.AddExternalTrack(Audio("a2", "C:/in/other.mka", trackId: 7)).ErrorCode);
         Assert.Single(draft.ExternalTracks);
     }
 
@@ -708,7 +774,11 @@ public sealed class MuxDraftTests
         public Exception? Exception { get; set; }
         public Task<EquatableArray<InputPathFacts>> CollectAsync(IReadOnlyList<InputItem> items, CancellationToken cancellationToken = default) =>
             Exception is { } exception
-                ? throw exception
+                ? exception is ArgumentException or IOException or NotSupportedException or UnauthorizedAccessException
+                    ? Task.FromResult(new EquatableArray<InputPathFacts>([.. items.Select(item =>
+                        new InputPathFacts(item.Path, true, item.Path, Path.GetExtension(item.Path), "", item.Kind,
+                            false, false, false, exception.Message))]))
+                    : throw exception
                 : Task.FromResult(new EquatableArray<InputPathFacts>([.. items.Select(Item)]));
 
         private InputPathFacts Item(InputItem item)
@@ -716,28 +786,28 @@ public sealed class MuxDraftTests
             if (Items.TryGetValue(item.Path, out var known)) return known;
             // 未登记的路径按“不存在”处理，缺文件路径必须被拒绝。
             return new(item.Path, true, item.Path, Path.GetExtension(item.Path), "",
-                item.Kind, FileExists: false, DirectoryExists: item.Kind == InputLocationKind.LocalDirectory, ContainsInvalidPathChars: false);
+                item.Kind, FileExists: false, DirectoryExists: item.Kind == InputLocationKind.LocalDirectory, ContainsInvalidPathChars: false, FailureDetail: null);
         }
     }
 
     private static FakePathFacts Facts()
     {
         var facts = new FakePathFacts();
-        facts.Items["C:/in/v.mkv"] = new("C:/in/v.mkv", true, "C:/in/v.mkv", ".mkv", "C:/in", InputLocationKind.LocalFile, true, false, false);
-        facts.Items["C:/in/other.mkv"] = new("C:/in/other.mkv", true, "C:/in/other.mkv", ".mkv", "C:/in", InputLocationKind.LocalFile, true, false, false);
-        facts.Items["C:/in/v2.mkv"] = new("C:/in/v2.mkv", true, "C:/in/v2.mkv", ".mkv", "C:/in", InputLocationKind.LocalFile, true, false, false);
-        facts.Items["C:/in/missing.mkv"] = new("C:/in/missing.mkv", true, "C:/in/missing.mkv", ".mkv", "C:/in", InputLocationKind.LocalFile, false, false, false);
+        facts.Items["C:/in/v.mkv"] = new("C:/in/v.mkv", true, "C:/in/v.mkv", ".mkv", "C:/in", InputLocationKind.LocalFile, true, false, false, null);
+        facts.Items["C:/in/other.mkv"] = new("C:/in/other.mkv", true, "C:/in/other.mkv", ".mkv", "C:/in", InputLocationKind.LocalFile, true, false, false, null);
+        facts.Items["C:/in/v2.mkv"] = new("C:/in/v2.mkv", true, "C:/in/v2.mkv", ".mkv", "C:/in", InputLocationKind.LocalFile, true, false, false, null);
+        facts.Items["C:/in/missing.mkv"] = new("C:/in/missing.mkv", true, "C:/in/missing.mkv", ".mkv", "C:/in", InputLocationKind.LocalFile, false, false, false, null);
         // 数据流标记等非法路径字符由端口事实报告，Application 不调用 System.IO。
-        facts.Items["C:/in/bad.mkv"] = new("C:/in/bad.mkv", true, "C:/in/bad.mkv", ".mkv", "C:/in", InputLocationKind.LocalFile, true, false, true);
-        facts.Items["C:/in/note.txt"] = new("C:/in/note.txt", true, "C:/in/note.txt", ".txt", "C:/in", InputLocationKind.LocalFile, true, false, false);
-        facts.Items["C:/in/sc.ass"] = new("C:/in/sc.ass", true, "C:/in/sc.ass", ".ass", "C:/in", InputLocationKind.LocalFile, true, false, false);
-        facts.Items["C:/in/tc.ass"] = new("C:/in/tc.ass", true, "C:/in/tc.ass", ".ass", "C:/in", InputLocationKind.LocalFile, true, false, false);
-        facts.Items["C:/in/other.ass"] = new("C:/in/other.ass", true, "C:/in/other.ass", ".ass", "C:/in", InputLocationKind.LocalFile, true, false, false);
-        facts.Items["C:/in/audio.wav"] = new("C:/in/audio.wav", true, "C:/in/audio.wav", ".wav", "C:/in", InputLocationKind.LocalFile, true, false, false);
-        facts.Items["C:/in/a.mka"] = new("C:/in/a.mka", true, "C:/in/a.mka", ".mka", "C:/in", InputLocationKind.LocalFile, true, false, false);
-        facts.Items["C:/in/multi.wav"] = new("C:/in/multi.wav", true, "C:/in/multi.wav", ".wav", "C:/in", InputLocationKind.LocalFile, true, false, false);
-        facts.Items["C:/fonts"] = new("C:/fonts", true, "C:/fonts", "", "C:/fonts", InputLocationKind.LocalDirectory, false, true, false);
-        facts.Items["C:/out"] = new("C:/out", true, "C:/out", "", "C:/out", InputLocationKind.LocalDirectory, false, true, false);
+        facts.Items["C:/in/bad.mkv"] = new("C:/in/bad.mkv", true, "C:/in/bad.mkv", ".mkv", "C:/in", InputLocationKind.LocalFile, true, false, true, null);
+        facts.Items["C:/in/note.txt"] = new("C:/in/note.txt", true, "C:/in/note.txt", ".txt", "C:/in", InputLocationKind.LocalFile, true, false, false, null);
+        facts.Items["C:/in/sc.ass"] = new("C:/in/sc.ass", true, "C:/in/sc.ass", ".ass", "C:/in", InputLocationKind.LocalFile, true, false, false, null);
+        facts.Items["C:/in/tc.ass"] = new("C:/in/tc.ass", true, "C:/in/tc.ass", ".ass", "C:/in", InputLocationKind.LocalFile, true, false, false, null);
+        facts.Items["C:/in/other.ass"] = new("C:/in/other.ass", true, "C:/in/other.ass", ".ass", "C:/in", InputLocationKind.LocalFile, true, false, false, null);
+        facts.Items["C:/in/audio.wav"] = new("C:/in/audio.wav", true, "C:/in/audio.wav", ".wav", "C:/in", InputLocationKind.LocalFile, true, false, false, null);
+        facts.Items["C:/in/a.mka"] = new("C:/in/a.mka", true, "C:/in/a.mka", ".mka", "C:/in", InputLocationKind.LocalFile, true, false, false, null);
+        facts.Items["C:/in/multi.wav"] = new("C:/in/multi.wav", true, "C:/in/multi.wav", ".wav", "C:/in", InputLocationKind.LocalFile, true, false, false, null);
+        facts.Items["C:/fonts"] = new("C:/fonts", true, "C:/fonts", "", "C:/fonts", InputLocationKind.LocalDirectory, false, true, false, null);
+        facts.Items["C:/out"] = new("C:/out", true, "C:/out", "", "C:/out", InputLocationKind.LocalDirectory, false, true, false, null);
         return facts;
     }
 }

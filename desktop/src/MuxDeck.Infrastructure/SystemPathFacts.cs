@@ -15,13 +15,20 @@ public sealed class SystemPathFacts : IPathFacts
 
     public InputPathFacts Collect(InputItem item)
     {
-        var directory = item.Kind == InputLocationKind.LocalDirectory
-            ? Normalize(item.Path) : Normalize(Path.GetDirectoryName(item.Path) ?? "");
-        // 旧实现是在 GetFullPath 规范化之后判断非法字符；这里对同一个规范化结果判断，保持等价。
-        var normalized = Normalize(item.Path);
-        return new(item.Path, Path.IsPathFullyQualified(item.Path), normalized, Path.GetExtension(item.Path),
-            directory, item.Kind, File.Exists(item.Path), Directory.Exists(item.Path),
-            normalized.IndexOfAny(Path.GetInvalidPathChars()) >= 0);
+        try
+        {
+            var normalized = Path.GetFullPath(item.Path);
+            var directory = item.Kind == InputLocationKind.LocalDirectory
+                ? normalized : Path.GetFullPath(Path.GetDirectoryName(item.Path) ?? "");
+            // 旧实现是在 GetFullPath 规范化之后判断非法字符；这里对同一个规范化结果判断，保持等价。
+            return new(item.Path, Path.IsPathFullyQualified(item.Path), normalized, Path.GetExtension(item.Path),
+                directory, item.Kind, File.Exists(item.Path), Directory.Exists(item.Path),
+                normalized.IndexOfAny(Path.GetInvalidPathChars()) >= 0, null);
+        }
+        catch (ArgumentException exception) { return Failed(item, exception); }
+        catch (IOException exception) { return Failed(item, exception); }
+        catch (NotSupportedException exception) { return Failed(item, exception); }
+        catch (UnauthorizedAccessException exception) { return Failed(item, exception); }
     }
 
     public Task<EquatableArray<InputPathFacts>> CollectAsync(IReadOnlyList<InputItem> items, CancellationToken cancellationToken = default)
@@ -30,11 +37,6 @@ public sealed class SystemPathFacts : IPathFacts
         return Task.FromResult(new EquatableArray<InputPathFacts>([.. Collect(items)]));
     }
 
-    // 规范化只在事实被使用时才有意义（重复与字体目录），失败的路径保持原样，交给同一批规则报错。
-    private static string Normalize(string path)
-    {
-        try { return Path.GetFullPath(path); }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or IOException or System.Security.SecurityException)
-        { return path; }
-    }
+    private static InputPathFacts Failed(InputItem item, Exception exception) =>
+        new(item.Path, false, item.Path, "", "", item.Kind, false, false, false, exception.Message);
 }

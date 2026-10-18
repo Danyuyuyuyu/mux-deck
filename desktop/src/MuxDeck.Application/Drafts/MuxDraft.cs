@@ -43,7 +43,8 @@ public sealed class DraftAcceptancePlan
 {
     internal DraftAcceptancePlan(MuxDraft owner, DraftOperation operation, long revision,
         IReadOnlyList<DraftCandidate> candidates, IReadOnlyList<DraftAssignment> assignments,
-        bool requiresConfirmation, string? normalizedCurrentPath = null)
+        bool requiresConfirmation, string? normalizedCurrentPath = null, bool currentPathFactsAvailable = true,
+        IReadOnlyDictionary<SubtitleSlot, (string Path, bool Available)>? normalizedCurrentSubtitlePaths = null)
     {
         Owner = owner;
         Operation = operation;
@@ -52,6 +53,8 @@ public sealed class DraftAcceptancePlan
         Assignments = Array.AsReadOnly(assignments.ToArray());
         RequiresReplacementConfirmation = requiresConfirmation;
         NormalizedCurrentPath = normalizedCurrentPath;
+        CurrentPathFactsAvailable = currentPathFactsAvailable;
+        NormalizedCurrentSubtitlePaths = normalizedCurrentSubtitlePaths ?? new Dictionary<SubtitleSlot, (string Path, bool Available)>();
     }
 
     internal MuxDraft Owner { get; }
@@ -61,6 +64,8 @@ public sealed class DraftAcceptancePlan
     public IReadOnlyList<DraftAssignment> Assignments { get; }
     public bool RequiresReplacementConfirmation { get; }
     internal string? NormalizedCurrentPath { get; }
+    internal bool CurrentPathFactsAvailable { get; }
+    internal IReadOnlyDictionary<SubtitleSlot, (string Path, bool Available)> NormalizedCurrentSubtitlePaths { get; }
 }
 
 public sealed record SubtitleSlotSnapshot(string Path, bool IsIncluded, string Name, LanguageTag Language,
@@ -221,7 +226,9 @@ public sealed class MuxDraft
     {
         ArgumentNullException.ThrowIfNull(track);
         if (isLocked) return DraftOutcome.Refuse(DraftCodes.Locked);
-        if (external.Any(item => item.Identity == track.Identity)) return DraftOutcome.Refuse(DraftCodes.Duplicate);
+        if (external.Any(item => item.Identity == track.Identity ||
+            (track.SourceTrackId is { } sourceId && item.SourceTrackId == sourceId)))
+            return DraftOutcome.Refuse(DraftCodes.Duplicate);
         external.Add(new MutableTrack(track));
         MarkChanged();
         return DraftOutcome.Accept();
@@ -231,7 +238,7 @@ public sealed class MuxDraft
     {
         if (isLocked) return DraftOutcome.Refuse(DraftCodes.Locked);
         var removed = external.RemoveAll(track => track.Identity == identity);
-        if (removed == 0) return DraftOutcome.Accept();
+        if (removed == 0) return DraftOutcome.Refuse(DraftCodes.ExternalTrackMissing);
         MarkChanged();
         return DraftOutcome.Accept();
     }
@@ -284,17 +291,23 @@ public sealed class MuxDraft
             {
                 case DraftOperation.Subtitles:
                     foreach (var assignment in normalized.Assignments)
-                        if (ApplySlotPath(assignment.Slot, assignment.Candidate.Item.Path, ignoreCase: true)) MarkChanged();
+                    {
+                        var current = normalized.NormalizedCurrentSubtitlePaths.TryGetValue(assignment.Slot, out var path)
+                            ? path : ("", true);
+                        var same = current.Item2 && !string.IsNullOrWhiteSpace(current.Item1) &&
+                            SamePath(current.Item1, assignment.Candidate.Item.Path);
+                        if (!same && ApplySlotPath(assignment.Slot, assignment.Candidate.Item.Path, ignoreCase: true)) MarkChanged();
+                    }
                     break;
                 case DraftOperation.Video:
-                    if (!SamePath(normalized.NormalizedCurrentPath ?? videoPath, normalized.Candidates[0].Item.Path))
+                    if (!normalized.CurrentPathFactsAvailable || !SamePath(normalized.NormalizedCurrentPath ?? "", normalized.Candidates[0].Item.Path))
                     { videoPath = normalized.Candidates[0].Item.Path; MarkChanged(); }
                     break;
                 case DraftOperation.FontsDirectory:
-                    if (!SamePath(fontsDirectory, normalized.Candidates[0].Item.Path)) { fontsDirectory = normalized.Candidates[0].Item.Path; MarkChanged(); }
+                    if (!normalized.CurrentPathFactsAvailable || !SamePath(normalized.NormalizedCurrentPath ?? "", normalized.Candidates[0].Item.Path)) { fontsDirectory = normalized.Candidates[0].Item.Path; MarkChanged(); }
                     break;
                 case DraftOperation.OutputDirectory:
-                    if (!SamePath(outputDirectory, normalized.Candidates[0].Item.Path)) { outputDirectory = normalized.Candidates[0].Item.Path; MarkChanged(); }
+                    if (!normalized.CurrentPathFactsAvailable || !SamePath(normalized.NormalizedCurrentPath ?? "", normalized.Candidates[0].Item.Path)) { outputDirectory = normalized.Candidates[0].Item.Path; MarkChanged(); }
                     break;
             }
         });
@@ -427,71 +440,69 @@ public sealed class MuxDraft
             : candidates.Select(candidate => candidate.Item).ToArray();
         if (!InputRules.AcceptsSelectionCount(items.Length, operation == DraftOperation.Subtitles))
             return new(false, DraftCodes.InvalidCount);
-        EquatableArray<InputPathFacts> actual;
-        IReadOnlyDictionary<SubtitleSlot, string> currentSubtitlePaths = new Dictionary<SubtitleSlot, string>();
-        string currentVideoPath = "";
-        try
-        {
-            actual = facts is not null
-                ? new EquatableArray<InputPathFacts>(facts.ToArray())
-                : await pathFacts.CollectAsync(items, cancellationToken).ConfigureAwait(false);
+        var actual = facts is not null
+            ? new EquatableArray<InputPathFacts>(facts.ToArray())
+            : await pathFacts.CollectAsync(items, cancellationToken).ConfigureAwait(false);
+        var failedCandidate = actual.FirstOrDefault(item => !string.IsNullOrWhiteSpace(item.FailureDetail));
+        if (failedCandidate is not null) return new(false, DraftCodes.InvalidPath, Detail: failedCandidate.FailureDetail);
 
-            if (operation == DraftOperation.Video && !string.IsNullOrWhiteSpace(videoPath))
+        var currentSubtitlePaths = new Dictionary<SubtitleSlot, (string Path, bool Available)>();
+        var currentSinglePath = "";
+        var currentSingleAvailable = true;
+        var currentRaw = operation switch
+        {
+            DraftOperation.Video => videoPath,
+            DraftOperation.FontsDirectory => fontsDirectory,
+            DraftOperation.OutputDirectory => outputDirectory,
+            _ => ""
+        };
+        if (operation != DraftOperation.Subtitles && !string.IsNullOrWhiteSpace(currentRaw))
+        {
+            var currentFacts = await pathFacts.CollectAsync(
+                new[] { new InputItem(currentRaw, operation == DraftOperation.Video ? InputLocationKind.LocalFile : InputLocationKind.LocalDirectory) },
+                cancellationToken).ConfigureAwait(false);
+            currentSingleAvailable = currentFacts.Count == 1 && string.IsNullOrWhiteSpace(currentFacts[0].FailureDetail);
+            if (currentSingleAvailable) currentSinglePath = currentFacts[0].FullPath;
+        }
+        else if (operation == DraftOperation.Subtitles)
+        {
+            var currentSlots = Enum.GetValues<SubtitleSlot>()
+                .Where(slot => !string.IsNullOrWhiteSpace(PathFor(slot)))
+                .ToArray();
+            if (currentSlots.Length > 0)
             {
                 var currentFacts = await pathFacts.CollectAsync(
-                    new[] { new InputItem(videoPath, InputLocationKind.LocalFile) }, cancellationToken).ConfigureAwait(false);
-                if (currentFacts.Count != 1) return new(false, DraftCodes.InvalidCount);
-                currentVideoPath = currentFacts[0].FullPath;
-            }
-            else if (operation == DraftOperation.Subtitles)
-            {
-                var currentSlots = assignments
-                    .Where(assignment => !string.IsNullOrWhiteSpace(PathFor(assignment.Slot)))
-                    .Select(assignment => assignment.Slot)
-                    .ToArray();
-                if (currentSlots.Length > 0)
+                    currentSlots.Select(slot => new InputItem(PathFor(slot), InputLocationKind.LocalFile)).ToArray(),
+                    cancellationToken).ConfigureAwait(false);
+                for (var index = 0; index < currentSlots.Length; index++)
                 {
-                    var currentFacts = await pathFacts.CollectAsync(
-                        currentSlots.Select(slot => new InputItem(PathFor(slot), InputLocationKind.LocalFile)).ToArray(),
-                        cancellationToken).ConfigureAwait(false);
-                    if (currentFacts.Count != currentSlots.Length) return new(false, DraftCodes.InvalidCount);
-                    currentSubtitlePaths = currentSlots
-                        .Select((slot, index) => (slot, path: currentFacts[index].FullPath))
-                        .ToDictionary(item => item.slot, item => item.path);
+                    var available = index < currentFacts.Count && string.IsNullOrWhiteSpace(currentFacts[index].FailureDetail);
+                    currentSubtitlePaths[currentSlots[index]] = (available ? currentFacts[index].FullPath : PathFor(currentSlots[index]), available);
                 }
             }
         }
-        catch (OperationCanceledException) { throw; }
-        catch (Exception exception) when (IsPathFactsException(exception))
-        {
-            return new(false, DraftCodes.InvalidPath, Detail: exception.Message);
-        }
         return operation == DraftOperation.Subtitles
             ? PrepareSubtitles(actual, assignments, currentSubtitlePaths)
-            : PrepareSingle(operation, actual, candidates, currentVideoPath);
+            : PrepareSingle(operation, actual, candidates, currentRaw, currentSinglePath, currentSingleAvailable);
     }
 
     private DraftPrepareResult PrepareSingle(DraftOperation operation,
-        EquatableArray<InputPathFacts> facts, IReadOnlyList<DraftCandidate> candidates, string currentPath)
+        EquatableArray<InputPathFacts> facts, IReadOnlyList<DraftCandidate> candidates,
+        string currentRawPath, string currentPath, bool currentPathAvailable)
     {
         if (facts.Count != 1) return new(false, DraftCodes.InvalidCount);
         var expectsDirectory = operation != DraftOperation.Video;
         if (ValidateFact(facts[0], expectsDirectory, operation == DraftOperation.Video) is { } error) return new(false, error);
         var candidate = candidates[0] with { Item = new InputItem(facts[0].FullPath, facts[0].Kind) };
-        var current = operation switch
-        {
-            DraftOperation.Video => currentPath,
-            DraftOperation.FontsDirectory => fontsDirectory,
-            _ => outputDirectory
-        };
-        var requiresConfirmation = operation == DraftOperation.Video && InputRules.RequiresReplacement(current, SamePath(current, facts[0].FullPath));
+        var samePath = currentPathAvailable && SamePath(currentPath, facts[0].FullPath);
+        var requiresConfirmation = operation == DraftOperation.Video && InputRules.RequiresReplacement(currentRawPath, samePath);
         return new(true, null, new DraftAcceptancePlan(this, operation, revision,
             new List<DraftCandidate> { candidate }, new List<DraftAssignment>(), requiresConfirmation,
-            operation == DraftOperation.Video ? currentPath : null), requiresConfirmation);
+            currentPathAvailable ? currentPath : null, currentPathAvailable), requiresConfirmation);
     }
 
     private DraftPrepareResult PrepareSubtitles(EquatableArray<InputPathFacts> facts,
-        IReadOnlyList<DraftAssignment> assignments, IReadOnlyDictionary<SubtitleSlot, string> currentPaths)
+        IReadOnlyList<DraftAssignment> assignments, IReadOnlyDictionary<SubtitleSlot, (string Path, bool Available)> currentPaths)
     {
         if (!InputRules.AcceptsSelectionCount(assignments.Count, subtitleSlots: true) || facts.Count != assignments.Count)
             return new(false, DraftCodes.InvalidCount);
@@ -504,24 +515,27 @@ public sealed class MuxDraft
                 return new(false, DraftCodes.InvalidSlot);
             if (ValidateFact(facts[index], expectsDirectory: false, isVideo: false) is { } error) return new(false, error);
             normalized.Add(new(assignment.Slot, assignment.Candidate with { Item = new InputItem(facts[index].FullPath, facts[index].Kind) }));
-            var currentPath = currentPaths.TryGetValue(assignment.Slot, out var normalizedCurrent)
-                ? normalizedCurrent : "";
+            var current = currentPaths.TryGetValue(assignment.Slot, out var normalizedCurrent)
+                ? normalizedCurrent : ("", true);
+            var currentPath = current.Item1;
             requiresConfirmation |= InputRules.RequiresReplacement(currentPath,
-                SamePath(currentPath, facts[index].FullPath));
+                current.Item2 && SamePath(currentPath, facts[index].FullPath));
         }
         // 与最终槽位集合比较；整组交换合法，不能拿将被替换的旧槽位误报重复。
-        var finalSc = normalized.FirstOrDefault(item => item.Slot == SubtitleSlot.Sc)?.Candidate.Item.Path ?? PathFor(SubtitleSlot.Sc);
-        var finalTc = normalized.FirstOrDefault(item => item.Slot == SubtitleSlot.Tc)?.Candidate.Item.Path ?? PathFor(SubtitleSlot.Tc);
-        if (InputRules.SubtitlePathsConflict(finalSc, finalTc, SamePath(finalSc, finalTc))) return new(false, DraftCodes.Duplicate);
-        return new(true, null, new DraftAcceptancePlan(this, DraftOperation.Subtitles, revision, new List<DraftCandidate>(), normalized, requiresConfirmation), requiresConfirmation);
+        var sc = FinalSubtitlePath(SubtitleSlot.Sc, normalized, currentPaths);
+        var tc = FinalSubtitlePath(SubtitleSlot.Tc, normalized, currentPaths);
+        if (InputRules.SubtitlePathsConflict(sc.Path, tc.Path, sc.Available && tc.Available && SamePath(sc.Path, tc.Path)))
+            return new(false, DraftCodes.Duplicate);
+        return new(true, null, new DraftAcceptancePlan(this, DraftOperation.Subtitles, revision, new List<DraftCandidate>(), normalized,
+            requiresConfirmation, normalizedCurrentSubtitlePaths: currentPaths), requiresConfirmation);
     }
 
-    private static bool IsPathFactsException(Exception exception)
+    private (string Path, bool Available) FinalSubtitlePath(SubtitleSlot slot,
+        IReadOnlyList<DraftAssignment> normalized, IReadOnlyDictionary<SubtitleSlot, (string Path, bool Available)> currentPaths)
     {
-        if (exception is ArgumentException or NotSupportedException or UnauthorizedAccessException) return true;
-        for (var type = exception.GetType(); type is not null; type = type.BaseType)
-            if (type.FullName == "System.IO.IOException") return true;
-        return false;
+        var assignment = normalized.FirstOrDefault(item => item.Slot == slot);
+        if (assignment is not null) return (assignment.Candidate.Item.Path, true);
+        return currentPaths.TryGetValue(slot, out var current) ? current : (PathFor(slot), true);
     }
 
     private static string? ValidateFact(InputPathFacts fact, bool expectsDirectory, bool isVideo)

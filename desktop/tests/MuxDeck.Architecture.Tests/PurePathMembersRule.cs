@@ -1,4 +1,5 @@
 using Mono.Cecil;
+using Mono.Cecil.Cil;
 using NetArchTest.Rules;
 
 namespace MuxDeck.Architecture.Tests;
@@ -31,6 +32,8 @@ internal sealed class PurePathMembersRule : ICustomRule
                 method.Body.ExceptionHandlers.Any(handler => Forbidden(handler.CatchType))) return false;
             foreach (var instruction in method.Body.Instructions)
             {
+                if (instruction.OpCode == OpCodes.Ldstr && instruction.Operand is string literal &&
+                    literal.Contains("System.IO.", StringComparison.Ordinal)) return false;
                 if (instruction.Operand is MethodReference call &&
                     (!AllowedMember(call.DeclaringType, call.Name) || Forbidden(call.ReturnType) ||
                      call.Parameters.Any(parameter => Forbidden(parameter.ParameterType)) ||

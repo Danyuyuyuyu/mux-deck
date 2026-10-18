@@ -58,6 +58,17 @@ namespace MuxDeck.Architecture.Tests
         }
 
         [Theory]
+        [InlineData(typeof(Fixtures.StringLiterals.TypeNameSystemIo), false)]
+        [InlineData(typeof(Fixtures.StringLiterals.PureData), true)]
+        public void System_io_string_literals_are_rejected(Type type, bool expected)
+        {
+            var types = Types.InAssembly(typeof(GuardrailCounterexampleTests).Assembly).That().HaveName(type.Name);
+            var result = types.Should().MeetCustomRule(new PurePathMembersRule()).GetResult();
+            Assert.Equal(expected, result.IsSuccessful);
+            if (!expected) Assert.Contains(type.FullName!, result.FailingTypeNames);
+        }
+
+        [Theory]
         [InlineData(typeof(Fixtures.Collections.ListRecord), false)]
         [InlineData(typeof(Fixtures.Collections.EnumerableRecord), false)]
         [InlineData(typeof(Fixtures.Collections.DictionaryRecord), false)]
@@ -78,6 +89,12 @@ namespace MuxDeck.Architecture.Tests
             if (!expected) Assert.Contains(type.FullName!, failure!);
         }
     }
+}
+
+namespace MuxDeck.Architecture.Tests.Fixtures.StringLiterals
+{
+    internal sealed class TypeNameSystemIo { public bool IsIo(Type type) => type.FullName == "System.IO.IOException"; }
+    internal sealed record PureData(string Value);
 }
 
 namespace MuxDeck.Architecture.Tests.Fixtures.Clock
